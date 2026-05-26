@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import useSWR from "swr"
 import {
   Clock,
@@ -34,6 +34,7 @@ import type { Order, OrderStatus, Driver, DeliveryZone } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
+import { playNewOrderSound, playOrderReadySound, unlockAudio } from "@/lib/sounds"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -68,8 +69,8 @@ function OrderCard({
 
   const fulfillmentLabel = {
     delivery: "Delivery",
-    pickup: "Takeaway",
-    dine_in: "Dine-in",
+    pickup: "Retiro",
+    dine_in: "En el local",
   }[order.deliveryMethod] || "Pickup"
 
   const FulfillmentIcon = fulfillmentIcon
@@ -522,13 +523,6 @@ export default function OrdersPage() {
   const [assignSheetOpen, setAssignSheetOpen] = useState(false)
   const [assignOrderIds, setAssignOrderIds] = useState<string[]>([])
 
-  // Audio ref for notification
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-
-  useEffect(() => {
-    audioRef.current = new Audio("/notification.mp3")
-  }, [])
-
   useEffect(() => {
     if (dispatchData) {
       setOrders(dispatchData.orders || [])
@@ -547,16 +541,20 @@ export default function OrdersPage() {
         { event: "*", schema: "public", table: "orders" },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            toast.info("New order received!")
-            audioRef.current?.play().catch(() => {})
+            playNewOrderSound()
+            toast.info("¡Nuevo pedido!", { duration: 6000 })
             mutate()
           } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new
             setOrders((current) =>
-              current.map((order) =>
-                order.id === payload.new.id
-                  ? { ...order, ...payload.new, status: payload.new.status, driverId: payload.new.driver_id }
-                  : order
-              )
+              current.map((order) => {
+                if (order.id !== updated.id) return order
+                if (order.status !== "ready" && updated.status === "ready") {
+                  playOrderReadySound()
+                  toast.success(`Pedido #${order.orderNumber} listo en cocina`, { duration: 6000 })
+                }
+                return { ...order, ...updated, status: updated.status, driverId: updated.driver_id }
+              })
             )
           }
         }
@@ -663,7 +661,7 @@ export default function OrdersPage() {
   )
 
   return (
-    <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]" onClick={unlockAudio}>
       <div>
         <h1
           className="text-2xl font-bold text-foreground"

@@ -39,17 +39,19 @@ export async function GET(request: NextRequest) {
             })
         }
 
-        // Fallback to Directions API
-        const directionsResult = await fetchFromDirectionsAPI(
-            apiKey,
-            `${originLat},${originLng}`,
-            `${destLat},${destLng}`
-        )
+        if (process.env.GOOGLE_MAPS_ENABLE_LEGACY_DIRECTIONS === "true") {
+            // Optional fallback. Disabled by default to avoid noisy legacy Directions API calls/errors.
+            const directionsResult = await fetchFromDirectionsAPI(
+                apiKey,
+                `${originLat},${originLng}`,
+                `${destLat},${destLng}`
+            )
 
-        if (directionsResult) {
-            return NextResponse.json(directionsResult, {
-                headers: { "Cache-Control": "public, max-age=30, s-maxage=30" },
-            })
+            if (directionsResult) {
+                return NextResponse.json(directionsResult, {
+                    headers: { "Cache-Control": "public, max-age=30, s-maxage=30" },
+                })
+            }
         }
 
         return NextResponse.json({ error: "No route found" }, { status: 404 })

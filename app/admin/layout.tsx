@@ -28,22 +28,22 @@ import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 const navItems = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/orders", label: "Orders", icon: ClipboardList },
-  { href: "/admin/kitchen", label: "Kitchen", icon: ChefHat },
+  { href: "/admin", label: "Panel", icon: LayoutDashboard },
+  { href: "/admin/orders", label: "Pedidos", icon: ClipboardList },
+  { href: "/admin/kitchen", label: "Cocina", icon: ChefHat },
   { href: "/admin/pos", label: "POS / Mostrador", icon: ShoppingBag },
-  { href: "/admin/dispatch", label: "Dispatch", icon: PackageCheck },
-  { href: "/admin/live-tracking", label: "Live Tracking", icon: MapIcon },
+  { href: "/admin/dispatch", label: "Despacho", icon: PackageCheck },
+  { href: "/admin/live-tracking", label: "Seguimiento en Vivo", icon: MapIcon },
 ]
 
 const configItems = [
-  { href: "/admin/categories", label: "Categories", icon: Tags },
-  { href: "/admin/products", label: "Products", icon: Package },
-  { href: "/admin/modifiers", label: "Modifiers", icon: Sliders },
+  { href: "/admin/categories", label: "Categorías", icon: Tags },
+  { href: "/admin/products", label: "Productos", icon: Package },
+  { href: "/admin/modifiers", label: "Modificadores", icon: Sliders },
   { href: "/admin/branches", label: "Sucursales", icon: Building2 },
-  { href: "/admin/coupons", label: "Coupons", icon: Tag },
+  { href: "/admin/coupons", label: "Cupones", icon: Tag },
   { href: "/admin/upsells", label: "Upsells", icon: Sparkles },
-  { href: "/admin/drivers", label: "Drivers", icon: Bike },
+  { href: "/admin/drivers", label: "Repartidores", icon: Bike },
 ]
 
 function NavItem({ item, pathname }: { item: typeof navItems[0]; pathname: string }) {
@@ -73,7 +73,7 @@ function NavContent({ pathname }: { pathname: string }) {
       {/* Main Operations */}
       <div className="px-3 py-2">
         <p className="text-xs font-medium text-sidebar-foreground/50 uppercase tracking-wider mb-1">
-          Operations
+          Operaciones
         </p>
         <div className="flex flex-col gap-0.5">
           {navItems.map((item) => (
@@ -85,7 +85,7 @@ function NavContent({ pathname }: { pathname: string }) {
       {/* Configuration */}
       <div className="px-3 py-2 border-t border-sidebar-border">
         <p className="text-xs font-medium text-sidebar-foreground/50 uppercase tracking-wider mb-1">
-          Configuration
+          Configuración
         </p>
         <div className="flex flex-col gap-0.5">
           {configItems.map((item) => (
@@ -138,7 +138,7 @@ export default function AdminLayout({
             className="h-8 w-8 text-sidebar-foreground/50 hover:text-sidebar-foreground"
             asChild
           >
-            <Link href="/" aria-label="Back to storefront">
+            <Link href="/" aria-label="Volver al sitio">
               <ChevronLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -152,7 +152,7 @@ export default function AdminLayout({
             className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors w-full"
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            Sign Out
+            Cerrar sesión
           </button>
         </div>
       </aside>
@@ -164,7 +164,7 @@ export default function AdminLayout({
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9" suppressHydrationWarning>
                 <Menu className="h-5 w-5" />
-                <span className="sr-only">Open navigation</span>
+                <span className="sr-only">Abrir navegación</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-60 p-0 bg-sidebar border-sidebar-border">
@@ -189,7 +189,7 @@ export default function AdminLayout({
             className="text-base font-bold text-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            BLAZR Admin
+            BLAZR · Admin
           </span>
         </header>
 

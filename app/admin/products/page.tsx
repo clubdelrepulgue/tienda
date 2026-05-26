@@ -120,7 +120,7 @@ export default function ProductsPage() {
 
   const handleSave = async () => {
     if (!formName || !formPrice || !formCategory) {
-      toast.error("Please fill all required fields")
+      toast.error("Por favor completá todos los campos requeridos")
       return
     }
 
@@ -139,7 +139,7 @@ export default function ProductsPage() {
           .upload(fileName, item.file)
 
         if (uploadError) {
-          toast.error("Error uploading image: " + uploadError.message)
+          toast.error("Error al subir imagen: " + uploadError.message)
           setSaving(false)
           return
         }
@@ -167,7 +167,7 @@ export default function ProductsPage() {
           setSaving(false)
           return
         }
-        toast.success("Product updated")
+        toast.success("Producto actualizado")
       } else {
         const result = await createProduct({
           nombre: formName,
@@ -182,13 +182,13 @@ export default function ProductsPage() {
           setSaving(false)
           return
         }
-        toast.success("Product created")
+        toast.success("Producto creado")
       }
       setDialogOpen(false)
       mutateProducts()
     } catch (error) {
       console.error(error)
-      toast.error("Something went wrong")
+      toast.error("Ocurrió un error inesperado")
     } finally {
       setSaving(false)
     }
@@ -212,7 +212,7 @@ export default function ProductsPage() {
 
   const getCategoryName = (id: string) => {
     const safeCategories = Array.isArray(categories) ? categories : []
-    return safeCategories.find((c) => c.id === id)?.name || "Unknown"
+    return safeCategories.find((c) => c.id === id)?.name || "Sin categoría"
   }
 
   if (productsLoading) {
@@ -241,10 +241,10 @@ export default function ProductsPage() {
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            Products
+            Productos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your menu items
+            Administrá los ítems de tu menú
           </p>
         </div>
         <Button
@@ -252,7 +252,7 @@ export default function ProductsPage() {
           onClick={openCreate}
         >
           <Plus className="h-4 w-4" />
-          Add Product
+          Agregar producto
         </Button>
       </div>
 
@@ -262,7 +262,7 @@ export default function ProductsPage() {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search products..."
+                placeholder="Buscar productos..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
@@ -275,11 +275,11 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground">Product</TableHead>
-                  <TableHead className="text-muted-foreground">Category</TableHead>
-                  <TableHead className="text-muted-foreground">Price</TableHead>
-                  <TableHead className="text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-muted-foreground text-right">Actions</TableHead>
+                  <TableHead className="text-muted-foreground">Producto</TableHead>
+                  <TableHead className="text-muted-foreground">Categoría</TableHead>
+                  <TableHead className="text-muted-foreground">Precio</TableHead>
+                  <TableHead className="text-muted-foreground">Estado</TableHead>
+                  <TableHead className="text-muted-foreground text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -352,14 +352,14 @@ export default function ProductsPage() {
               className="text-card-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              {editProduct ? "Edit Product" : "Create Product"}
+              {editProduct ? "Editar producto" : "Crear producto"}
             </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
 
             {/* Images Grid */}
             <div>
-              <Label className="text-sm text-muted-foreground mb-2 block">Images</Label>
+              <Label className="text-sm text-muted-foreground mb-2 block">Imágenes</Label>
               <div className="grid grid-cols-3 gap-3">
                 {/* Existing Images */}
                 {existingImages.map((url, i) => (
@@ -391,7 +391,7 @@ export default function ProductsPage() {
                 {/* Add Button */}
                 <Label className="relative aspect-square rounded-xl border-2 border-dashed border-border hover:border-primary/50 cursor-pointer flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors bg-secondary/30">
                   <Upload className="h-5 w-5" />
-                  <span className="text-[10px] font-medium">Add Image</span>
+                  <span className="text-[10px] font-medium">Agregar imagen</span>
                   <input
                     type="file"
                     multiple
@@ -405,18 +405,18 @@ export default function ProductsPage() {
 
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Name
+                Nombre
               </Label>
               <Input
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="Product name"
+                placeholder="Nombre del producto"
                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
               />
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Price
+                Precio
               </Label>
               <Input
                 type="number"
@@ -429,11 +429,11 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Category
+                Categoría
               </Label>
               <Select value={formCategory} onValueChange={setFormCategory}>
                 <SelectTrigger className="rounded-xl bg-secondary border-0 text-foreground">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Seleccionar categoría" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
                   {(Array.isArray(categories) ? categories : []).map((cat) => (
@@ -446,7 +446,7 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Modifier Groups
+                Grupos de modificadores
               </Label>
               <div className="flex flex-col gap-2 max-h-40 overflow-y-auto mt-2 border border-border p-3 rounded-xl bg-secondary/50">
                 {(Array.isArray(modifiers) ? modifiers : []).map((mod) => (
@@ -465,12 +465,12 @@ export default function ProductsPage() {
                   </div>
                 ))}
                 {(!modifiers || modifiers.length === 0) && (
-                  <span className="text-xs text-muted-foreground text-center py-2">No modifiers available</span>
+                  <span className="text-xs text-muted-foreground text-center py-2">Sin modificadores disponibles</span>
                 )}
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <Label className="text-sm text-muted-foreground">Active</Label>
+              <Label className="text-sm text-muted-foreground">Activo</Label>
               <Switch checked={formActive} onCheckedChange={setFormActive} />
             </div>
           </div>
@@ -480,7 +480,7 @@ export default function ProductsPage() {
               onClick={() => setDialogOpen(false)}
               className="rounded-xl"
             >
-              Cancel
+              Cancelar
             </Button>
             <Button
               onClick={handleSave}
@@ -490,9 +490,9 @@ export default function ProductsPage() {
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : editProduct ? (
-                "Save Changes"
+                "Guardar cambios"
               ) : (
-                "Create Product"
+                "Crear producto"
               )}
             </Button>
           </DialogFooter>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import useSWR from "swr"
-import { Clock, ChefHat, Package, CheckCircle2, Volume2, VolumeX, AlertCircle } from "lucide-react"
+import { ChefHat, Package, CheckCircle2, Volume2, VolumeX, AlertCircle } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,7 @@ import { updateOrderStatus } from "@/app/actions"
 import type { Order, OrderStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { playNewOrderSound, playOrderReadySound, unlockAudio } from "@/lib/sounds"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -69,32 +70,40 @@ export default function KitchenDisplayPage() {
     const [orders, setOrders] = useState<Order[]>([])
     const [soundEnabled, setSoundEnabled] = useState(true)
     const [fullscreen, setFullscreen] = useState(false)
-    const audioRef = useRef<HTMLAudioElement | null>(null)
-    const prevOrdersRef = useRef<Order[]>([])
-
-    // Initialize audio
-    useEffect(() => {
-        audioRef.current = new Audio("/notification.mp3")
-    }, [])
+    const prevStatusMapRef = useRef<Map<string, OrderStatus>>(new Map())
 
     useEffect(() => {
-        if (initialOrders) {
-            // Check for new orders
-            const prevIds = new Set(prevOrdersRef.current.map((o) => o.id))
-            const newOrders = initialOrders.filter((o) => !prevIds.has(o.id) && o.status === "new")
+        if (!initialOrders) return
 
-            if (newOrders.length > 0 && soundEnabled && audioRef.current) {
-                audioRef.current.play().catch(() => { })
-                newOrders.forEach((o) => {
-                    toast.info(`Nuevo pedido #${o.orderNumber}`, {
-                        duration: 5000,
-                    })
-                })
+        const prev = prevStatusMapRef.current
+        const isFirstLoad = prev.size === 0
+
+        if (!isFirstLoad) {
+            const newOrders = initialOrders.filter(
+                (o) => !prev.has(o.id) && o.status === "new"
+            )
+            const justReady = initialOrders.filter(
+                (o) => prev.has(o.id) && prev.get(o.id) !== "ready" && o.status === "ready"
+            )
+
+            if (soundEnabled) {
+                if (newOrders.length > 0) {
+                    playNewOrderSound()
+                    newOrders.forEach((o) =>
+                        toast.info(`Nuevo pedido #${o.orderNumber}`, { duration: 6000 })
+                    )
+                }
+                if (justReady.length > 0) {
+                    playOrderReadySound()
+                    justReady.forEach((o) =>
+                        toast.success(`Pedido #${o.orderNumber} listo`, { duration: 6000 })
+                    )
+                }
             }
-
-            setOrders(initialOrders)
-            prevOrdersRef.current = initialOrders
         }
+
+        prevStatusMapRef.current = new Map(initialOrders.map((o) => [o.id, o.status]))
+        setOrders(initialOrders)
     }, [initialOrders, soundEnabled])
 
     // Realtime subscription
@@ -151,17 +160,17 @@ export default function KitchenDisplayPage() {
                         className="text-2xl font-bold text-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
-                        Kitchen Display
+                        Pantalla de cocina
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Manage orders in real-time
+                        Gestioná los pedidos en tiempo real
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => setSoundEnabled(!soundEnabled)}
+                        onClick={() => { unlockAudio(); setSoundEnabled(!soundEnabled) }}
                         className="rounded-full"
                     >
                         {soundEnabled ? (
@@ -175,7 +184,7 @@ export default function KitchenDisplayPage() {
                         onClick={toggleFullscreen}
                         className="rounded-full"
                     >
-                        {fullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                        {fullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
                     </Button>
                 </div>
             </div>

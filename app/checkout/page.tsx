@@ -10,14 +10,57 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCartStore } from "@/lib/store"
-import type { DeliveryMethod, PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
+import type { PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { createOrder } from "@/app/actions"
 import { CouponInput } from "@/components/storefront/coupon-input"
 import { GoogleMapsProvider, AddressSelector } from "@/components/maps"
+import { findDeliveryZoneForPoint, formatZoneMeta, getZoneDeliveryFee } from "@/lib/delivery-zones"
+
+function getBranchCity(address: string) {
+  const parts = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  if (parts.length >= 2) return parts[parts.length - 2]
+  return parts[0] || "Ciudad no configurada"
+}
+
+function getDistanceKm(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+) {
+  const earthRadiusKm = 6371
+  const dLat = ((to.lat - from.lat) * Math.PI) / 180
+  const dLng = ((to.lng - from.lng) * Math.PI) / 180
+  const fromLat = (from.lat * Math.PI) / 180
+  const toLat = (to.lat * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function getBranchesCenter(branches: Branch[]) {
+  const locatedBranches = branches.filter(
+    (branch) => branch.isOpen && branch.lat != null && branch.lng != null
+  )
+
+  if (locatedBranches.length === 0) return undefined
+
+  return {
+    lat:
+      locatedBranches.reduce((sum, branch) => sum + branch.lat!, 0) /
+      locatedBranches.length,
+    lng:
+      locatedBranches.reduce((sum, branch) => sum + branch.lng!, 0) /
+      locatedBranches.length,
+  }
+}
 
 export default function CheckoutPage() {
   const items = useCartStore((s) => s.items)
@@ -26,7 +69,7 @@ export default function CheckoutPage() {
   const router = useRouter()
 
   const [deliveryMethod, setDeliveryMethod] =
-    useState<DeliveryMethod>("delivery")
+    useState<"delivery" | "pickup">("delivery")
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("mercadopago")
 
@@ -37,6 +80,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranch, setSelectedBranch] = useState("")
+  const [allDeliveryZones, setAllDeliveryZones] = useState<DeliveryZone[]>([])
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([])
   const [selectedZone, setSelectedZone] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<{
@@ -54,99 +98,121 @@ export default function CheckoutPage() {
   } | null>(null)
 
   useEffect(() => {
-    fetch("/api/admin?type=branches")
+    fetch("/api/checkout-data")
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) {
-          setBranches(data)
-          const openBranch = data.find((b: Branch) => b.isOpen)
+        if (Array.isArray(data?.branches)) {
+          setBranches(data.branches)
+          const openBranch = data.branches.find((b: Branch) => b.isOpen)
           if (openBranch) setSelectedBranch(openBranch.id)
         }
+        if (Array.isArray(data?.deliveryZones)) setAllDeliveryZones(data.deliveryZones)
       })
-      .catch(() => { })
+      .catch(() => {
+        toast.error("No se pudieron cargar las zonas de envío")
+      })
   }, [])
 
-  // Load delivery zones when branch is selected
   useEffect(() => {
-    if (selectedBranch) {
-      fetch(`/api/admin?type=delivery-zones`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (Array.isArray(data)) {
-            const zones = data.filter((z: DeliveryZone) => z.branchId === selectedBranch)
-            setDeliveryZones(zones)
-            if (zones.length > 0) setSelectedZone(zones[0].id)
-          }
-        })
-        .catch(() => { })
-    }
-  }, [selectedBranch])
+    if (!selectedBranch) return
+    setDeliveryZones(allDeliveryZones.filter((z) => z.branchId === selectedBranch))
+  }, [allDeliveryZones, selectedBranch])
 
   // Update address when location is selected from map
   useEffect(() => {
     if (selectedLocation) {
       setAddress(selectedLocation.address)
-      // Auto-detect zone based on coordinates
-      if (deliveryZones.length > 0) {
-        // Simple point-in-polygon check for auto-selection
-        const point = { lat: selectedLocation.lat, lng: selectedLocation.lng }
-        for (const zone of deliveryZones) {
-          if (isPointInPolygon(point, zone.coordinates)) {
-            setSelectedZone(zone.id)
-            break
+
+      const openBranches = branches.filter(
+        (branch) => branch.isOpen && branch.lat != null && branch.lng != null
+      )
+
+      const candidates = openBranches
+        .map((branch) => {
+          const branchZones = allDeliveryZones.filter((zone) => zone.branchId === branch.id)
+          const zone = findDeliveryZoneForPoint(branchZones, selectedLocation)
+
+          return {
+            branch,
+            branchZones,
+            zone,
+            distanceKm: getDistanceKm(
+              { lat: branch.lat!, lng: branch.lng! },
+              selectedLocation
+            ),
           }
-        }
+        })
+        .sort((a, b) => {
+          if (a.zone && !b.zone) return -1
+          if (!a.zone && b.zone) return 1
+          return a.distanceKm - b.distanceKm
+        })
+
+      const best = candidates[0]
+      if (best) {
+        setSelectedBranch(best.branch.id)
+        setDeliveryZones(best.branchZones)
+        setSelectedZone(best.zone?.id || "")
+      }
+
+      if (!best?.zone && allDeliveryZones.length > 0) {
+        toast.warning("Esa dirección está fuera de las zonas de envío")
       }
     }
-  }, [selectedLocation, deliveryZones])
+  }, [allDeliveryZones, branches, selectedLocation])
 
-  // Point in polygon check
-  function isPointInPolygon(
-    point: { lat: number; lng: number },
-    polygon: { lat: number; lng: number }[]
-  ): boolean {
-    if (!polygon || polygon.length < 3) return false
-    let inside = false
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i].lng
-      const yi = polygon[i].lat
-      const xj = polygon[j].lng
-      const yj = polygon[j].lat
-      const intersect =
-        yi > point.lat !== yj > point.lat &&
-        point.lng < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi
-      if (intersect) inside = !inside
-    }
-    return inside
-  }
+  const selectedBranchInfo = branches.find((branch) => branch.id === selectedBranch)
+  const selectedBranchLocation =
+    selectedBranchInfo?.lat != null && selectedBranchInfo?.lng != null
+      ? {
+          lat: selectedBranchInfo.lat,
+          lng: selectedBranchInfo.lng,
+          title: selectedBranchInfo.name,
+        }
+      : undefined
+  const branchesSearchCenter = getBranchesCenter(branches)
+  const openBranchIds = new Set(
+    branches.filter((branch) => branch.isOpen).map((branch) => branch.id)
+  )
+  const visibleDeliveryZones = selectedLocation
+    ? deliveryZones
+    : allDeliveryZones.filter(
+        (zone) => zone.isActive && openBranchIds.has(zone.branchId)
+      )
+  const selectedZoneInfo = deliveryZones.find((z) => z.id === selectedZone)
+  const hasCoverageCheck = deliveryMethod === "delivery" && deliveryZones.length > 0
+  const isOutsideCoverage = hasCoverageCheck && selectedLocation && !selectedZoneInfo
+  const shouldCalculateDelivery = hasCoverageCheck && !selectedZoneInfo
 
-  // Calculate delivery fee based on zone
   const getDeliveryFee = () => {
     if (deliveryMethod !== "delivery") return 0
-    const zone = deliveryZones.find((z) => z.id === selectedZone)
-    return zone?.deliveryFee || 3.99
+    return getZoneDeliveryFee(selectedZoneInfo, subtotalAfterDiscount)
   }
 
-  const deliveryFee = getDeliveryFee()
   const couponDiscount = appliedCoupon?.discount || 0
   const subtotalAfterDiscount = Math.max(0, totalPrice - couponDiscount)
+  const deliveryFee = getDeliveryFee()
   const grandTotal = subtotalAfterDiscount + deliveryFee
 
   const handlePlaceOrder = async () => {
     if (!name || !phone) {
-      toast.error("Please fill in your name and phone number")
+      toast.error("Por favor completá tu nombre y teléfono")
       return
     }
     if (deliveryMethod === "delivery" && !address) {
-      toast.error("Please enter a delivery address")
+      toast.error("Por favor ingresá una dirección de entrega")
       return
     }
-    if (deliveryMethod === "delivery" && !selectedZone) {
-      toast.error("Please select a delivery zone")
+    if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedLocation) {
+      toast.error("Marcá tu ubicación en el mapa para confirmar la zona de envío")
+      return
+    }
+    if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedZone) {
+      toast.error("La dirección está fuera de las zonas de envío disponibles")
       return
     }
     if (items.length === 0) {
-      toast.error("Your cart is empty")
+      toast.error("Tu carrito está vacío")
       return
     }
 
@@ -178,10 +244,10 @@ export default function CheckoutPage() {
       }
 
       clearCart()
-      toast.success(`Order #${result.orderNumber} placed!`)
+      toast.success(`¡Pedido #${result.orderNumber} realizado!`)
       router.push(`/order/${result.trackingToken}`)
     } catch {
-      toast.error("Something went wrong. Please try again.")
+      toast.error("Algo salió mal. Por favor intentá de nuevo.")
     } finally {
       setLoading(false)
     }
@@ -190,9 +256,9 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-6">
-        <p className="text-muted-foreground">Your cart is empty</p>
-        <Button asChild variant="outline">
-          <Link href="/">Back to Menu</Link>
+        <p className="text-muted-foreground">Tu carrito está vacío</p>
+        <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
+          <Link href="/">Ver menú</Link>
         </Button>
       </div>
     )
@@ -200,11 +266,11 @@ export default function CheckoutPage() {
 
   return (
     <GoogleMapsProvider>
-      <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
+      <div className="min-h-screen bg-secondary">
+        <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
           <div className="mx-auto max-w-3xl flex items-center gap-3 px-4 py-3">
-            <Button variant="ghost" size="icon" className="rounded-full" asChild>
-              <Link href="/" aria-label="Back to menu">
+            <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" asChild>
+              <Link href="/" aria-label="Volver al menú">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
@@ -212,7 +278,7 @@ export default function CheckoutPage() {
               className="text-lg font-bold text-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Checkout
+              Finalizar pedido
             </h1>
           </div>
         </header>
@@ -222,7 +288,7 @@ export default function CheckoutPage() {
             {/* Delivery Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                Delivery Method
+                Método de entrega
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -278,136 +344,107 @@ export default function CheckoutPage() {
                         : "text-muted-foreground"
                     )}
                   >
-                    Pickup
+                    Retiro en local
                   </span>
                 </button>
-              </div>
-            </section>
-
-            {/* Branch & Zone Selection */}
-            <section className="rounded-2xl bg-card border border-border p-5">
-              <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                {deliveryMethod === "delivery" ? "Sucursal & Zona" : "Sucursal"}
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm text-muted-foreground mb-1.5 block">
-                    Sucursal
-                  </Label>
-                  <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                    <SelectTrigger className="rounded-xl bg-secondary border-0">
-                      <SelectValue placeholder="Selecciona una sucursal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches.map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id}>
-                          {branch.name} {branch.isOpen ? "(Abierta)" : "(Cerrada)"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {deliveryMethod === "delivery" && deliveryZones.length > 0 && (
-                  <div>
-                    <Label className="text-sm text-muted-foreground mb-1.5 block">
-                      Zona de Delivery
-                    </Label>
-                    <Select value={selectedZone} onValueChange={setSelectedZone}>
-                      <SelectTrigger className="rounded-xl bg-secondary border-0">
-                        <SelectValue placeholder="Selecciona una zona" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {deliveryZones.map((zone) => (
-                          <SelectItem key={zone.id} value={zone.id}>
-                            <span className="flex items-center gap-2">
-                              <span
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: zone.color }}
-                              />
-                              {zone.name} - ${zone.deliveryFee.toFixed(2)}
-                              {zone.estimatedTimeMin && ` (~${zone.estimatedTimeMin} min)`}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
               </div>
             </section>
 
             {/* Contact Info */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                Contact Info
+                Datos de contacto
               </h2>
               <div className="flex flex-col gap-4">
                 <div>
                   <Label htmlFor="name" className="text-sm text-muted-foreground mb-1.5 block">
-                    Name
+                    Nombre
                   </Label>
                   <Input
                     id="name"
-                    placeholder="Your name"
+                    placeholder="Tu nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                    className="rounded-xl bg-white border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                   />
                 </div>
                 <div>
                   <Label htmlFor="phone" className="text-sm text-muted-foreground mb-1.5 block">
-                    Phone
+                    Teléfono
                   </Label>
                   <Input
                     id="phone"
                     placeholder="+54 11 5555-0000"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                    className="rounded-xl bg-white border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                   />
                 </div>
                 {deliveryMethod === "delivery" && (
                   <>
-                    <div>
-                      <Label htmlFor="address" className="text-sm text-muted-foreground mb-1.5 block">
-                        Address
-                      </Label>
-                      <Input
-                        id="address"
-                        placeholder="Street, number, apartment"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
-                      />
-                    </div>
-
                     {/* Map Address Selector */}
                     <div className="pt-2">
                       <Label className="text-sm text-muted-foreground mb-1.5 block">
-                        Selecciona tu ubicación en el mapa
+                        Dirección de entrega
                       </Label>
                       <AddressSelector
                         value={selectedLocation || undefined}
                         onChange={setSelectedLocation}
-                        zones={deliveryZones.map(z => ({
+                        defaultCenter={selectedBranchLocation}
+                        searchCenter={branchesSearchCenter}
+                        searchRadiusKm={80}
+                        branchMarker={selectedBranchLocation}
+                        zones={visibleDeliveryZones.map(z => ({
                           id: z.id,
                           name: z.name,
                           color: z.color,
                           coordinates: z.coordinates || []
                         }))}
                         height="300px"
-                        placeholder="Buscar dirección..."
+                        placeholder="Buscar dirección de entrega..."
+                        showInstructions={false}
+                        simpleMap
                       />
+                      <div className="mt-3 rounded-xl border border-border bg-white p-3">
+                        {selectedZoneInfo ? (
+                          <div className="flex items-start gap-3">
+                            <span
+                              className="mt-1 h-3 w-3 rounded-full shrink-0"
+                              style={{ backgroundColor: selectedZoneInfo.color }}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-foreground">
+                                {selectedZoneInfo.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatZoneMeta(selectedZoneInfo)}
+                              </p>
+                              {selectedBranchInfo && (
+                                <p className="text-xs text-muted-foreground">
+                                  Sale desde {getBranchCity(selectedBranchInfo.address)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ) : isOutsideCoverage ? (
+                          <p className="text-sm text-destructive">
+                            Esta dirección está fuera de nuestras zonas de envío.
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Buscá tu dirección o mové el pin para calcular envío.
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div>
                       <Label htmlFor="notes" className="text-sm text-muted-foreground mb-1.5 block">
-                        Delivery Notes
+                        Notas de entrega
                       </Label>
                       <Textarea
                         id="notes"
-                        placeholder="Ring bell, leave at door, etc."
+                        placeholder="Tocar timbre, dejar en puerta, etc."
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         rows={2}
@@ -422,7 +459,7 @@ export default function CheckoutPage() {
             {/* Payment Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                Payment Method
+                Método de pago
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -478,7 +515,7 @@ export default function CheckoutPage() {
                         : "text-muted-foreground"
                     )}
                   >
-                    Cash
+                    Efectivo
                   </span>
                 </button>
               </div>
@@ -489,7 +526,7 @@ export default function CheckoutPage() {
           <aside className="lg:w-80 shrink-0">
             <div className="rounded-2xl bg-card border border-border p-5 lg:sticky lg:top-20 space-y-4">
               <h2 className="font-semibold text-card-foreground text-sm uppercase tracking-wide">
-                Order Summary
+                Resumen del pedido
               </h2>
               <div className="flex flex-col gap-3">
                 {items.map((item) => {
@@ -555,10 +592,14 @@ export default function CheckoutPage() {
                 <div className="flex justify-between text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Truck className="h-3.5 w-3.5" />
-                    Delivery
+                    {selectedZoneInfo ? `Delivery · ${selectedZoneInfo.name}` : "Delivery"}
                   </span>
                   <span>
-                    {deliveryFee > 0 ? `$${deliveryFee.toFixed(2)}` : "Free"}
+                    {shouldCalculateDelivery
+                      ? "A calcular"
+                      : deliveryFee > 0
+                        ? `$${deliveryFee.toFixed(2)}`
+                        : "Gratis"}
                   </span>
                 </div>
                 
@@ -578,10 +619,10 @@ export default function CheckoutPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Placing Order...
+                    Procesando pedido...
                   </>
                 ) : (
-                  "Place Order"
+                  "Confirmar pedido"
                 )}
               </Button>
             </div>

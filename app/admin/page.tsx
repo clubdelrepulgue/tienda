@@ -14,12 +14,12 @@ const statusConfig: Record<
   OrderStatus,
   { label: string; className: string }
 > = {
-  new: { label: "New", className: "bg-chart-1/15 text-chart-1 border-chart-1/20" },
-  accepted: { label: "Accepted", className: "bg-chart-2/15 text-chart-2 border-chart-2/20" },
-  preparing: { label: "Preparing", className: "bg-accent/15 text-accent border-accent/20" },
-  ready: { label: "Ready", className: "bg-chart-3/15 text-chart-3 border-chart-3/20" },
-  delivered: { label: "Delivered", className: "bg-muted text-muted-foreground border-border" },
-  cancelled: { label: "Cancelled", className: "bg-destructive/15 text-destructive border-destructive/20" },
+  new: { label: "Nuevo", className: "bg-chart-1/15 text-chart-1 border-chart-1/20" },
+  accepted: { label: "Aceptado", className: "bg-chart-2/15 text-chart-2 border-chart-2/20" },
+  preparing: { label: "Preparando", className: "bg-accent/15 text-accent border-accent/20" },
+  ready: { label: "Listo", className: "bg-chart-3/15 text-chart-3 border-chart-3/20" },
+  delivered: { label: "Entregado", className: "bg-muted text-muted-foreground border-border" },
+  cancelled: { label: "Cancelado", className: "bg-destructive/15 text-destructive border-destructive/20" },
 }
 
 export default function AdminDashboard() {
@@ -59,10 +59,10 @@ export default function AdminDashboard() {
           className="text-2xl font-bold text-foreground"
           style={{ fontFamily: "var(--font-heading)" }}
         >
-          Dashboard
+          Panel
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {"Today's overview"}
+          Resumen de hoy
         </p>
       </div>
 
@@ -71,7 +71,7 @@ export default function AdminDashboard() {
         <Card className="rounded-2xl bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Revenue
+              Ingresos
             </CardTitle>
             <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
@@ -81,7 +81,7 @@ export default function AdminDashboard() {
             </p>
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
               <TrendingUp className="h-3 w-3 text-chart-3" />
-              {todayOrders.length} orders today
+              {todayOrders.length} pedidos hoy
             </p>
           </CardContent>
         </Card>
@@ -89,7 +89,7 @@ export default function AdminDashboard() {
         <Card className="rounded-2xl bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Orders
+              Total Pedidos
             </CardTitle>
             <ShoppingBag className="h-4 w-4 text-primary" />
           </CardHeader>
@@ -97,14 +97,14 @@ export default function AdminDashboard() {
             <p className="text-2xl font-bold text-card-foreground">
               {todayOrders.length}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Today</p>
+            <p className="text-xs text-muted-foreground mt-1">Hoy</p>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active
+              Activos
             </CardTitle>
             <Clock className="h-4 w-4 text-accent" />
           </CardHeader>
@@ -112,14 +112,14 @@ export default function AdminDashboard() {
             <p className="text-2xl font-bold text-card-foreground">
               {activeOrders}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">In progress</p>
+            <p className="text-xs text-muted-foreground mt-1">En curso</p>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Avg. Order
+              Ticket Prom.
             </CardTitle>
             <DollarSign className="h-4 w-4 text-chart-2" />
           </CardHeader>
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
             <p className="text-2xl font-bold text-card-foreground">
               ${todayOrders.length > 0 ? (revenue / todayOrders.length).toFixed(2) : "0.00"}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Per order</p>
+            <p className="text-xs text-muted-foreground mt-1">Por pedido</p>
           </CardContent>
         </Card>
       </div>
@@ -139,13 +139,13 @@ export default function AdminDashboard() {
             className="text-lg font-bold text-card-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            Recent Orders
+            Pedidos Recientes
           </CardTitle>
         </CardHeader>
         <CardContent>
           {todayOrders.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No orders yet
+              Sin pedidos aún
             </p>
           ) : (
             <div className="flex flex-col gap-3">

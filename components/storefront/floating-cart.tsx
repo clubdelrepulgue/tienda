@@ -22,12 +22,12 @@ export function FloatingCart({ onCartOpen }: FloatingCartProps) {
       >
         <div className="flex items-center gap-2">
           <ShoppingBag className="h-5 w-5" />
-          <span className="bg-primary-foreground/20 rounded-full px-2 py-0.5 text-sm">
+          <span className="bg-primary-foreground/20 rounded-full px-2 py-0.5 text-sm font-bold">
             {totalItems}
           </span>
         </div>
-        <span className="flex-1 text-center md:text-left">View Cart</span>
-        <span>${totalPrice.toFixed(2)}</span>
+        <span className="flex-1 text-center md:text-left font-bold">Ver carrito</span>
+        <span className="font-bold">${totalPrice.toFixed(2)}</span>
       </Button>
     </div>
   )

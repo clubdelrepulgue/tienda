@@ -29,6 +29,7 @@ import type { Order, Driver, DeliveryZone } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
+import { formatZoneMeta } from "@/lib/delivery-zones"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -280,12 +281,25 @@ export default function DispatchPage() {
                         className="h-4 w-4"
                         style={{ color: zone?.color }}
                       />
-                      <span className="text-sm font-semibold flex-1">
-                        {zone?.name || "Sin zona"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {zoneOrders.length} orden{zoneOrders.length !== 1 ? "es" : ""}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold">
+                            {zone?.name || "Sin zona"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {zoneOrders.length} orden{zoneOrders.length !== 1 ? "es" : ""}
+                          </span>
+                        </div>
+                        {zone ? (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {formatZoneMeta(zone)}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-destructive">
+                            Revisar coordenadas o zona antes de asignar
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {/* Orders */}
@@ -338,6 +352,27 @@ export default function DispatchPage() {
                                       {order.address}
                                     </p>
                                   )}
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[11px] px-2 py-0.5"
+                                      style={{
+                                        borderColor: zone?.color || undefined,
+                                        color: zone?.color || undefined,
+                                      }}
+                                    >
+                                      {zone?.name || "Sin zona"}
+                                    </Badge>
+                                    {order.addressLat != null && order.addressLng != null ? (
+                                      <span className="text-[11px] text-muted-foreground">
+                                        GPS confirmado
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] text-destructive">
+                                        Sin coordenadas
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="flex items-center justify-between mt-2">
                                     <span className="font-semibold text-sm">
                                       ${order.total.toFixed(2)}

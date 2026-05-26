@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { Map, useMap, Marker } from "@vis.gl/react-google-maps"
 import { Polygon } from "./polygon"
 import { Button } from "@/components/ui/button"
@@ -11,9 +11,17 @@ interface ZoneEditorProps {
     center?: { lat: number; lng: number }
     branchMarker?: { lat: number; lng: number; title?: string }
     zoneColor?: string
+    previewZones?: {
+        id: string
+        name: string
+        color: string
+        coordinates: { lat: number; lng: number }[]
+        radiusKm?: number
+    }[]
     onChange: (coordinates: { lat: number; lng: number }[]) => void
     height?: string
     readOnly?: boolean
+    showPointMarkers?: boolean
 }
 
 const defaultCenter = { lat: -34.6037, lng: -58.3816 }
@@ -23,14 +31,25 @@ export function ZoneEditor({
     center,
     branchMarker,
     zoneColor = "#3b82f6",
+    previewZones = [],
     onChange,
     height = "500px",
     readOnly = false,
+    showPointMarkers = true,
 }: ZoneEditorProps) {
     const map = useMap()
     const [coordinates, setCoordinates] = useState<{ lat: number; lng: number }[]>(initialCoordinates)
     const [mapCenter, setMapCenter] = useState(center || defaultCenter)
     const [geolocating, setGeolocating] = useState(false)
+    const sortedPreviewZones = useMemo(
+        () =>
+            [...previewZones].sort((a, b) => {
+                const radiusA = a.radiusKm ?? getPolygonArea(a.coordinates)
+                const radiusB = b.radiusKm ?? getPolygonArea(b.coordinates)
+                return radiusB - radiusA
+            }),
+        [previewZones]
+    )
 
     // On mount, try geolocation if no explicit center provided
     useEffect(() => {
@@ -112,8 +131,20 @@ export function ZoneEditor({
                         mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || undefined}
                         onClick={handleMapClick}
                     >
+                        {/* Preview zones are drawn largest first so inner zones remain visible. */}
+                        {sortedPreviewZones.map((zone, index) => (
+                            <Polygon
+                                key={zone.id}
+                                paths={zone.coordinates}
+                                strokeColor={zone.color}
+                                fillColor={zone.color}
+                                fillOpacity={0.14 + index * 0.04}
+                                strokeWeight={3}
+                            />
+                        ))}
+
                         {/* Polygon */}
-                        {coordinates.length >= 2 && (
+                        {sortedPreviewZones.length === 0 && coordinates.length >= 2 && (
                             <Polygon
                                 paths={coordinates}
                                 strokeColor={zoneColor}
@@ -125,6 +156,7 @@ export function ZoneEditor({
 
                         {/* Point markers */}
                         {!readOnly &&
+                            showPointMarkers &&
                             coordinates.map((coord, index) => (
                                 <Marker
                                     key={`point-${index}`}
@@ -167,6 +199,30 @@ export function ZoneEditor({
                 )}
             </div>
 
+            {sortedPreviewZones.length > 0 && (
+                <div className="grid grid-cols-1 gap-2">
+                    {[...sortedPreviewZones].reverse().map((zone) => (
+                        <div
+                            key={`legend-${zone.id}`}
+                            className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+                        >
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                    className="h-3 w-3 rounded-full shrink-0"
+                                    style={{ backgroundColor: zone.color }}
+                                />
+                                <span className="font-medium truncate">{zone.name}</span>
+                            </div>
+                            {zone.radiusKm && (
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                    hasta {zone.radiusKm} km
+                                </span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Controls */}
             {!readOnly && (
                 <div className="flex items-center justify-between">
@@ -198,5 +254,16 @@ export function ZoneEditor({
                 </div>
             )}
         </div>
+    )
+}
+
+function getPolygonArea(polygon: { lat: number; lng: number }[]) {
+    if (!polygon || polygon.length < 3) return 0
+
+    return Math.abs(
+        polygon.reduce((area, point, index) => {
+            const next = polygon[(index + 1) % polygon.length]
+            return area + point.lng * next.lat - next.lng * point.lat
+        }, 0) / 2
     )
 }

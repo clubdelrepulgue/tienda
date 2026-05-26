@@ -16,36 +16,36 @@ export function CategoryTabs({
   onCategoryChange,
 }: CategoryTabsProps) {
   return (
-    <div className="sticky top-[57px] z-40 bg-background/80 backdrop-blur-xl border-b border-border">
+    <div className="sticky top-[84px] z-40 bg-white border-b border-border">
       <ScrollArea className="mx-auto max-w-5xl">
         <div className="flex items-center gap-2 px-4 py-3">
           <button
             onClick={() => onCategoryChange("all")}
             className={cn(
-              "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
+              "shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all whitespace-nowrap",
               activeCategory === "all"
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                ? "bg-primary text-white"
+                : "bg-white text-foreground border border-border hover:border-primary/40 hover:text-primary"
             )}
           >
-            All
+            Todas
           </button>
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => onCategoryChange(cat.id)}
               className={cn(
-                "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
+                "shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all whitespace-nowrap",
                 activeCategory === cat.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  ? "bg-primary text-white"
+                  : "bg-white text-foreground border border-border hover:border-primary/40 hover:text-primary"
               )}
             >
               {cat.name}
             </button>
           ))}
         </div>
-        <ScrollBar orientation="horizontal" />
+        <ScrollBar orientation="horizontal" className="h-1" />
       </ScrollArea>
     </div>
   )

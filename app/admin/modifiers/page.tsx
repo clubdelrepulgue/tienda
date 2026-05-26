@@ -80,12 +80,12 @@ export default function ModifiersPage() {
 
   const handleSave = async () => {
     if (!formName) {
-      toast.error("Please enter a group name")
+      toast.error("Por favor ingresá un nombre para el grupo")
       return
     }
     const validOptions = formOptions.filter((o) => o.name.trim())
     if (validOptions.length === 0) {
-      toast.error("Add at least one option")
+      toast.error("Agregá al menos una opción")
       return
     }
 
@@ -106,7 +106,7 @@ export default function ModifiersPage() {
           toast.error(result.error)
           return
         }
-        toast.success("Modifier group updated")
+        toast.success("Grupo de modificadores actualizado")
       } else {
         const result = await createModifierGroup({
           nombre: formName,
@@ -122,12 +122,12 @@ export default function ModifiersPage() {
           toast.error(result.error)
           return
         }
-        toast.success("Modifier group created")
+        toast.success("Grupo de modificadores creado")
       }
       setDialogOpen(false)
       mutate()
     } catch {
-      toast.error("Something went wrong")
+      toast.error("Ocurrió un error inesperado")
     } finally {
       setSaving(false)
     }
@@ -157,10 +157,10 @@ export default function ModifiersPage() {
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            Modifiers
+            Modificadores
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Configure extras, sauces, sizes, and more
+            Configurá extras, salsas, tamaños y más
           </p>
         </div>
         <Button
@@ -168,7 +168,7 @@ export default function ModifiersPage() {
           onClick={openCreate}
         >
           <Plus className="h-4 w-4" />
-          Add Group
+          Agregar grupo
         </Button>
       </div>
 
@@ -195,14 +195,14 @@ export default function ModifiersPage() {
                       variant="outline"
                       className="text-xs bg-primary/15 text-primary border-primary/20"
                     >
-                      Required
+                      Requerido
                     </Badge>
                   )}
                   <Badge
                     variant="outline"
                     className="text-xs text-muted-foreground border-border"
                   >
-                    Max {group.maxSelections}
+                    Máx. {group.maxSelections}
                   </Badge>
                 </div>
               </div>
@@ -223,7 +223,7 @@ export default function ModifiersPage() {
                     <span className="text-sm text-muted-foreground">
                       {option.price > 0
                         ? `+$${option.price.toFixed(2)}`
-                        : "Free"}
+                        : "Gratis"}
                     </span>
                   </div>
                 ))}
@@ -241,18 +241,18 @@ export default function ModifiersPage() {
               className="text-card-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              {editGroup ? "Edit Modifier Group" : "Create Modifier Group"}
+              {editGroup ? "Editar grupo de modificadores" : "Crear grupo de modificadores"}
             </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4">
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Group Name
+                Nombre del grupo
               </Label>
               <Input
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. Extras, Sauces, Size"
+                placeholder="ej. Extras, Salsas, Tamaño"
                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
               />
             </div>
@@ -264,12 +264,12 @@ export default function ModifiersPage() {
                   id="required"
                 />
                 <Label htmlFor="required" className="text-sm text-muted-foreground">
-                  Required
+                  Requerido
                 </Label>
               </div>
               <div className="flex-1">
                 <Label className="text-sm text-muted-foreground mb-1.5 block">
-                  Max selections
+                  Máx. selecciones
                 </Label>
                 <Input
                   type="number"
@@ -284,7 +284,7 @@ export default function ModifiersPage() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-sm text-muted-foreground">
-                  Options
+                  Opciones
                 </Label>
                 <Button
                   variant="ghost"
@@ -293,7 +293,7 @@ export default function ModifiersPage() {
                   onClick={addOption}
                 >
                   <Plus className="h-3 w-3" />
-                  Add
+                  Agregar
                 </Button>
               </div>
               <div className="flex flex-col gap-2">
@@ -304,7 +304,7 @@ export default function ModifiersPage() {
                       onChange={(e) =>
                         updateOption(i, "name", e.target.value)
                       }
-                      placeholder="Option name"
+                      placeholder="Nombre de opción"
                       className="flex-1 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground text-sm"
                     />
                     <div className="relative w-24">
@@ -326,7 +326,7 @@ export default function ModifiersPage() {
                       size="icon"
                       className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => removeOption(i)}
-                      aria-label="Remove option"
+                      aria-label="Eliminar opción"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -341,7 +341,7 @@ export default function ModifiersPage() {
               onClick={() => setDialogOpen(false)}
               className="rounded-xl"
             >
-              Cancel
+              Cancelar
             </Button>
             <Button
               onClick={handleSave}
@@ -351,9 +351,9 @@ export default function ModifiersPage() {
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : editGroup ? (
-                "Save Changes"
+                "Guardar cambios"
               ) : (
-                "Create Group"
+                "Crear grupo"
               )}
             </Button>
           </DialogFooter>

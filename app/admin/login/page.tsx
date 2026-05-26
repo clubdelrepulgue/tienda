@@ -36,7 +36,7 @@ export default function AdminLoginPage() {
             }
 
             if (!data.user) {
-                setError("Login failed")
+                setError("Inicio de sesión fallido")
                 return
             }
 
@@ -53,11 +53,11 @@ export default function AdminLoginPage() {
                 return
             }
 
-            toast.success("Welcome back!")
+            toast.success("¡Bienvenido de vuelta!")
             router.push("/admin")
             router.refresh()
         } catch {
-            setError("Something went wrong")
+            setError("Ocurrió un error inesperado")
         } finally {
             setLoading(false)
         }
@@ -79,10 +79,10 @@ export default function AdminLoginPage() {
                         className="text-xl text-card-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
-                        Admin Login
+                        Acceso Admin
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Sign in to manage your restaurant
+                        Ingresá para gestionar tu restaurante
                     </p>
                 </CardHeader>
                 <CardContent>
@@ -95,7 +95,7 @@ export default function AdminLoginPage() {
                         )}
                         <div>
                             <Label htmlFor="email" className="text-sm text-muted-foreground mb-1.5 block">
-                                Email
+                                Correo electrónico
                             </Label>
                             <Input
                                 id="email"
@@ -109,7 +109,7 @@ export default function AdminLoginPage() {
                         </div>
                         <div>
                             <Label htmlFor="password" className="text-sm text-muted-foreground mb-1.5 block">
-                                Password
+                                Contraseña
                             </Label>
                             <Input
                                 id="password"
@@ -129,12 +129,12 @@ export default function AdminLoginPage() {
                             {loading ? (
                                 <>
                                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    Signing in...
+                                    Ingresando...
                                 </>
                             ) : (
                                 <>
                                     <LogIn className="h-4 w-4 mr-2" />
-                                    Sign In
+                                    Ingresar
                                 </>
                             )}
                         </Button>

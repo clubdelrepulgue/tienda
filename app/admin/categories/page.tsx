@@ -82,7 +82,7 @@ export default function CategoriesPage() {
 
     const handleSave = async () => {
         if (!formName || !formSlug) {
-            toast.error("Please fill all required fields")
+            toast.error("Por favor completá todos los campos requeridos")
             return
         }
 
@@ -98,7 +98,7 @@ export default function CategoriesPage() {
                     toast.error(result.error)
                     return
                 }
-                toast.success("Category updated")
+                toast.success("Categoría actualizada")
             } else {
                 const result = await createCategory({
                     nombre: formName,
@@ -109,19 +109,19 @@ export default function CategoriesPage() {
                     toast.error(result.error)
                     return
                 }
-                toast.success("Category created")
+                toast.success("Categoría creada")
             }
             setDialogOpen(false)
             mutateCategories()
         } catch {
-            toast.error("Something went wrong")
+            toast.error("Ocurrió un error inesperado")
         } finally {
             setSaving(false)
         }
     }
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm("Are you sure you want to delete this category? Products linked to it might be affected.")) return
+        if (!window.confirm("¿Estás seguro de que querés eliminar esta categoría? Los productos vinculados podrían verse afectados.")) return
 
         try {
             const result = await deleteCategory(id)
@@ -129,10 +129,10 @@ export default function CategoriesPage() {
                 toast.error(result.error)
                 return
             }
-            toast.success("Category deleted")
+            toast.success("Categoría eliminada")
             mutateCategories()
         } catch {
-            toast.error("Failed to delete category")
+            toast.error("Error al eliminar la categoría")
         }
     }
 
@@ -162,10 +162,10 @@ export default function CategoriesPage() {
                         className="text-2xl font-bold text-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
-                        Categories
+                        Categorías
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Organize your products into categories
+                        Organizá tus productos en categorías
                     </p>
                 </div>
                 <Button
@@ -173,7 +173,7 @@ export default function CategoriesPage() {
                     onClick={openCreate}
                 >
                     <Plus className="h-4 w-4" />
-                    Add Category
+                    Agregar categoría
                 </Button>
             </div>
 
@@ -183,7 +183,7 @@ export default function CategoriesPage() {
                         <div className="relative flex-1 max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Search categories..."
+                                placeholder="Buscar categorías..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 className="pl-9 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
@@ -196,10 +196,10 @@ export default function CategoriesPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="border-border hover:bg-transparent">
-                                    <TableHead className="text-muted-foreground">Order</TableHead>
-                                    <TableHead className="text-muted-foreground">Name</TableHead>
+                                    <TableHead className="text-muted-foreground">Orden</TableHead>
+                                    <TableHead className="text-muted-foreground">Nombre</TableHead>
                                     <TableHead className="text-muted-foreground">Slug</TableHead>
-                                    <TableHead className="text-muted-foreground text-right">Actions</TableHead>
+                                    <TableHead className="text-muted-foreground text-right">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -243,7 +243,7 @@ export default function CategoriesPage() {
                                 {filtered.length === 0 && (
                                     <TableRow>
                                         <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                            No categories found.
+                                            No se encontraron categorías.
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -261,18 +261,18 @@ export default function CategoriesPage() {
                             className="text-card-foreground"
                             style={{ fontFamily: "var(--font-heading)" }}
                         >
-                            {editCategory ? "Edit Category" : "Create Category"}
+                            {editCategory ? "Editar categoría" : "Crear categoría"}
                         </DialogTitle>
                     </DialogHeader>
                     <div className="flex flex-col gap-4 py-4">
                         <div>
                             <Label className="text-sm text-muted-foreground mb-1.5 block">
-                                Name
+                                Nombre
                             </Label>
                             <Input
                                 value={formName}
                                 onChange={handleNameChange}
-                                placeholder="e.g. Burgers"
+                                placeholder="ej. Empanadas"
                                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
                             />
                         </div>
@@ -283,13 +283,13 @@ export default function CategoriesPage() {
                             <Input
                                 value={formSlug}
                                 onChange={(e) => setFormSlug(e.target.value)}
-                                placeholder="e.g. burgers"
+                                placeholder="ej. empanadas"
                                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
                             />
                         </div>
                         <div>
                             <Label className="text-sm text-muted-foreground mb-1.5 block">
-                                Order (Display priority)
+                                Orden (prioridad de visualización)
                             </Label>
                             <Input
                                 type="number"
@@ -306,7 +306,7 @@ export default function CategoriesPage() {
                             onClick={() => setDialogOpen(false)}
                             className="rounded-xl"
                         >
-                            Cancel
+                            Cancelar
                         </Button>
                         <Button
                             onClick={handleSave}
@@ -316,9 +316,9 @@ export default function CategoriesPage() {
                             {saving ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : editCategory ? (
-                                "Save Changes"
+                                "Guardar cambios"
                             ) : (
-                                "Create Category"
+                                "Crear categoría"
                             )}
                         </Button>
                     </DialogFooter>

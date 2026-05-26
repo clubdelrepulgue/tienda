@@ -78,7 +78,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
       quantity,
       modifiers: selectedModifiers,
     })
-    toast.success(`${product.name} added to cart`)
+    toast.success(`${product.name} agregado al carrito`)
     setQuantity(1)
     setSelectedModifiers([])
     onClose()
@@ -92,8 +92,9 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="grid max-h-[90vh] max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl border-border bg-card p-0">
-        <div className="relative aspect-video overflow-hidden">
+      <DialogContent className="grid max-h-[90vh] max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl border-border bg-white p-0">
+        {/* Image header with orange background */}
+        <div className="relative aspect-[4/3] overflow-hidden bg-primary/15">
           <Image
             src={product.image}
             alt={product.name}
@@ -101,43 +102,46 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
             className="object-cover"
             sizes="(max-width: 640px) 100vw, 512px"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 via-28% to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 p-5">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1 p-5">
             <DialogTitle
-              className="text-3xl font-bold tracking-tight text-white sm:text-4xl"
+              className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl"
               style={{ fontFamily: "var(--font-heading)" }}
             >
               {product.name}
             </DialogTitle>
-            <p className="max-w-[85%] text-sm leading-relaxed text-white/70 sm:text-base">
-              {product.description}
-            </p>
-            <p className="text-2xl font-bold text-primary sm:text-3xl">
+            {product.description && (
+              <p className="max-w-[85%] text-sm text-white/80">
+                {product.description}
+              </p>
+            )}
+            <p className="text-xl font-extrabold text-white sm:text-2xl">
               ${product.price.toFixed(2)}
             </p>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-3 right-3 z-20 h-8 w-8 rounded-full bg-background/80 text-foreground backdrop-blur-sm hover:bg-background"
+            className="absolute top-3 right-3 z-20 h-8 w-8 rounded-full bg-white/90 text-foreground hover:bg-white shadow-sm"
             onClick={handleClose}
-            aria-label="Close product details"
+            aria-label="Cerrar"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
 
-        <div className="product-modal-scroll min-h-0 overflow-y-auto">
+        {/* Modifiers */}
+        <div className="product-modal-scroll min-h-0 overflow-y-auto bg-white">
           <div className="flex flex-col gap-5 p-5 pr-6">
             {productModifierGroups.map((group) => (
               <div key={group.id}>
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-card-foreground text-sm">
+                  <h4 className="font-bold text-foreground text-sm">
                     {group.name}
                   </h4>
                   {group.required && (
-                    <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full font-medium">
-                      Required
+                    <span className="text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-semibold">
+                      Requerido
                     </span>
                   )}
                 </div>
@@ -167,16 +171,16 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                         <Label
                           key={option.id}
                           htmlFor={option.id}
-                          className="flex items-center justify-between rounded-xl bg-secondary/50 px-4 py-3 cursor-pointer hover:bg-secondary transition-colors"
+                          className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3 cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-colors"
                         >
                           <div className="flex items-center gap-3">
                             <RadioGroupItem value={option.id} id={option.id} />
-                            <span className="text-sm text-card-foreground">
+                            <span className="text-sm font-medium text-foreground">
                               {option.name}
                             </span>
                           </div>
                           {option.price > 0 && (
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-sm font-semibold text-primary">
                               +${option.price.toFixed(2)}
                             </span>
                           )}
@@ -195,7 +199,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                         <Label
                           key={option.id}
                           htmlFor={`check-${option.id}`}
-                          className="flex items-center justify-between rounded-xl bg-secondary/50 px-4 py-3 cursor-pointer hover:bg-secondary transition-colors"
+                          className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3 cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-colors"
                         >
                           <div className="flex items-center gap-3">
                             <Checkbox
@@ -212,12 +216,12 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                                 )
                               }
                             />
-                            <span className="text-sm text-card-foreground">
+                            <span className="text-sm font-medium text-foreground">
                               {option.name}
                             </span>
                           </div>
                           {option.price > 0 && (
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-sm font-semibold text-primary">
                               +${option.price.toFixed(2)}
                             </span>
                           )}
@@ -231,35 +235,36 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
           </div>
         </div>
 
-        <div className="p-5 border-t border-border flex items-center gap-4">
-          <div className="flex items-center gap-3 bg-secondary rounded-xl px-1">
+        {/* Add to cart footer */}
+        <div className="p-5 border-t border-border flex items-center gap-4 bg-secondary/50">
+          <div className="flex items-center gap-3 bg-white rounded-xl border border-border px-1 shadow-sm">
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-lg"
+              className="h-9 w-9 rounded-lg hover:bg-primary/10"
               onClick={() => setQuantity(Math.max(1, quantity - 1))}
-              aria-label="Decrease quantity"
+              aria-label="Disminuir"
             >
               <Minus className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-semibold w-6 text-center text-foreground">
+            <span className="text-sm font-bold w-6 text-center text-foreground">
               {quantity}
             </span>
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-lg"
+              className="h-9 w-9 rounded-lg hover:bg-primary/10"
               onClick={() => setQuantity(quantity + 1)}
-              aria-label="Increase quantity"
+              aria-label="Aumentar"
             >
               <Plus className="h-4 w-4" />
             </Button>
           </div>
           <Button
-            className="flex-1 h-11 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+            className="flex-1 h-11 rounded-xl bg-primary text-white hover:bg-primary/90 font-bold shadow-sm"
             onClick={handleAddToCart}
           >
-            Add to Cart - ${itemTotal.toFixed(2)}
+            Agregar — ${itemTotal.toFixed(2)}
           </Button>
         </div>
       </DialogContent>

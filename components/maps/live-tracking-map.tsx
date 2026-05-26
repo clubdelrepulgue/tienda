@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
-import { Map, AdvancedMarker, Pin, useMap } from "@vis.gl/react-google-maps"
+import { Map, AdvancedMarker, Marker, Pin, useMap } from "@vis.gl/react-google-maps"
 import { Card, CardContent } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { Navigation, Clock, Bike, MapPin, Gauge } from "lucide-react"
@@ -11,6 +11,13 @@ interface LiveTrackingMapProps {
     driverId?: string
     destination: { lat: number; lng: number; address: string }
     branchLocation?: { lat: number; lng: number }
+    initialDriverLocation?: {
+        lat: number
+        lng: number
+        accuracy?: number | null
+        heading?: number | null
+        speed?: number | null
+    } | null
     height?: string
 }
 
@@ -28,6 +35,9 @@ interface RouteInfo {
     durationMinutes: number
     polyline: string | null
 }
+
+const routeCache = new globalThis.Map<string, { route: RouteInfo; cachedAt: number }>()
+const ROUTE_CACHE_MS = 60_000
 
 // Decode Google encoded polyline into LatLng array
 function decodePolyline(encoded: string): google.maps.LatLngLiteral[] {
@@ -120,6 +130,7 @@ export function LiveTrackingMap({
     driverId,
     destination,
     branchLocation,
+    initialDriverLocation,
     height = "350px",
 }: LiveTrackingMapProps) {
     const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null)
@@ -127,27 +138,52 @@ export function LiveTrackingMap({
     const [route, setRoute] = useState<RouteInfo | null>(null)
     const [routeLoading, setRouteLoading] = useState(false)
     const hasMapId = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID
+    const lastRouteRequestRef = useRef<{ key: string; requestedAt: number } | null>(null)
 
     // Fetch real route from Directions API
     const fetchRoute = useCallback(
         async (driverLat: number, driverLng: number) => {
+            const originLat = driverLat.toFixed(4)
+            const originLng = driverLng.toFixed(4)
+            const destLat = destination.lat.toFixed(4)
+            const destLng = destination.lng.toFixed(4)
+            const cacheKey = `${originLat},${originLng}:${destLat},${destLng}`
+            const now = Date.now()
+            const cached = routeCache.get(cacheKey)
+
+            if (cached && now - cached.cachedAt < ROUTE_CACHE_MS) {
+                setRoute(cached.route)
+                return
+            }
+
+            const lastRequest = lastRouteRequestRef.current
+            if (
+                lastRequest?.key === cacheKey &&
+                now - lastRequest.requestedAt < ROUTE_CACHE_MS
+            ) {
+                return
+            }
+
+            lastRouteRequestRef.current = { key: cacheKey, requestedAt: now }
             setRouteLoading(true)
             try {
                 const params = new URLSearchParams({
-                    originLat: driverLat.toString(),
-                    originLng: driverLng.toString(),
-                    destLat: destination.lat.toString(),
-                    destLng: destination.lng.toString(),
+                    originLat,
+                    originLng,
+                    destLat,
+                    destLng,
                 })
                 const res = await fetch(`/api/directions?${params}`)
                 if (!res.ok) throw new Error("Route fetch failed")
 
                 const data = await res.json()
-                setRoute({
+                const nextRoute = {
                     distanceKm: data.distanceKm,
                     durationMinutes: data.durationMinutes,
                     polyline: data.polyline,
-                })
+                }
+                routeCache.set(cacheKey, { route: nextRoute, cachedAt: now })
+                setRoute(nextRoute)
             } catch {
                 // Fallback to Haversine
                 const dist = haversineDistance(
@@ -167,6 +203,30 @@ export function LiveTrackingMap({
         },
         [destination.lat, destination.lng]
     )
+
+    // Subscribe to driver location updates
+    useEffect(() => {
+        if (!initialDriverLocation) return
+
+        const location: DriverLocation = {
+            lat: initialDriverLocation.lat,
+            lng: initialDriverLocation.lng,
+            accuracy: initialDriverLocation.accuracy ?? null,
+            heading: initialDriverLocation.heading ?? null,
+            speed: initialDriverLocation.speed ?? null,
+            updatedAt: new Date().toISOString(),
+        }
+
+        setDriverLocation(location)
+        setLastUpdated(new Date())
+        fetchRoute(location.lat, location.lng)
+    }, [initialDriverLocation, fetchRoute])
+
+    useEffect(() => {
+        if (driverLocation || !branchLocation) return
+
+        fetchRoute(branchLocation.lat, branchLocation.lng)
+    }, [branchLocation, driverLocation, fetchRoute])
 
     // Subscribe to driver location updates
     useEffect(() => {
@@ -300,7 +360,7 @@ export function LiveTrackingMap({
                     {route?.polyline && <RoutePolyline encodedPath={route.polyline} />}
 
                     {/* Driver marker */}
-                    {driverLocation && (
+                    {driverLocation && hasMapId && (
                         <AdvancedMarker
                             position={{ lat: driverLocation.lat, lng: driverLocation.lng }}
                             title="Repartidor"
@@ -337,19 +397,32 @@ export function LiveTrackingMap({
                             </div>
                         </AdvancedMarker>
                     )}
+                    {driverLocation && !hasMapId && (
+                        <Marker
+                            position={{ lat: driverLocation.lat, lng: driverLocation.lng }}
+                            title="Repartidor"
+                        />
+                    )}
 
                     {/* Destination marker */}
-                    <AdvancedMarker
-                        position={{ lat: destination.lat, lng: destination.lng }}
-                        title="Tu ubicación"
-                    >
-                        <div className="h-10 w-10 rounded-full bg-red-500 flex items-center justify-center shadow-lg border-2 border-white">
-                            <MapPin className="h-5 w-5 text-white" />
-                        </div>
-                    </AdvancedMarker>
+                    {hasMapId ? (
+                        <AdvancedMarker
+                            position={{ lat: destination.lat, lng: destination.lng }}
+                            title="Destino"
+                        >
+                            <div className="h-10 w-10 rounded-full bg-red-500 flex items-center justify-center shadow-lg border-2 border-white">
+                                <MapPin className="h-5 w-5 text-white" />
+                            </div>
+                        </AdvancedMarker>
+                    ) : (
+                        <Marker
+                            position={{ lat: destination.lat, lng: destination.lng }}
+                            title="Destino"
+                        />
+                    )}
 
                     {/* Branch marker */}
-                    {branchLocation && (
+                    {branchLocation && hasMapId && (
                         <AdvancedMarker
                             position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
                             title="Restaurante"
@@ -361,6 +434,9 @@ export function LiveTrackingMap({
                                 scale={1.2}
                             />
                         </AdvancedMarker>
+                    )}
+                    {branchLocation && !hasMapId && (
+                        <Marker position={{ lat: branchLocation.lat, lng: branchLocation.lng }} title="Restaurante" />
                     )}
                 </Map>
             </div>
@@ -382,7 +458,9 @@ export function LiveTrackingMap({
             {!driverLocation && driverId && (
                 <div className="text-center py-4">
                     <p className="text-sm text-muted-foreground">
-                        Esperando ubicación del repartidor...
+                        {branchLocation
+                            ? "Mostrando ruta desde la sucursal hasta que el GPS esté activo..."
+                            : "Esperando ubicación del repartidor..."}
                     </p>
                 </div>
             )}

@@ -14,7 +14,7 @@ interface ProductCardProps {
 export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps) {
   return (
     <div
-      className="group cursor-pointer rounded-2xl bg-card border border-border overflow-hidden transition-all hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+      className="group cursor-pointer rounded-2xl bg-white border border-border overflow-hidden shadow-sm transition-all hover:shadow-md hover:border-primary/20 hover:-translate-y-0.5"
       onClick={() => onSelect(product)}
       role="button"
       tabIndex={0}
@@ -24,32 +24,41 @@ export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps)
           onSelect(product)
         }
       }}
-      aria-label={`View ${product.name}, $${product.price.toFixed(2)}`}
+      aria-label={`Ver ${product.name}, $${product.price.toFixed(2)}`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden">
+      {/* Square image area with orange background */}
+      <div className="relative aspect-square overflow-hidden bg-primary/10">
         <Image
           src={product.image}
           alt={product.name}
           fill
           className="object-cover transition-transform duration-300 group-hover:scale-105"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
         />
       </div>
-      <div className="p-4 flex items-start justify-between gap-3">
+
+      <div className="p-3.5 flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-card-foreground truncate">{product.name}</h3>
-          <p className="text-lg font-bold text-primary mt-0.5">
+          <h3 className="font-bold text-foreground text-sm leading-snug truncate">
+            {product.name}
+          </h3>
+          {product.description && (
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+              {product.description}
+            </p>
+          )}
+          <p className="text-base font-extrabold text-primary mt-1.5">
             ${product.price.toFixed(2)}
           </p>
         </div>
         <Button
           size="icon"
-          className="shrink-0 h-9 w-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+          className="shrink-0 h-9 w-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm mt-0.5"
           onClick={(e) => {
             e.stopPropagation()
             onQuickAdd(product)
           }}
-          aria-label={`Quick add ${product.name} to cart`}
+          aria-label={`Agregar ${product.name} al carrito`}
         >
           <Plus className="h-4 w-4" />
         </Button>
