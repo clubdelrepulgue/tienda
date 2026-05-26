@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { Map, Marker, useMap } from "@vis.gl/react-google-maps"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,7 @@ interface AddressSelectorProps {
     showInstructions?: boolean
     simpleMap?: boolean
     reverseGeocodeOnSelect?: boolean
+    lazyMap?: boolean
 }
 
 const fallbackCenter = { lat: -34.6037, lng: -58.3816 }
@@ -77,6 +78,7 @@ export function AddressSelector({
     showInstructions = true,
     simpleMap = false,
     reverseGeocodeOnSelect = false,
+    lazyMap = false,
 }: AddressSelectorProps) {
     const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
         value ? { lat: value.lat, lng: value.lng } : null
@@ -85,6 +87,9 @@ export function AddressSelector({
     const [isSearching, setIsSearching] = useState(false)
     const [selectedZone, setSelectedZone] = useState<string | null>(null)
     const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null)
+    const [mapVisible, setMapVisible] = useState(!lazyMap)
+    // Pending pan/zoom to apply once the map mounts (used when lazyMap triggers map open)
+    const pendingPanRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null)
     const mapCenter = defaultCenter || branchMarker || fallbackCenter
     const geocodeCenter = searchCenter || mapCenter
 
@@ -194,12 +199,18 @@ export function AddressSelector({
                 const location = result.results[0].geometry.location
                 const lat = location.lat()
                 const lng = location.lng()
-
-                mapInstance?.panTo({ lat, lng })
-                mapInstance?.setZoom(16)
-
                 const address = result.results[0].formatted_address
+
                 await selectPoint(lat, lng, address)
+
+                // Auto-open map after successful search so user can confirm pin
+                if (!mapVisible) {
+                    pendingPanRef.current = { lat, lng, zoom: 16 }
+                    setMapVisible(true)
+                } else {
+                    mapInstance?.panTo({ lat, lng })
+                    mapInstance?.setZoom(16)
+                }
             } else {
                 toast.error("No se encontró la dirección")
             }
@@ -209,7 +220,7 @@ export function AddressSelector({
         } finally {
             setIsSearching(false)
         }
-    }, [searchQuery, geocodeCenter, mapInstance, searchRadiusKm, selectPoint])
+    }, [searchQuery, geocodeCenter, mapInstance, mapVisible, searchRadiusKm, selectPoint])
 
     // Usar ubicación actual
     const handleUseCurrentLocation = useCallback(() => {
@@ -226,9 +237,17 @@ export function AddressSelector({
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords
-                mapInstance?.panTo({ lat: latitude, lng: longitude })
-                mapInstance?.setZoom(16)
+
                 await selectPoint(latitude, longitude, "Mi ubicación actual")
+
+                // Auto-open map so user sees their pin
+                if (!mapVisible) {
+                    pendingPanRef.current = { lat: latitude, lng: longitude, zoom: 16 }
+                    setMapVisible(true)
+                } else {
+                    mapInstance?.panTo({ lat: latitude, lng: longitude })
+                    mapInstance?.setZoom(16)
+                }
             },
             (error) => {
                 console.error("Geolocation error:", error)
@@ -240,10 +259,16 @@ export function AddressSelector({
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
         )
-    }, [mapInstance, selectPoint])
+    }, [mapInstance, mapVisible, selectPoint])
 
     const handleMapReady = useCallback((map: google.maps.Map) => {
         setMapInstance(map)
+        // Apply deferred pan/zoom (happens when map was opened lazily after a search/GPS)
+        if (pendingPanRef.current) {
+            map.panTo({ lat: pendingPanRef.current.lat, lng: pendingPanRef.current.lng })
+            map.setZoom(pendingPanRef.current.zoom)
+            pendingPanRef.current = null
+        }
     }, [])
 
     useEffect(() => {
@@ -286,76 +311,86 @@ export function AddressSelector({
                 </Button>
             </div>
 
-            {/* Map */}
-            <div className="relative">
-                <div style={{ height }} className="rounded-xl overflow-hidden border border-border">
-                    <Map
-                        defaultCenter={mapCenter}
-                        defaultZoom={branchMarker ? 13 : 12}
-                        gestureHandling="greedy"
-                        disableDefaultUI={simpleMap}
-                        zoomControl={!simpleMap}
-                        fullscreenControl={!simpleMap}
-                        streetViewControl={false}
-                        mapTypeControl={!simpleMap}
-                        mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || undefined}
-                        onClick={handleMapClick}
-                    >
-                        <MapInstanceSync onMapReady={handleMapReady} />
+            {/* Map — lazy: only mounts when mapVisible is true */}
+            {mapVisible ? (
+                <div className="relative">
+                    <div style={{ height }} className="rounded-xl overflow-hidden border border-border">
+                        <Map
+                            defaultCenter={mapCenter}
+                            defaultZoom={branchMarker ? 13 : 12}
+                            gestureHandling="greedy"
+                            disableDefaultUI={simpleMap}
+                            zoomControl={!simpleMap}
+                            fullscreenControl={!simpleMap}
+                            streetViewControl={false}
+                            mapTypeControl={!simpleMap}
+                            mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || undefined}
+                            onClick={handleMapClick}
+                        >
+                            <MapInstanceSync onMapReady={handleMapReady} />
 
-                        {/* Show zones */}
-                        {zones.map((zone) => (
-                            <Polygon
-                                key={zone.id}
-                                paths={zone.coordinates}
-                                strokeColor={zone.color}
-                                fillColor={zone.color}
-                                fillOpacity={selectedZone === zone.id ? 0.35 : 0.15}
-                                strokeWeight={selectedZone === zone.id ? 3 : 1}
-                            />
-                        ))}
+                            {/* Show zones */}
+                            {zones.map((zone) => (
+                                <Polygon
+                                    key={zone.id}
+                                    paths={zone.coordinates}
+                                    strokeColor={zone.color}
+                                    fillColor={zone.color}
+                                    fillOpacity={selectedZone === zone.id ? 0.35 : 0.15}
+                                    strokeWeight={selectedZone === zone.id ? 3 : 1}
+                                />
+                            ))}
 
-                        {/* Branch marker */}
-                        {branchMarker && (
-                            <Marker
-                                position={{ lat: branchMarker.lat, lng: branchMarker.lng }}
-                                title={branchMarker.title || "Sucursal"}
-                                zIndex={20}
-                            />
-                        )}
+                            {/* Branch marker */}
+                            {branchMarker && (
+                                <Marker
+                                    position={{ lat: branchMarker.lat, lng: branchMarker.lng }}
+                                    title={branchMarker.title || "Sucursal"}
+                                    zIndex={20}
+                                />
+                            )}
 
-                        {/* Customer marker */}
-                        {marker && (
-                            <Marker
-                                position={marker}
-                                title="Tu ubicación"
-                                draggable
-                                onDragEnd={(event) => {
-                                    const lat = event.latLng?.lat()
-                                    const lng = event.latLng?.lng()
-                                    if (lat == null || lng == null) return
-                                    handleMarkerDragEnd({ lat, lng })
-                                }}
-                            />
-                        )}
-                    </Map>
-                </div>
+                            {/* Customer marker */}
+                            {marker && (
+                                <Marker
+                                    position={marker}
+                                    title="Tu ubicación"
+                                    draggable
+                                    onDragEnd={(event) => {
+                                        const lat = event.latLng?.lat()
+                                        const lng = event.latLng?.lng()
+                                        if (lat == null || lng == null) return
+                                        handleMarkerDragEnd({ lat, lng })
+                                    }}
+                                />
+                            )}
+                        </Map>
+                    </div>
 
-                {/* Instructions */}
-                {showInstructions && !marker && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="bg-background/90 backdrop-blur-sm px-4 py-3 rounded-xl shadow-lg border border-border">
-                            <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-primary" />
-                                <p className="text-sm text-foreground">
-                                    Haz clic en el mapa para seleccionar tu ubicación
-                                </p>
+                    {/* Instructions */}
+                    {showInstructions && !marker && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="bg-background/90 backdrop-blur-sm px-4 py-3 rounded-xl shadow-lg border border-border">
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-primary" />
+                                    <p className="text-sm text-foreground">
+                                        Haz clic en el mapa para seleccionar tu ubicación
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
-
+                    )}
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => setMapVisible(true)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors py-5 text-sm"
+                >
+                    <MapPin className="h-4 w-4" />
+                    Ver mapa para confirmar ubicación
+                </button>
+            )}
         </div>
     )
 }

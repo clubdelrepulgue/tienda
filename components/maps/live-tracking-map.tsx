@@ -38,6 +38,7 @@ interface RouteInfo {
 
 const routeCache = new globalThis.Map<string, { route: RouteInfo; cachedAt: number }>()
 const ROUTE_CACHE_MS = 60_000
+const ROUTE_MIN_DISTANCE_KM = 0.15
 
 // Decode Google encoded polyline into LatLng array
 function decodePolyline(encoded: string): google.maps.LatLngLiteral[] {
@@ -139,6 +140,8 @@ export function LiveTrackingMap({
     const [routeLoading, setRouteLoading] = useState(false)
     const hasMapId = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID
     const lastRouteRequestRef = useRef<{ key: string; requestedAt: number } | null>(null)
+    // Tracks origin of the last route actually fetched from the API (for distance threshold)
+    const lastRouteOriginRef = useRef<{ lat: number; lng: number } | null>(null)
 
     // Fetch real route from Directions API
     const fetchRoute = useCallback(
@@ -164,6 +167,13 @@ export function LiveTrackingMap({
                 return
             }
 
+            // Skip re-fetch if driver moved less than 150m since last route — route is still accurate enough
+            const lastOrigin = lastRouteOriginRef.current
+            if (lastOrigin) {
+                const movedKm = haversineDistance(lastOrigin.lat, lastOrigin.lng, driverLat, driverLng)
+                if (movedKm < ROUTE_MIN_DISTANCE_KM) return
+            }
+
             lastRouteRequestRef.current = { key: cacheKey, requestedAt: now }
             setRouteLoading(true)
             try {
@@ -183,6 +193,7 @@ export function LiveTrackingMap({
                     polyline: data.polyline,
                 }
                 routeCache.set(cacheKey, { route: nextRoute, cachedAt: now })
+                lastRouteOriginRef.current = { lat: driverLat, lng: driverLng }
                 setRoute(nextRoute)
             } catch {
                 // Fallback to Haversine

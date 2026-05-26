@@ -404,6 +404,7 @@ export default function CheckoutPage() {
                         placeholder="Buscar dirección de entrega..."
                         showInstructions={false}
                         simpleMap
+                        lazyMap
                       />
                       <div className="mt-3 rounded-xl border border-border bg-white p-3">
                         {selectedZoneInfo ? (
