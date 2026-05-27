@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
@@ -122,12 +123,9 @@ export default function AdminLayout({
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
         <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
           <Link href="/admin" className="flex items-center gap-2">
-            <span
-              className="text-lg font-bold text-sidebar-primary"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              BLAZR
-            </span>
+            <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0">
+              <Image src="/assets/brand/logo.jpeg" alt="El Club del Repulge" fill className="object-cover" />
+            </div>
             <span className="text-xs bg-sidebar-accent text-sidebar-accent-foreground px-2 py-0.5 rounded-full font-medium">
               Admin
             </span>
@@ -170,12 +168,9 @@ export default function AdminLayout({
             <SheetContent side="left" className="w-60 p-0 bg-sidebar border-sidebar-border">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <div className="flex items-center gap-2 p-4 border-b border-sidebar-border">
-                <span
-                  className="text-lg font-bold text-sidebar-primary"
-                  style={{ fontFamily: "var(--font-heading)" }}
-                >
-                  BLAZR
-                </span>
+                <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0">
+                  <Image src="/assets/brand/logo.jpeg" alt="El Club del Repulge" fill className="object-cover" />
+                </div>
                 <span className="text-xs bg-sidebar-accent text-sidebar-accent-foreground px-2 py-0.5 rounded-full font-medium">
                   Admin
                 </span>
@@ -185,12 +180,12 @@ export default function AdminLayout({
               </div>
             </SheetContent>
           </Sheet>
-          <span
-            className="text-base font-bold text-foreground"
-            style={{ fontFamily: "var(--font-heading)" }}
-          >
-            BLAZR · Admin
-          </span>
+          <div className="flex items-center gap-2">
+            <div className="relative w-7 h-7 rounded-full overflow-hidden shrink-0">
+              <Image src="/assets/brand/logo.jpeg" alt="El Club del Repulge" fill className="object-cover" />
+            </div>
+            <span className="text-sm font-semibold text-foreground">Admin</span>
+          </div>
         </header>
 
         <main className="flex-1 p-4 md:p-6">{children}</main>

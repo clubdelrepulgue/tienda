@@ -12,9 +12,10 @@ import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createOrder } from "@/app/actions"
-import type { Product, Category, Branch } from "@/lib/types"
+import type { Product, Category, Branch, Order } from "@/lib/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { PrintReceiptButton } from "@/components/receipt/order-receipt"
 
 interface CartItem {
     tempId: string
@@ -33,6 +34,8 @@ export default function POSPage() {
     const [cart, setCart] = useState<CartItem[]>([])
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [lastOrder, setLastOrder] = useState<Order | null>(null)
+    const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
 
     // Checkout form
     const [customerName, setCustomerName] = useState("")
@@ -148,6 +151,36 @@ export default function POSPage() {
                 return
             }
 
+            // Build a local Order object so we can print the receipt immediately
+            const builtOrder: Order = {
+                id: result.orderId,
+                orderNumber: result.orderNumber,
+                trackingToken: result.trackingToken,
+                customerName,
+                customerPhone: "POS",
+                address: "",
+                deliveryNotes: "",
+                deliveryMethod: orderType === "delivery" ? "delivery" : "pickup",
+                paymentMethod,
+                items: cart.map((item) => ({
+                    id: item.tempId,
+                    productId: item.productId,
+                    name: item.name,
+                    image: item.image,
+                    price: item.price,
+                    quantity: item.quantity,
+                    modifiers: [],
+                })),
+                subtotal,
+                deliveryFee: 0,
+                total: subtotal,
+                status: "new",
+                createdAt: new Date().toISOString(),
+                branchId: selectedBranch,
+            }
+
+            setLastOrder(builtOrder)
+            setIsPrintDialogOpen(true)
             toast.success(`¡Pedido #${result.orderNumber} creado!`)
             clearCart()
             setIsCheckoutOpen(false)
@@ -328,6 +361,32 @@ export default function POSPage() {
                     </Button>
                 </div>
             </div>
+
+            {/* Print Receipt Dialog (shown after order creation) */}
+            {lastOrder && (
+                <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
+                    <DialogContent className="sm:max-w-sm rounded-2xl">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl">
+                                Pedido #{lastOrder.orderNumber} creado
+                            </DialogTitle>
+                        </DialogHeader>
+                        <p className="text-sm text-muted-foreground -mt-2">
+                            ¿Querés imprimir el recibo?
+                        </p>
+                        <div className="flex gap-3 pt-2">
+                            <Button
+                                variant="outline"
+                                className="flex-1 rounded-xl"
+                                onClick={() => setIsPrintDialogOpen(false)}
+                            >
+                                No, gracias
+                            </Button>
+                            <PrintReceiptButton order={lastOrder} />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {/* Checkout Dialog */}
             <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>

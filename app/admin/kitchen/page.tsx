@@ -20,6 +20,8 @@ type KitchenColumn = {
     id: OrderStatus
     label: string
     color: string
+    panel: string
+    empty: string
     nextStatus?: OrderStatus
     buttonText: string
 }
@@ -28,28 +30,36 @@ const COLUMNS: KitchenColumn[] = [
     {
         id: "new",
         label: "Nuevos",
-        color: "bg-chart-1/15 text-chart-1 border-chart-1/20",
+        color: "bg-red-50 text-red-700 border-red-200",
+        panel: "border-red-100 bg-red-50/20",
+        empty: "border-red-100 bg-red-50/30 text-red-700/50",
         nextStatus: "accepted",
         buttonText: "Aceptar",
     },
     {
         id: "accepted",
         label: "Aceptados",
-        color: "bg-chart-2/15 text-chart-2 border-chart-2/20",
+        color: "bg-amber-50 text-amber-700 border-amber-200",
+        panel: "border-amber-100 bg-amber-50/20",
+        empty: "border-amber-100 bg-amber-50/30 text-amber-700/50",
         nextStatus: "preparing",
         buttonText: "Preparar",
     },
     {
         id: "preparing",
         label: "En Preparación",
-        color: "bg-accent/15 text-accent border-accent/20",
+        color: "bg-sky-50 text-sky-700 border-sky-200",
+        panel: "border-sky-100 bg-sky-50/20",
+        empty: "border-sky-100 bg-sky-50/30 text-sky-700/50",
         nextStatus: "ready",
         buttonText: "Listo",
     },
     {
         id: "ready",
         label: "Listos",
-        color: "bg-chart-3/15 text-chart-3 border-chart-3/20",
+        color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        panel: "border-emerald-100 bg-emerald-50/20",
+        empty: "border-emerald-100 bg-emerald-50/30 text-emerald-700/50",
         buttonText: "Esperando",
     },
 ]
@@ -152,17 +162,17 @@ export default function KitchenDisplayPage() {
     }
 
     return (
-        <div className="h-[calc(100vh-4rem)] flex flex-col">
+        <div className="h-[calc(100vh-4rem)] flex flex-col bg-background">
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between gap-4 pb-5">
                 <div>
                     <h1
-                        className="text-2xl font-bold text-foreground"
+                        className="text-3xl font-bold tracking-tight text-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
                         Pantalla de cocina
                     </h1>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted-foreground">
                         Gestioná los pedidos en tiempo real
                     </p>
                 </div>
@@ -171,7 +181,8 @@ export default function KitchenDisplayPage() {
                         variant="outline"
                         size="icon"
                         onClick={() => { unlockAudio(); setSoundEnabled(!soundEnabled) }}
-                        className="rounded-full"
+                        className="h-10 w-10 rounded-full bg-card shadow-sm"
+                        aria-label={soundEnabled ? "Silenciar avisos" : "Activar avisos"}
                     >
                         {soundEnabled ? (
                             <Volume2 className="h-4 w-4" />
@@ -182,7 +193,7 @@ export default function KitchenDisplayPage() {
                     <Button
                         variant="outline"
                         onClick={toggleFullscreen}
-                        className="rounded-full"
+                        className="h-10 rounded-full bg-card px-5 shadow-sm"
                     >
                         {fullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
                     </Button>
@@ -190,33 +201,39 @@ export default function KitchenDisplayPage() {
             </div>
 
             {/* Columns */}
-            <div className="flex-1 grid grid-cols-4 gap-4 min-h-0">
+            <div className="flex-1 grid min-h-0 grid-cols-4 gap-4">
                 {COLUMNS.map((col) => {
                     const colOrders = orders.filter((o) => o.status === col.id)
 
                     return (
-                        <div key={col.id} className="flex flex-col min-h-0">
+                        <div
+                            key={col.id}
+                            className={cn(
+                                "flex min-h-0 flex-col overflow-hidden rounded-2xl border shadow-sm",
+                                col.panel
+                            )}
+                        >
                             {/* Column Header */}
                             <div className={cn(
-                                "flex items-center justify-between p-3 rounded-t-xl border",
+                                "flex items-center justify-between border-b px-4 py-3",
                                 col.color
                             )}>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold text-sm uppercase tracking-wide">
+                                    <span className="text-sm font-extrabold uppercase tracking-wide">
                                         {col.label}
                                     </span>
                                 </div>
-                                <Badge variant="outline" className={cn("text-xs", col.color)}>
+                                <Badge variant="outline" className={cn("min-w-7 justify-center rounded-full border-current/20 bg-white/60 px-2 text-xs font-bold", col.color)}>
                                     {colOrders.length}
                                 </Badge>
                             </div>
 
                             {/* Orders */}
-                            <ScrollArea className="flex-1 bg-secondary/30 rounded-b-xl border-x border-b border-border p-2">
+                            <ScrollArea className="flex-1 p-3">
                                 <div className="space-y-3">
                                     {colOrders.length === 0 ? (
-                                        <div className="h-32 flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-border/50 rounded-xl">
-                                            <p className="text-sm">No orders</p>
+                                        <div className={cn("flex h-32 flex-col items-center justify-center rounded-xl border border-dashed", col.empty)}>
+                                            <p className="text-sm font-medium">Sin pedidos</p>
                                         </div>
                                     ) : (
                                         colOrders.map((order) => (
@@ -252,27 +269,27 @@ function KitchenOrderCard({ order, column, onNextStatus, now }: KitchenOrderCard
 
     return (
         <Card className={cn(
-            "rounded-xl border-border overflow-hidden",
-            isDelayed && "border-red-500/50 ring-1 ring-red-500/20"
+            "overflow-hidden rounded-2xl border-border bg-card shadow-md shadow-black/5",
+            isDelayed && "border-red-500/50 ring-2 ring-red-500/15"
         )}>
-            <CardContent className="p-3 space-y-3">
+            <CardContent className="space-y-4 p-4">
                 {/* Header */}
                 <div className="flex items-start justify-between">
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="text-2xl font-bold text-foreground">
+                            <span className="text-3xl font-black leading-none tracking-tight text-foreground">
                                 #{order.orderNumber}
                             </span>
                             {isDelayed && (
-                                <AlertCircle className="h-5 w-5 text-red-500" />
+                                <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
                             )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="mt-1 text-sm font-medium capitalize text-muted-foreground">
                             {order.orderType === "pos" ? "Mostrador" : order.deliveryMethod}
                         </p>
                     </div>
                     <div className={cn(
-                        "text-right font-mono text-lg",
+                        "rounded-full bg-secondary px-2.5 py-1 text-right font-mono text-sm font-semibold",
                         isDelayed ? "text-red-500 font-bold" : "text-muted-foreground"
                     )}>
                         {elapsedTime}
@@ -280,19 +297,19 @@ function KitchenOrderCard({ order, column, onNextStatus, now }: KitchenOrderCard
                 </div>
 
                 {/* Items */}
-                <div className="space-y-1.5">
+                <div className="space-y-2 border-y border-border/70 py-3">
                     {order.items.map((item, idx) => (
                         <div key={idx} className="text-sm">
                             <div className="flex items-baseline gap-2">
-                                <span className="font-bold text-foreground">
+                                <span className="min-w-7 font-black text-foreground">
                                     {item.quantity}x
                                 </span>
-                                <span className="text-card-foreground">
+                                <span className="font-medium text-card-foreground">
                                     {item.name}
                                 </span>
                             </div>
                             {item.modifiers.length > 0 && (
-                                <p className="text-xs text-muted-foreground ml-6">
+                                <p className="ml-9 mt-0.5 text-xs text-muted-foreground">
                                     {item.modifiers.map((m) => m.optionName).join(", ")}
                                 </p>
                             )}
@@ -302,8 +319,8 @@ function KitchenOrderCard({ order, column, onNextStatus, now }: KitchenOrderCard
 
                 {/* Notes */}
                 {order.deliveryNotes && (
-                    <div className="p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                        <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                        <p className="text-xs font-medium text-amber-800">
                             📝 {order.deliveryNotes}
                         </p>
                     </div>
@@ -312,7 +329,7 @@ function KitchenOrderCard({ order, column, onNextStatus, now }: KitchenOrderCard
                 {/* Action Button */}
                 {column.nextStatus && (
                     <Button
-                        className="w-full h-12 text-base font-semibold rounded-lg"
+                        className="h-12 w-full rounded-xl text-base font-bold shadow-sm"
                         onClick={() => onNextStatus(order.id, column.nextStatus!)}
                     >
                         {column.nextStatus === "accepted" && <CheckCircle2 className="h-4 w-4 mr-2" />}

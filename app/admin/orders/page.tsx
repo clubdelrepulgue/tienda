@@ -17,6 +17,7 @@ import {
   X,
   Check,
 } from "lucide-react"
+import { PrintReceiptButton } from "@/components/receipt/order-receipt"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -158,25 +159,29 @@ function OrderCard({
             </span>
           </div>
 
-          {onNext && nextStatus && (
-            <Button
-              size="sm"
-              className="h-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 gap-1"
-              onClick={onNext}
-            >
-              Next
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <PrintReceiptButton order={order} variant="ghost" />
 
-          {showAssign && !nextStatus && !driver && (
-            <Badge
-              variant="outline"
-              className="text-xs text-muted-foreground border-dashed"
-            >
-              Sin asignar
-            </Badge>
-          )}
+            {onNext && nextStatus && (
+              <Button
+                size="sm"
+                className="h-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 gap-1"
+                onClick={onNext}
+              >
+                Next
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            {showAssign && !nextStatus && !driver && (
+              <Badge
+                variant="outline"
+                className="text-xs text-muted-foreground border-dashed"
+              >
+                Sin asignar
+              </Badge>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

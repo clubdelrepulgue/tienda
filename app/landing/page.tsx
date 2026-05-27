@@ -13,7 +13,7 @@ export default function LandingPage() {
 
       <section className="mx-auto flex w-full max-w-5xl flex-col items-center px-6 py-20 text-center">
         <Badge className="mb-6 rounded-full border-white/15 bg-black/20 px-4 py-1 text-white shadow-none backdrop-blur-sm">
-          BLAZR Commerce Platform
+          El Club del Repulge
         </Badge>
 
         <h1 className="max-w-4xl font-heading text-5xl font-light tracking-tight text-white text-balance sm:text-6xl md:text-7xl">
