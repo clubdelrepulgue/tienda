@@ -96,6 +96,9 @@
 
 .blazr-app-shell {
   transition: opacity 240ms ease;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (prefers-reduced-motion: reduce) {
