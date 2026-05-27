@@ -14,7 +14,7 @@ interface ProductCardProps {
 export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps) {
   return (
     <div
-      className="group cursor-pointer rounded-2xl bg-white border border-border overflow-hidden shadow-sm transition-all hover:shadow-md hover:border-primary/20 hover:-translate-y-0.5"
+      className="group cursor-pointer rounded-2xl bg-white border border-primary/15 overflow-hidden shadow-sm transition-all hover:shadow-md hover:border-primary/35 hover:-translate-y-0.5"
       onClick={() => onSelect(product)}
       role="button"
       tabIndex={0}
@@ -37,7 +37,7 @@ export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps)
         />
       </div>
 
-      <div className="p-3.5 flex items-start justify-between gap-2">
+      <div className="p-3.5 flex items-start justify-between gap-2 border-t border-primary/10">
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-foreground text-sm leading-snug truncate">
             {product.name}
