@@ -12,6 +12,7 @@ import { updateOrderStatus } from "@/app/actions"
 import type { Order, OrderStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { playNewOrderSound, playOrderReadySound, unlockAudio } from "@/lib/sounds"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -69,12 +70,16 @@ export default function KitchenDisplayPage() {
     const [orders, setOrders] = useState<Order[]>([])
     const [soundEnabled, setSoundEnabled] = useState(true)
     const [fullscreen, setFullscreen] = useState(false)
-    const audioRef = useRef<HTMLAudioElement | null>(null)
     const prevOrdersRef = useRef<Order[]>([])
 
-    // Initialize audio
+    // Unlock audio context on first interaction
     useEffect(() => {
-        audioRef.current = new Audio("/notification.mp3")
+        const unlock = () => {
+            unlockAudio()
+            document.removeEventListener("click", unlock)
+        }
+        document.addEventListener("click", unlock)
+        return () => document.removeEventListener("click", unlock)
     }, [])
 
     useEffect(() => {
@@ -83,10 +88,25 @@ export default function KitchenDisplayPage() {
             const prevIds = new Set(prevOrdersRef.current.map((o) => o.id))
             const newOrders = initialOrders.filter((o) => !prevIds.has(o.id) && o.status === "new")
 
-            if (newOrders.length > 0 && soundEnabled && audioRef.current) {
-                audioRef.current.play().catch(() => { })
+            // Check for orders transitioning to ready
+            const readyOrders = initialOrders.filter((o) => {
+                const prevOrder = prevOrdersRef.current.find((po) => po.id === o.id)
+                return o.status === "ready" && prevOrder && prevOrder.status !== "ready"
+            })
+
+            if (newOrders.length > 0 && soundEnabled) {
+                playNewOrderSound()
                 newOrders.forEach((o) => {
-                    toast.info(`Nuevo pedido #${o.orderNumber}`, {
+                    toast.info(`New order #${o.orderNumber}`, {
+                        duration: 5000,
+                    })
+                })
+            }
+
+            if (readyOrders.length > 0 && soundEnabled) {
+                playOrderReadySound()
+                readyOrders.forEach((o) => {
+                    toast.success(`Order #${o.orderNumber} is ready!`, {
                         duration: 5000,
                     })
                 })

@@ -15,6 +15,7 @@ import { createOrder } from "@/app/actions"
 import type { Product, Category, Branch } from "@/lib/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
 
 interface CartItem {
     tempId: string
@@ -41,6 +42,7 @@ export default function POSPage() {
     const [selectedBranch, setSelectedBranch] = useState("")
 
     useEffect(() => {
+        unlockAudio()
         Promise.all([
             fetch("/api/admin?type=products").then((r) => r.json()),
             fetch("/api/admin?type=categories").then((r) => r.json()),
@@ -148,6 +150,7 @@ export default function POSPage() {
                 return
             }
 
+            playNewOrderSound()
             toast.success(`Order #${result.orderNumber} created!`)
             clearCart()
             setIsCheckoutOpen(false)
