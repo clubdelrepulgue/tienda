@@ -12,12 +12,56 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCartStore } from "@/lib/store"
-import type { DeliveryMethod, PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
+import type { PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { createOrder } from "@/app/actions"
 import { CouponInput } from "@/components/storefront/coupon-input"
 import { GoogleMapsProvider, AddressSelector } from "@/components/maps"
+import { findDeliveryZoneForPoint, getZoneDeliveryFee } from "@/lib/delivery-zones"
+
+function getBranchCity(address: string) {
+  const parts = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  if (parts.length >= 2) return parts[parts.length - 2]
+  return parts[0] || "City not configured"
+}
+
+function getDistanceKm(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+) {
+  const earthRadiusKm = 6371
+  const dLat = ((to.lat - from.lat) * Math.PI) / 180
+  const dLng = ((to.lng - from.lng) * Math.PI) / 180
+  const fromLat = (from.lat * Math.PI) / 180
+  const toLat = (to.lat * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function getBranchesCenter(branches: Branch[]) {
+  const locatedBranches = branches.filter(
+    (branch) => branch.isOpen && branch.lat != null && branch.lng != null
+  )
+
+  if (locatedBranches.length === 0) return undefined
+
+  return {
+    lat:
+      locatedBranches.reduce((sum, branch) => sum + branch.lat!, 0) /
+      locatedBranches.length,
+    lng:
+      locatedBranches.reduce((sum, branch) => sum + branch.lng!, 0) /
+      locatedBranches.length,
+  }
+}
 
 export default function CheckoutPage() {
   const items = useCartStore((s) => s.items)
@@ -26,7 +70,7 @@ export default function CheckoutPage() {
   const router = useRouter()
 
   const [deliveryMethod, setDeliveryMethod] =
-    useState<DeliveryMethod>("delivery")
+    useState<"delivery" | "pickup">("delivery")
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("mercadopago")
 
@@ -37,6 +81,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranch, setSelectedBranch] = useState("")
+  const [allDeliveryZones, setAllDeliveryZones] = useState<DeliveryZone[]>([])
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([])
   const [selectedZone, setSelectedZone] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<{
@@ -54,82 +99,100 @@ export default function CheckoutPage() {
   } | null>(null)
 
   useEffect(() => {
-    fetch("/api/admin?type=branches")
+    fetch("/api/checkout-data")
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) {
-          setBranches(data)
-          const openBranch = data.find((b: Branch) => b.isOpen)
+        if (Array.isArray(data?.branches)) {
+          setBranches(data.branches)
+          const openBranch = data.branches.find((b: Branch) => b.isOpen)
           if (openBranch) setSelectedBranch(openBranch.id)
         }
+        if (Array.isArray(data?.deliveryZones)) setAllDeliveryZones(data.deliveryZones)
       })
-      .catch(() => { })
+      .catch(() => {
+        toast.error("Unable to load delivery zones")
+      })
   }, [])
 
-  // Load delivery zones when branch is selected
   useEffect(() => {
-    if (selectedBranch) {
-      fetch(`/api/admin?type=delivery-zones`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (Array.isArray(data)) {
-            const zones = data.filter((z: DeliveryZone) => z.branchId === selectedBranch)
-            setDeliveryZones(zones)
-            if (zones.length > 0) setSelectedZone(zones[0].id)
-          }
-        })
-        .catch(() => { })
-    }
-  }, [selectedBranch])
+    if (!selectedBranch) return
+    setDeliveryZones(allDeliveryZones.filter((z) => z.branchId === selectedBranch))
+  }, [allDeliveryZones, selectedBranch])
 
   // Update address when location is selected from map
   useEffect(() => {
     if (selectedLocation) {
       setAddress(selectedLocation.address)
-      // Auto-detect zone based on coordinates
-      if (deliveryZones.length > 0) {
-        // Simple point-in-polygon check for auto-selection
-        const point = { lat: selectedLocation.lat, lng: selectedLocation.lng }
-        for (const zone of deliveryZones) {
-          if (isPointInPolygon(point, zone.coordinates)) {
-            setSelectedZone(zone.id)
-            break
+
+      const openBranches = branches.filter(
+        (branch) => branch.isOpen && branch.lat != null && branch.lng != null
+      )
+
+      const candidates = openBranches
+        .map((branch) => {
+          const branchZones = allDeliveryZones.filter((zone) => zone.branchId === branch.id)
+          const zone = findDeliveryZoneForPoint(branchZones, selectedLocation)
+
+          return {
+            branch,
+            branchZones,
+            zone,
+            distanceKm: getDistanceKm(
+              { lat: branch.lat!, lng: branch.lng! },
+              selectedLocation
+            ),
           }
-        }
+        })
+        .sort((a, b) => {
+          if (a.zone && !b.zone) return -1
+          if (!a.zone && b.zone) return 1
+          return a.distanceKm - b.distanceKm
+        })
+
+      const best = candidates[0]
+      if (best) {
+        setSelectedBranch(best.branch.id)
+        setDeliveryZones(best.branchZones)
+        setSelectedZone(best.zone?.id || "")
+      }
+
+      if (!best?.zone && allDeliveryZones.length > 0) {
+        toast.warning("That address is outside our delivery zones")
       }
     }
-  }, [selectedLocation, deliveryZones])
+  }, [allDeliveryZones, branches, selectedLocation])
 
-  // Point in polygon check
-  function isPointInPolygon(
-    point: { lat: number; lng: number },
-    polygon: { lat: number; lng: number }[]
-  ): boolean {
-    if (!polygon || polygon.length < 3) return false
-    let inside = false
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i].lng
-      const yi = polygon[i].lat
-      const xj = polygon[j].lng
-      const yj = polygon[j].lat
-      const intersect =
-        yi > point.lat !== yj > point.lat &&
-        point.lng < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi
-      if (intersect) inside = !inside
-    }
-    return inside
-  }
+  const selectedBranchInfo = branches.find((branch) => branch.id === selectedBranch)
+  const selectedBranchLocation =
+    selectedBranchInfo?.lat != null && selectedBranchInfo?.lng != null
+      ? {
+          lat: selectedBranchInfo.lat,
+          lng: selectedBranchInfo.lng,
+          title: selectedBranchInfo.name,
+        }
+      : undefined
+  const branchesSearchCenter = getBranchesCenter(branches)
+  const openBranchIds = new Set(
+    branches.filter((branch) => branch.isOpen).map((branch) => branch.id)
+  )
+  const visibleDeliveryZones = selectedLocation
+    ? deliveryZones
+    : allDeliveryZones.filter(
+        (zone) => zone.isActive && openBranchIds.has(zone.branchId)
+      )
+  const selectedZoneInfo = deliveryZones.find((z) => z.id === selectedZone)
+  const hasCoverageCheck = deliveryMethod === "delivery" && deliveryZones.length > 0
+  const isOutsideCoverage = hasCoverageCheck && selectedLocation && !selectedZoneInfo
+  const shouldCalculateDelivery = hasCoverageCheck && !selectedZoneInfo
 
-  // Calculate delivery fee based on zone
   const getDeliveryFee = () => {
     if (deliveryMethod !== "delivery") return 0
-    const zone = deliveryZones.find((z) => z.id === selectedZone)
-    return zone?.deliveryFee || 3.99
+    return getZoneDeliveryFee(selectedZoneInfo, subtotalAfterDiscount)
   }
 
-  const deliveryFee = getDeliveryFee()
   const couponDiscount = appliedCoupon?.discount || 0
   const subtotalAfterDiscount = Math.max(0, totalPrice - couponDiscount)
+  const deliveryFee = getDeliveryFee()
   const grandTotal = subtotalAfterDiscount + deliveryFee
 
   const handlePlaceOrder = async () => {
@@ -141,8 +204,12 @@ export default function CheckoutPage() {
       toast.error("Please enter a delivery address")
       return
     }
-    if (deliveryMethod === "delivery" && !selectedZone) {
-      toast.error("Please select a delivery zone")
+    if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedLocation) {
+      toast.error("Mark your location on the map to confirm delivery zone")
+      return
+    }
+    if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedZone) {
+      toast.error("Your address is outside our delivery zones")
       return
     }
     if (items.length === 0) {
