@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { MapPin, Search, Navigation } from "lucide-react"
 import { toast } from "sonner"
 import { Polygon } from "./polygon"
+import { getCurrentPositionWithFallback, geolocationErrorMessage } from "@/lib/geolocation"
 
 interface AddressSelectorProps {
     value?: { lat: number; lng: number; address: string }
@@ -223,8 +224,8 @@ export function AddressSelector({
     }, [searchQuery, geocodeCenter, mapInstance, mapVisible, searchRadiusKm, selectPoint])
 
     // Usar ubicación actual
-    const handleUseCurrentLocation = useCallback(() => {
-        if (!navigator.geolocation) {
+    const handleUseCurrentLocation = useCallback(async () => {
+        if (typeof navigator === "undefined" || !navigator.geolocation) {
             toast.error("Tu navegador no soporta geolocalización")
             return
         }
@@ -234,31 +235,24 @@ export function AddressSelector({
             return
         }
 
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords
+        try {
+            const position = await getCurrentPositionWithFallback()
+            const { latitude, longitude } = position.coords
 
-                await selectPoint(latitude, longitude, "Mi ubicación actual")
+            await selectPoint(latitude, longitude, "Mi ubicación actual")
 
-                // Auto-open map so user sees their pin
-                if (!mapVisible) {
-                    pendingPanRef.current = { lat: latitude, lng: longitude, zoom: 16 }
-                    setMapVisible(true)
-                } else {
-                    mapInstance?.panTo({ lat: latitude, lng: longitude })
-                    mapInstance?.setZoom(16)
-                }
-            },
-            (error) => {
-                console.error("Geolocation error:", error)
-                const message =
-                    error.code === error.PERMISSION_DENIED
-                        ? "El navegador no tiene permiso para usar tu ubicación. Habilitalo en la barra de dirección."
-                        : "No se pudo obtener tu ubicación. Probá buscar la dirección o mover el pin."
-                toast.error(message)
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
-        )
+            // Auto-open map so user sees their pin
+            if (!mapVisible) {
+                pendingPanRef.current = { lat: latitude, lng: longitude, zoom: 16 }
+                setMapVisible(true)
+            } else {
+                mapInstance?.panTo({ lat: latitude, lng: longitude })
+                mapInstance?.setZoom(16)
+            }
+        } catch (error) {
+            console.error("Geolocation error:", error)
+            toast.error(geolocationErrorMessage(error as GeolocationPositionError))
+        }
     }, [mapInstance, mapVisible, selectPoint])
 
     const handleMapReady = useCallback((map: google.maps.Map) => {

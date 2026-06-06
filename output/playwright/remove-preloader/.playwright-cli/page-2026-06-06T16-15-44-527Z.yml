@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - img "El Club del Repulgue — Empanadas" [ref=e7]
+        - button "Abrir carrito con 0 productos" [ref=e9]:
+          - generic [ref=e10]:
+            - img
+          - generic [ref=e11]: Mi pedido
+    - img "Hechas a mano. Horneadas con amor." [ref=e14]
+    - generic [ref=e19]:
+      - button "Todas" [ref=e20]
+      - button "Empanada" [ref=e21]
+    - generic [ref=e23]:
+      - generic [ref=e24]:
+        - img "empanada" [ref=e25]: 🥟
+        - heading "Nuestras Empanadas" [level=2] [ref=e26]
+      - generic [ref=e28]:
+        - button "Ver Carne, $105.00" [ref=e29] [cursor=pointer]:
+          - img "Carne" [ref=e31]
+          - generic [ref=e32]:
+            - generic [ref=e33]:
+              - heading "Carne" [level=3] [ref=e34]
+              - paragraph [ref=e35]: $105.00
+            - button "Agregar Carne al carrito" [ref=e36]:
+              - img
+        - button "Ver Carne cortada a cuchillo , $105.00" [ref=e37] [cursor=pointer]:
+          - img "Carne cortada a cuchillo" [ref=e39]
+          - generic [ref=e40]:
+            - generic [ref=e41]:
+              - heading "Carne cortada a cuchillo" [level=3] [ref=e42]
+              - paragraph [ref=e43]: $105.00
+            - button "Agregar Carne cortada a cuchillo al carrito" [ref=e44]:
+              - img
+        - button "Ver Jamón y queso , $105.00" [ref=e45] [cursor=pointer]:
+          - img "Jamón y queso" [ref=e47]
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - heading "Jamón y queso" [level=3] [ref=e50]
+              - paragraph [ref=e51]: $105.00
+            - button "Agregar Jamón y queso al carrito" [ref=e52]:
+              - img
+  - region "Notifications alt+T"
+  - alert [ref=e53]

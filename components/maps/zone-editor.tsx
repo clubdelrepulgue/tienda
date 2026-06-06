@@ -5,6 +5,7 @@ import { Map, useMap, Marker } from "@vis.gl/react-google-maps"
 import { Polygon } from "./polygon"
 import { Button } from "@/components/ui/button"
 import { Undo, Trash2, Crosshair } from "lucide-react"
+import { getCurrentPositionWithFallback } from "@/lib/geolocation"
 
 interface ZoneEditorProps {
     initialCoordinates?: { lat: number; lng: number }[]
@@ -53,21 +54,19 @@ export function ZoneEditor({
 
     // On mount, try geolocation if no explicit center provided
     useEffect(() => {
-        if (!center && navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-                    setMapCenter(loc)
-                    if (map) {
-                        map.panTo(loc)
-                        map.setZoom(14)
-                    }
-                },
-                () => {
-                    // Geolocation denied/unavailable - keep default center
+        if (center) return
+        getCurrentPositionWithFallback()
+            .then((pos) => {
+                const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+                setMapCenter(loc)
+                if (map) {
+                    map.panTo(loc)
+                    map.setZoom(14)
                 }
-            )
-        }
+            })
+            .catch(() => {
+                // Geolocation denied/unavailable - keep default center
+            })
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Sync with initial coordinates when they change (e.g. editing a zone)
@@ -103,20 +102,20 @@ export function ZoneEditor({
         setCoordinates([])
     }, [])
 
-    const handleGeolocate = useCallback(() => {
-        if (!navigator.geolocation) return
+    const handleGeolocate = useCallback(async () => {
         setGeolocating(true)
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-                if (map) {
-                    map.panTo(loc)
-                    map.setZoom(15)
-                }
-                setGeolocating(false)
-            },
-            () => setGeolocating(false)
-        )
+        try {
+            const pos = await getCurrentPositionWithFallback()
+            const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+            if (map) {
+                map.panTo(loc)
+                map.setZoom(15)
+            }
+        } catch {
+            // ignore - keep current view
+        } finally {
+            setGeolocating(false)
+        }
     }, [map])
 
     return (
