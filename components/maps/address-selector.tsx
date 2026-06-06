@@ -239,7 +239,9 @@ export function AddressSelector({
             const position = await getCurrentPositionWithFallback()
             const { latitude, longitude } = position.coords
 
-            await selectPoint(latitude, longitude, "Mi ubicación actual")
+            // Geocodificamos las coordenadas reales del GPS para mostrar calle y número.
+            const address = await reverseGeocode(latitude, longitude)
+            await selectPoint(latitude, longitude, address || "Mi ubicación actual")
 
             // Auto-open map so user sees their pin
             if (!mapVisible) {
@@ -253,7 +255,7 @@ export function AddressSelector({
             console.error("Geolocation error:", error)
             toast.error(geolocationErrorMessage(error as GeolocationPositionError))
         }
-    }, [mapInstance, mapVisible, selectPoint])
+    }, [mapInstance, mapVisible, selectPoint, reverseGeocode])
 
     const handleMapReady = useCallback((map: google.maps.Map) => {
         setMapInstance(map)

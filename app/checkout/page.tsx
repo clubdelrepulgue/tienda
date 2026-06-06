@@ -405,6 +405,7 @@ export default function CheckoutPage() {
                         showInstructions={false}
                         simpleMap
                         lazyMap
+                        reverseGeocodeOnSelect
                       />
                       <div className="mt-3 rounded-xl border border-border bg-white p-3">
                         {selectedZoneInfo ? (
