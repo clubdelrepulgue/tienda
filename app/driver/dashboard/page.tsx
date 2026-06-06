@@ -31,6 +31,9 @@ export default function DriverDashboardPage() {
         driverId,
         enabled: true,
         interval: 10000,
+        // Red de seguridad: si el GPS falla 3 veces seguidas (interior, sin señal),
+        // usa Google Geolocation API por WiFi/red. Crítico para no perder al repartidor.
+        useGoogleFallback: true,
         onError: (err) => {
             if (err.code === err.PERMISSION_DENIED) {
                 toast.error("Por favor habilita la ubicación GPS para continuar")
