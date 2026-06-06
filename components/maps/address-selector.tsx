@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { MapPin, Search, Navigation } from "lucide-react"
 import { toast } from "sonner"
 import { Polygon } from "./polygon"
+import { BranchLogoMarker } from "./branch-logo-marker"
 import { getCurrentPositionWithFallback, geolocationErrorMessage } from "@/lib/geolocation"
 
 interface AddressSelectorProps {
@@ -337,12 +338,11 @@ export function AddressSelector({
                                 />
                             ))}
 
-                            {/* Branch marker */}
+                            {/* Branch marker con el logo del local */}
                             {branchMarker && (
-                                <Marker
+                                <BranchLogoMarker
                                     position={{ lat: branchMarker.lat, lng: branchMarker.lng }}
                                     title={branchMarker.title || "Sucursal"}
-                                    zIndex={20}
                                 />
                             )}
 
