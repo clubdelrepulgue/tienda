@@ -1,8 +1,10 @@
 "use client"
 
+import Image from "next/image"
 import { ShoppingBag, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/lib/store"
+import blzrLogo from "@/img/LOGO BLZR.webp"
 
 interface HeaderProps {
   onCartOpen: () => void
@@ -13,13 +15,18 @@ export function Header({ onCartOpen }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
-      <div className="mx-auto max-w-5xl flex items-center justify-between px-4 py-3">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between py-3">
         <div className="flex items-center gap-3">
           <h1
-            className="text-xl font-bold tracking-tight"
+            className="flex items-center"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            <span className="text-primary">BLZR</span>
+            <Image
+              src={blzrLogo}
+              alt="BLZR"
+              priority
+              className="h-8 w-auto"
+            />
           </h1>
           <div className="hidden sm:flex items-center gap-1.5 text-muted-foreground text-sm">
             <MapPin className="h-3.5 w-3.5" />

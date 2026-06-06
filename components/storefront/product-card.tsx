@@ -14,7 +14,7 @@ interface ProductCardProps {
 export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps) {
   return (
     <div
-      className="group cursor-pointer rounded-2xl bg-card border border-border overflow-hidden transition-all hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+      className="group cursor-pointer overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#111214] shadow-[0_14px_40px_rgba(0,0,0,0.22)] transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-[#141518] hover:shadow-[0_18px_48px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       onClick={() => onSelect(product)}
       role="button"
       tabIndex={0}
@@ -26,7 +26,7 @@ export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps)
       }}
       aria-label={`View ${product.name}, $${product.price.toFixed(2)}`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden">
+      <div className="relative aspect-square w-full overflow-hidden rounded-t-[22px] bg-[#111]">
         <Image
           src={product.image}
           alt={product.name}
@@ -35,16 +35,16 @@ export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps)
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
         />
       </div>
-      <div className="p-4 flex items-start justify-between gap-3">
+      <div className="flex min-h-[78px] items-center justify-between gap-4 px-4 py-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-card-foreground truncate">{product.name}</h3>
-          <p className="text-lg font-bold text-primary mt-0.5">
+          <h3 className="mb-1.5 truncate text-[15px] font-bold leading-tight text-white">{product.name}</h3>
+          <p className="text-[17px] font-extrabold leading-none text-primary">
             ${product.price.toFixed(2)}
           </p>
         </div>
         <Button
           size="icon"
-          className="shrink-0 h-9 w-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+          className="h-[38px] w-[38px] min-w-[38px] shrink-0 rounded-full bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.28)] transition-[transform,background-color,box-shadow] duration-150 hover:scale-[1.06] hover:bg-primary/90 hover:shadow-[0_12px_28px_rgba(255,56,56,0.36)] active:scale-95"
           onClick={(e) => {
             e.stopPropagation()
             onQuickAdd(product)

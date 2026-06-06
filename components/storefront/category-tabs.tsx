@@ -16,16 +16,16 @@ export function CategoryTabs({
   onCategoryChange,
 }: CategoryTabsProps) {
   return (
-    <div className="sticky top-[57px] z-40 bg-background/80 backdrop-blur-xl border-b border-border">
-      <ScrollArea className="mx-auto max-w-5xl">
-        <div className="flex items-center gap-2 px-4 py-3">
+    <div className="sticky top-[57px] z-40 border-b border-white/[0.07] bg-background/85 backdrop-blur-xl">
+      <ScrollArea className="mx-auto max-w-6xl">
+        <div className="flex items-center gap-2.5 px-4 py-3.5 sm:px-5 lg:px-6">
           <button
             onClick={() => onCategoryChange("all")}
             className={cn(
-              "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
+              "shrink-0 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
               activeCategory === "all"
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.22)]"
+                : "border-white/[0.06] bg-[#18191d] text-white/75 hover:border-white/[0.12] hover:bg-[#202126] hover:text-white"
             )}
           >
             All
@@ -35,10 +35,10 @@ export function CategoryTabs({
               key={cat.id}
               onClick={() => onCategoryChange(cat.id)}
               className={cn(
-                "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
+                "shrink-0 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
                 activeCategory === cat.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.22)]"
+                  : "border-white/[0.06] bg-[#18191d] text-white/75 hover:border-white/[0.12] hover:bg-[#202126] hover:text-white"
               )}
             >
               {cat.name}
