@@ -52,7 +52,7 @@ const preloaderBootstrapScript = `
   (() => {
     const pathname = window.location.pathname;
     const shouldShow =
-      pathname === '/' || pathname === '/landing' || pathname.startsWith('/menu');
+      pathname === '/landing' || pathname.startsWith('/menu');
 
     if (!shouldShow) {
       document.documentElement.dataset.blazrPreloaderState = 'seen';

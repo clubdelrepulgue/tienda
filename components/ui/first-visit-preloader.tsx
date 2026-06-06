@@ -93,7 +93,7 @@ export function FirstVisitPreloader() {
     <div
       aria-hidden="true"
       className={cn(
-        'fixed inset-0 z-[120] flex items-center justify-center overflow-hidden bg-background px-6 transition-opacity duration-500',
+        'fixed inset-0 z-[120] flex items-center justify-center overflow-hidden bg-primary px-6 transition-opacity duration-500',
         phase === 'closing' && 'opacity-0',
       )}
     >
