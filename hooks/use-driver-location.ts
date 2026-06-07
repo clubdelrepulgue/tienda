@@ -7,6 +7,7 @@ interface UseDriverLocationOptions {
     driverId: string | null
     enabled?: boolean
     interval?: number // ms
+    useGoogleFallback?: boolean
     onError?: (error: GeolocationPositionError) => void
 }
 
@@ -14,6 +15,7 @@ export function useDriverLocation({
     driverId,
     enabled = true,
     interval = 10000,
+    useGoogleFallback = false,
     onError,
 }: UseDriverLocationOptions) {
     const [isTracking, setIsTracking] = useState(false)
@@ -128,11 +130,11 @@ export function useDriverLocation({
             onErrorRef.current?.(err)
 
             // After 3 consecutive GPS failures, try Google Geolocation fallback
-            if (consecutiveErrorsRef.current >= 3) {
+            if (useGoogleFallback && consecutiveErrorsRef.current >= 3) {
                 fallbackToGoogleGeolocation()
             }
         },
-        [fallbackToGoogleGeolocation]
+        [fallbackToGoogleGeolocation, useGoogleFallback]
     )
 
     const stopTracking = useCallback(() => {

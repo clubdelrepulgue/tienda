@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCartStore } from "@/lib/store"
 import type { PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -18,7 +17,7 @@ import { toast } from "sonner"
 import { createOrder } from "@/app/actions"
 import { CouponInput } from "@/components/storefront/coupon-input"
 import { GoogleMapsProvider, AddressSelector } from "@/components/maps"
-import { findDeliveryZoneForPoint, getZoneDeliveryFee } from "@/lib/delivery-zones"
+import { findDeliveryZoneForPoint, formatZoneMeta, getZoneDeliveryFee } from "@/lib/delivery-zones"
 
 function getBranchCity(address: string) {
   const parts = address
@@ -110,7 +109,7 @@ export default function CheckoutPage() {
         if (Array.isArray(data?.deliveryZones)) setAllDeliveryZones(data.deliveryZones)
       })
       .catch(() => {
-        toast.error("No se pudieron cargar las zonas de delivery")
+        toast.error("No se pudieron cargar las zonas de envío")
       })
   }, [])
 
@@ -157,7 +156,7 @@ export default function CheckoutPage() {
       }
 
       if (!best?.zone && allDeliveryZones.length > 0) {
-        toast.warning("Esa direccion esta fuera de nuestras zonas de delivery")
+        toast.warning("Esa dirección está fuera de las zonas de envío")
       }
     }
   }, [allDeliveryZones, branches, selectedLocation])
@@ -197,23 +196,23 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!name || !phone) {
-      toast.error("Completa tu nombre y telefono")
+      toast.error("Por favor completá tu nombre y teléfono")
       return
     }
     if (deliveryMethod === "delivery" && !address) {
-      toast.error("Ingresa una direccion de delivery")
+      toast.error("Por favor ingresá una dirección de entrega")
       return
     }
     if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedLocation) {
-      toast.error("Marca tu ubicacion en el mapa para confirmar la zona de delivery")
+      toast.error("Marcá tu ubicación en el mapa para confirmar la zona de envío")
       return
     }
     if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedZone) {
-      toast.error("Tu direccion esta fuera de nuestras zonas de delivery")
+      toast.error("La dirección está fuera de las zonas de envío disponibles")
       return
     }
     if (items.length === 0) {
-      toast.error("Tu carrito esta vacio")
+      toast.error("Tu carrito está vacío")
       return
     }
 
@@ -245,10 +244,10 @@ export default function CheckoutPage() {
       }
 
       clearCart()
-      toast.success(`Pedido #${result.orderNumber} realizado`)
+      toast.success(`¡Pedido #${result.orderNumber} realizado!`)
       router.push(`/order/${result.trackingToken}`)
     } catch {
-      toast.error("Algo salio mal. Intenta nuevamente.")
+      toast.error("Algo salió mal. Por favor intentá de nuevo.")
     } finally {
       setLoading(false)
     }
@@ -257,9 +256,9 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-6">
-        <p className="text-muted-foreground">Tu carrito esta vacio</p>
-        <Button asChild variant="outline">
-          <Link href="/">Volver al menu</Link>
+        <p className="text-muted-foreground">Tu carrito está vacío</p>
+        <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
+          <Link href="/">Ver menú</Link>
         </Button>
       </div>
     )
@@ -267,11 +266,11 @@ export default function CheckoutPage() {
 
   return (
     <GoogleMapsProvider>
-      <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
+      <div className="min-h-screen bg-secondary">
+        <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
           <div className="mx-auto max-w-3xl flex items-center gap-3 px-4 py-3">
-            <Button variant="ghost" size="icon" className="rounded-full" asChild>
-              <Link href="/" aria-label="Volver al menu">
+            <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" asChild>
+              <Link href="/" aria-label="Volver al menú">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
@@ -279,7 +278,7 @@ export default function CheckoutPage() {
               className="text-lg font-bold text-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Pago
+              Finalizar pedido
             </h1>
           </div>
         </header>
@@ -289,7 +288,7 @@ export default function CheckoutPage() {
             {/* Delivery Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                Metodo de entrega
+                Método de entrega
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -345,62 +344,9 @@ export default function CheckoutPage() {
                         : "text-muted-foreground"
                     )}
                   >
-                    Retiro
+                    Retiro en local
                   </span>
                 </button>
-              </div>
-            </section>
-
-            {/* Branch & Zone Selection */}
-            <section className="rounded-2xl bg-card border border-border p-5">
-              <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                {deliveryMethod === "delivery" ? "Sucursal & Zona" : "Sucursal"}
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm text-muted-foreground mb-1.5 block">
-                    Sucursal
-                  </Label>
-                  <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                    <SelectTrigger className="rounded-xl bg-secondary border-0">
-                      <SelectValue placeholder="Selecciona una sucursal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches.map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id}>
-                          {branch.name} {branch.isOpen ? "(Abierta)" : "(Cerrada)"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {deliveryMethod === "delivery" && deliveryZones.length > 0 && (
-                  <div>
-                    <Label className="text-sm text-muted-foreground mb-1.5 block">
-                      Zona de Delivery
-                    </Label>
-                    <Select value={selectedZone} onValueChange={setSelectedZone}>
-                      <SelectTrigger className="rounded-xl bg-secondary border-0">
-                        <SelectValue placeholder="Selecciona una zona" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {deliveryZones.map((zone) => (
-                          <SelectItem key={zone.id} value={zone.id}>
-                            <span className="flex items-center gap-2">
-                              <span
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: zone.color }}
-                              />
-                              {zone.name} - ${zone.deliveryFee.toFixed(2)}
-                              {zone.estimatedTimeMin && ` (~${zone.estimatedTimeMin} min)`}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
               </div>
             </section>
 
@@ -419,58 +365,87 @@ export default function CheckoutPage() {
                     placeholder="Tu nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                    className="rounded-xl bg-white border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                   />
                 </div>
                 <div>
                   <Label htmlFor="phone" className="text-sm text-muted-foreground mb-1.5 block">
+<<<<<<< HEAD
                     Telefono
+=======
+                    Teléfono
+>>>>>>> b259f33 (Cambios listos)
                   </Label>
                   <Input
                     id="phone"
                     placeholder="+54 11 5555-0000"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                    className="rounded-xl bg-white border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                   />
                 </div>
                 {deliveryMethod === "delivery" && (
                   <>
-                    <div>
-                      <Label htmlFor="address" className="text-sm text-muted-foreground mb-1.5 block">
-                        Direccion
-                      </Label>
-                      <Input
-                        id="address"
-                        placeholder="Calle, numero, apartamento"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
-                      />
-                    </div>
-
                     {/* Map Address Selector */}
                     <div className="pt-2">
                       <Label className="text-sm text-muted-foreground mb-1.5 block">
-                        Selecciona tu ubicación en el mapa
+                        Dirección de entrega
                       </Label>
                       <AddressSelector
                         value={selectedLocation || undefined}
                         onChange={setSelectedLocation}
-                        zones={deliveryZones.map(z => ({
+                        defaultCenter={selectedBranchLocation}
+                        searchCenter={branchesSearchCenter}
+                        searchRadiusKm={80}
+                        branchMarker={selectedBranchLocation}
+                        zones={visibleDeliveryZones.map(z => ({
                           id: z.id,
                           name: z.name,
                           color: z.color,
                           coordinates: z.coordinates || []
                         }))}
                         height="300px"
-                        placeholder="Buscar dirección..."
+                        placeholder="Buscar dirección de entrega..."
+                        showInstructions={false}
+                        simpleMap
+                        lazyMap
                       />
+                      <div className="mt-3 rounded-xl border border-border bg-white p-3">
+                        {selectedZoneInfo ? (
+                          <div className="flex items-start gap-3">
+                            <span
+                              className="mt-1 h-3 w-3 rounded-full shrink-0"
+                              style={{ backgroundColor: selectedZoneInfo.color }}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-foreground">
+                                {selectedZoneInfo.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatZoneMeta(selectedZoneInfo)}
+                              </p>
+                              {selectedBranchInfo && (
+                                <p className="text-xs text-muted-foreground">
+                                  Sale desde {getBranchCity(selectedBranchInfo.address)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ) : isOutsideCoverage ? (
+                          <p className="text-sm text-destructive">
+                            Esta dirección está fuera de nuestras zonas de envío.
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Buscá tu dirección o mové el pin para calcular envío.
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div>
                       <Label htmlFor="notes" className="text-sm text-muted-foreground mb-1.5 block">
-                        Notas para el delivery
+                        Notas de entrega
                       </Label>
                       <Textarea
                         id="notes"
@@ -489,7 +464,7 @@ export default function CheckoutPage() {
             {/* Payment Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                Metodo de pago
+                Método de pago
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -622,10 +597,14 @@ export default function CheckoutPage() {
                 <div className="flex justify-between text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Truck className="h-3.5 w-3.5" />
-                    Delivery
+                    {selectedZoneInfo ? `Delivery · ${selectedZoneInfo.name}` : "Delivery"}
                   </span>
                   <span>
-                    {deliveryFee > 0 ? `$${deliveryFee.toFixed(2)}` : "Gratis"}
+                    {shouldCalculateDelivery
+                      ? "A calcular"
+                      : deliveryFee > 0
+                        ? `$${deliveryFee.toFixed(2)}`
+                        : "Gratis"}
                   </span>
                 </div>
                 
@@ -645,10 +624,10 @@ export default function CheckoutPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Realizando pedido...
+                    Procesando pedido...
                   </>
                 ) : (
-                  "Realizar pedido"
+                  "Confirmar pedido"
                 )}
               </Button>
             </div>

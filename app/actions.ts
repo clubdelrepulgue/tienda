@@ -717,6 +717,40 @@ export async function createDeliveryZone(data: {
     return { success: true }
 }
 
+export async function createDeliveryZones(
+    zones: {
+        branchId: string
+        name: string
+        color?: string
+        coordinates: { lat: number; lng: number }[]
+        deliveryFee: number
+        minOrderAmount?: number
+        estimatedTimeMin?: number
+    }[]
+) {
+    const supabase = await createClient()
+
+    if (zones.length === 0) return { error: "No hay zonas para crear" }
+
+    const { error } = await supabase.from("delivery_zones").insert(
+        zones.map((zone) => ({
+            sucursal_id: zone.branchId,
+            name: zone.name,
+            color: zone.color || "#3b82f6",
+            coordinates: zone.coordinates,
+            delivery_fee: zone.deliveryFee,
+            min_order_amount: zone.minOrderAmount || 0,
+            estimated_time_min: zone.estimatedTimeMin,
+        }))
+    )
+
+    if (error) return { error: error.message }
+
+    revalidatePath("/admin/delivery-zones")
+    revalidatePath("/admin/branches")
+    return { success: true }
+}
+
 export async function updateDeliveryZone(
     id: string,
     data: {

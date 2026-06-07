@@ -12,7 +12,6 @@ import {
     Clock,
     Eye,
     Building2,
-    Crosshair,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,6 +34,11 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
 import type { Branch, DeliveryZone } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -42,15 +46,56 @@ import {
     createBranch,
     updateBranch,
     toggleBranchOpen,
-    createDeliveryZone,
+    createDeliveryZones,
     updateDeliveryZone,
     deleteDeliveryZone,
 } from "@/app/actions"
-import { GoogleMapsProvider, ZoneEditor } from "@/components/maps"
+import { AddressSelector, GoogleMapsProvider, ZoneEditor } from "@/components/maps"
+import { formatZoneMeta, generateCirclePolygon } from "@/lib/delivery-zones"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 const ZONE_COLORS = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899"]
+
+type RadiusZoneDraft = {
+    id: string
+    name: string
+    radiusKm: string
+    deliveryFee: string
+    minOrderAmount: string
+    estimatedTimeMin: string
+    color: string
+}
+
+const defaultRadiusZones: RadiusZoneDraft[] = [
+    {
+        id: "near",
+        name: "Cerca",
+        radiusKm: "5",
+        deliveryFee: "100",
+        minOrderAmount: "",
+        estimatedTimeMin: "25",
+        color: "#22c55e",
+    },
+    {
+        id: "mid",
+        name: "Media",
+        radiusKm: "10",
+        deliveryFee: "180",
+        minOrderAmount: "",
+        estimatedTimeMin: "40",
+        color: "#f59e0b",
+    },
+    {
+        id: "far",
+        name: "Lejana",
+        radiusKm: "25",
+        deliveryFee: "300",
+        minOrderAmount: "",
+        estimatedTimeMin: "60",
+        color: "#ef4444",
+    },
+]
 
 export default function BranchesPage() {
     const {
@@ -85,6 +130,8 @@ export default function BranchesPage() {
     const [zoneEstTime, setZoneEstTime] = useState("")
     const [zoneColor, setZoneColor] = useState("#3b82f6")
     const [zoneCoordinates, setZoneCoordinates] = useState<{ lat: number; lng: number }[]>([])
+    const [radiusZones, setRadiusZones] = useState<RadiusZoneDraft[]>(defaultRadiusZones)
+    const [savingZone, setSavingZone] = useState(false)
 
     // ── Selected branch for filtering zones ──
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null)
@@ -189,6 +236,7 @@ export default function BranchesPage() {
         setZoneEstTime("")
         setZoneColor("#3b82f6")
         setZoneCoordinates([])
+        setRadiusZones(defaultRadiusZones.map((zone) => ({ ...zone })))
         setZoneDialogOpen(true)
     }
 
@@ -201,6 +249,7 @@ export default function BranchesPage() {
         setZoneEstTime(zone.estimatedTimeMin?.toString() || "")
         setZoneColor(zone.color)
         setZoneCoordinates(zone.coordinates || [])
+        setRadiusZones(defaultRadiusZones.map((draft) => ({ ...draft })))
         setZoneDialogOpen(true)
     }
 
@@ -209,7 +258,90 @@ export default function BranchesPage() {
         setViewDialogOpen(true)
     }
 
+    const updateRadiusZone = (id: string, patch: Partial<RadiusZoneDraft>) => {
+        setRadiusZones((current) =>
+            current.map((zone) => (zone.id === id ? { ...zone, ...patch } : zone))
+        )
+    }
+
+    const addRadiusZone = () => {
+        const lastRadius = radiusZones
+            .map((zone) => parseFloat(zone.radiusKm))
+            .filter((radius) => Number.isFinite(radius))
+            .sort((a, b) => b - a)[0]
+
+        setRadiusZones((current) => [
+            ...current,
+            {
+                id: `zone-${Date.now()}`,
+                name: `Zona ${current.length + 1}`,
+                radiusKm: lastRadius ? String(lastRadius + 5) : "5",
+                deliveryFee: "",
+                minOrderAmount: "",
+                estimatedTimeMin: "",
+                color: ZONE_COLORS[current.length % ZONE_COLORS.length],
+            },
+        ])
+    }
+
+    const removeRadiusZone = (id: string) => {
+        setRadiusZones((current) => current.filter((zone) => zone.id !== id))
+    }
+
     const handleSaveZone = async () => {
+        setSavingZone(true)
+        try {
+            if (!editZone) {
+                const branchLocation = getBranchLocation(zoneBranchId)
+                if (!branchLocation) {
+                    toast.error("Primero geolocalizá la sucursal para crear zonas por radio")
+                    return
+                }
+
+                const validZones = radiusZones
+                    .map((zone) => ({
+                        ...zone,
+                        radius: parseFloat(zone.radiusKm),
+                        fee: parseFloat(zone.deliveryFee),
+                        minOrder: parseFloat(zone.minOrderAmount),
+                        eta: parseInt(zone.estimatedTimeMin),
+                    }))
+                    .filter(
+                        (zone) =>
+                            zone.name.trim() &&
+                            Number.isFinite(zone.radius) &&
+                            zone.radius > 0 &&
+                            Number.isFinite(zone.fee)
+                    )
+                    .sort((a, b) => a.radius - b.radius)
+
+                if (validZones.length === 0) {
+                    toast.error("Agregá al menos una zona con radio y costo")
+                    return
+                }
+
+                const result = await createDeliveryZones(
+                    validZones.map((zone) => ({
+                        branchId: zoneBranchId,
+                        name: `${zone.name.trim()} · hasta ${zone.radius} km`,
+                        color: zone.color,
+                        coordinates: generateCirclePolygon(branchLocation, zone.radius),
+                        deliveryFee: zone.fee,
+                        minOrderAmount: Number.isFinite(zone.minOrder) ? zone.minOrder : 0,
+                        estimatedTimeMin: Number.isFinite(zone.eta) ? zone.eta : undefined,
+                    }))
+                )
+
+                if (result.error) {
+                    toast.error(result.error)
+                } else {
+                    toast.success(`${validZones.length} zonas creadas por radio`)
+                    mutateZones()
+                    setZoneDialogOpen(false)
+                }
+                return
+            }
+
         if (zoneCoordinates.length < 3) {
             toast.error("La zona debe tener al menos 3 puntos")
             return
@@ -223,16 +355,17 @@ export default function BranchesPage() {
             minOrderAmount: parseFloat(zoneMinOrder) || 0,
             estimatedTimeMin: zoneEstTime ? parseInt(zoneEstTime) : undefined,
         }
-        const result = editZone
-            ? await updateDeliveryZone(editZone.id, { ...data, isActive: editZone.isActive })
-            : await createDeliveryZone(data)
+        const result = await updateDeliveryZone(editZone.id, { ...data, isActive: editZone.isActive })
 
         if (result.error) {
             toast.error(result.error)
         } else {
-            toast.success(editZone ? "Zona actualizada" : "Zona creada")
+            toast.success("Zona actualizada")
             mutateZones()
             setZoneDialogOpen(false)
+        }
+        } finally {
+            setSavingZone(false)
         }
     }
 
@@ -257,9 +390,6 @@ export default function BranchesPage() {
     }
 
     // ── Selected branch data ──
-    const selectedBranch = branches?.find((b) => b.id === selectedBranchId)
-    const selectedZones = selectedBranchId ? getZonesForBranch(selectedBranchId) : []
-
     if (loadingBranches) {
         return (
             <div className="flex flex-col gap-6 max-w-6xl">
@@ -447,10 +577,7 @@ export default function BranchesPage() {
                                                     </div>
 
                                                     <div className="text-xs text-muted-foreground">
-                                                        {zone.coordinates?.length || 0} puntos
-                                                        {zone.minOrderAmount > 0 && (
-                                                            <span> · Gratis desde ${zone.minOrderAmount}</span>
-                                                        )}
+                                                        {formatZoneMeta(zone)} · {zone.coordinates?.length || 0} puntos
                                                     </div>
 
                                                     <div className="flex gap-2 pt-1">
@@ -518,7 +645,7 @@ export default function BranchesPage() {
 
                 {/* ─── Branch Create/Edit Dialog ─── */}
                 <Dialog open={branchDialogOpen} onOpenChange={setBranchDialogOpen}>
-                    <DialogContent className="max-w-md bg-card border-border rounded-2xl">
+                    <DialogContent className="max-w-2xl bg-card border-border rounded-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle style={{ fontFamily: "var(--font-heading)" }}>
                                 {editBranch ? "Editar Sucursal" : "Nueva Sucursal"}
@@ -540,11 +667,24 @@ export default function BranchesPage() {
                                 <Label className="text-sm text-muted-foreground mb-1.5 block">
                                     Dirección
                                 </Label>
-                                <Input
-                                    value={formAddress}
-                                    onChange={(e) => setFormAddress(e.target.value)}
-                                    placeholder="Dirección completa"
-                                    className="rounded-xl bg-secondary border-0"
+                                <AddressSelector
+                                    value={
+                                        formLat != null && formLng != null
+                                            ? {
+                                                  lat: formLat,
+                                                  lng: formLng,
+                                                  address: formAddress || "Ubicación de la sucursal",
+                                              }
+                                            : undefined
+                                    }
+                                    onChange={(location) => {
+                                        setFormAddress(location.address)
+                                        setFormLat(location.lat)
+                                        setFormLng(location.lng)
+                                    }}
+                                    placeholder="Buscar dirección de la sucursal..."
+                                    height="240px"
+                                    reverseGeocodeOnSelect
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -614,89 +754,263 @@ export default function BranchesPage() {
                     <DialogContent className="sm:max-w-4xl rounded-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>
-                                {editZone ? "Editar Zona" : "Nueva Zona de Delivery"}
+                                {editZone ? "Editar Zona" : "Zonas por radio de distancia"}
                             </DialogTitle>
                             <DialogDescription>
-                                Dibuja el área de cobertura en el mapa haciendo clic para agregar puntos
+                                {editZone
+                                    ? "Ajusta el área de cobertura dibujada en el mapa"
+                                    : "Crea varias zonas circulares desde la sucursal: cerca, media y lejana."}
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
-                            {/* Form */}
-                            <div className="space-y-4">
-                                <div>
-                                    <Label>Nombre</Label>
-                                    <Input
-                                        value={zoneName}
-                                        onChange={(e) => setZoneName(e.target.value)}
-                                        placeholder="Ej: Centro"
-                                        className="rounded-xl mt-1.5"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
+                        {editZone ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
+                                <div className="space-y-4">
                                     <div>
-                                        <Label>Costo de envío</Label>
+                                        <Label>Nombre</Label>
                                         <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={zoneDeliveryFee}
-                                            onChange={(e) => setZoneDeliveryFee(e.target.value)}
+                                            value={zoneName}
+                                            onChange={(e) => setZoneName(e.target.value)}
+                                            placeholder="Ej: Centro"
                                             className="rounded-xl mt-1.5"
                                         />
                                     </div>
-                                    <div>
-                                        <Label>Mínimo gratis (opc)</Label>
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={zoneMinOrder}
-                                            onChange={(e) => setZoneMinOrder(e.target.value)}
-                                            className="rounded-xl mt-1.5"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <Label>Tiempo estimado (min, opc)</Label>
-                                    <Input
-                                        type="number"
-                                        value={zoneEstTime}
-                                        onChange={(e) => setZoneEstTime(e.target.value)}
-                                        className="rounded-xl mt-1.5"
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Color</Label>
-                                    <div className="flex gap-2 mt-1.5">
-                                        {ZONE_COLORS.map((c) => (
-                                            <button
-                                                key={c}
-                                                onClick={() => setZoneColor(c)}
-                                                className={cn(
-                                                    "w-8 h-8 rounded-full border-2 transition-transform hover:scale-110",
-                                                    zoneColor === c
-                                                        ? "border-foreground scale-110"
-                                                        : "border-transparent"
-                                                )}
-                                                style={{ backgroundColor: c }}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <Label>Costo de envío</Label>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                value={zoneDeliveryFee}
+                                                onChange={(e) => setZoneDeliveryFee(e.target.value)}
+                                                className="rounded-xl mt-1.5"
                                             />
+                                        </div>
+                                        <div>
+                                            <Label>Mínimo gratis (opc)</Label>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                value={zoneMinOrder}
+                                                onChange={(e) => setZoneMinOrder(e.target.value)}
+                                                className="rounded-xl mt-1.5"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label>Tiempo estimado (min, opc)</Label>
+                                        <Input
+                                            type="number"
+                                            value={zoneEstTime}
+                                            onChange={(e) => setZoneEstTime(e.target.value)}
+                                            className="rounded-xl mt-1.5"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Color</Label>
+                                        <div className="flex gap-2 mt-1.5">
+                                            {ZONE_COLORS.map((c) => (
+                                                <button
+                                                    key={c}
+                                                    type="button"
+                                                    onClick={() => setZoneColor(c)}
+                                                    className={cn(
+                                                        "w-8 h-8 rounded-full border-2 transition-transform hover:scale-110",
+                                                        zoneColor === c
+                                                            ? "border-foreground scale-110"
+                                                            : "border-transparent"
+                                                    )}
+                                                    style={{ backgroundColor: c }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="mb-2 block">Área de cobertura</Label>
+                                    <ZoneEditor
+                                        initialCoordinates={zoneCoordinates}
+                                        center={getBranchLocation(zoneBranchId)}
+                                        branchMarker={getBranchLocation(zoneBranchId)}
+                                        zoneColor={zoneColor}
+                                        onChange={setZoneCoordinates}
+                                        height="400px"
+                                        showPointMarkers={zoneCoordinates.length <= 24}
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6 pt-4">
+                                <div className="space-y-3">
+                                    <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                                        <p className="text-sm font-medium">Regla</p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Cada fila crea una zona circular desde el local. El comprador queda en la zona de menor radio que cubra su dirección.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        {radiusZones.map((zone, index) => (
+                                            <div
+                                                key={zone.id}
+                                                className="grid grid-cols-12 gap-2 items-end rounded-xl border border-border p-3"
+                                            >
+                                                <div className="col-span-12 sm:col-span-3">
+                                                    <Label className="text-xs">Nombre</Label>
+                                                    <Input
+                                                        value={zone.name}
+                                                        onChange={(e) => updateRadiusZone(zone.id, { name: e.target.value })}
+                                                        className="rounded-lg mt-1"
+                                                    />
+                                                </div>
+                                                <div className="col-span-6 sm:col-span-2">
+                                                    <Label className="text-xs">Hasta km</Label>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        value={zone.radiusKm}
+                                                        onChange={(e) => updateRadiusZone(zone.id, { radiusKm: e.target.value })}
+                                                        className="rounded-lg mt-1"
+                                                    />
+                                                </div>
+                                                <div className="col-span-6 sm:col-span-2">
+                                                    <Label className="text-xs">Costo</Label>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={zone.deliveryFee}
+                                                        onChange={(e) => updateRadiusZone(zone.id, { deliveryFee: e.target.value })}
+                                                        className="rounded-lg mt-1"
+                                                    />
+                                                </div>
+                                                <div className="col-span-6 sm:col-span-2">
+                                                    <Label className="text-xs">Gratis desde</Label>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={zone.minOrderAmount}
+                                                        onChange={(e) => updateRadiusZone(zone.id, { minOrderAmount: e.target.value })}
+                                                        placeholder="Opc."
+                                                        className="rounded-lg mt-1"
+                                                    />
+                                                </div>
+                                                <div className="col-span-4 sm:col-span-2">
+                                                    <Label className="text-xs">Min</Label>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        value={zone.estimatedTimeMin}
+                                                        onChange={(e) => updateRadiusZone(zone.id, { estimatedTimeMin: e.target.value })}
+                                                        className="rounded-lg mt-1"
+                                                    />
+                                                </div>
+                                                <div className="col-span-12 sm:col-span-1 flex items-center gap-2">
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="icon"
+                                                                className="h-9 w-9 rounded-lg p-1"
+                                                                title="Elegir color"
+                                                            >
+                                                                <span
+                                                                    className="h-full w-full rounded-md"
+                                                                    style={{ backgroundColor: zone.color }}
+                                                                />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-2" align="end">
+                                                            <div className="grid grid-cols-3 gap-2">
+                                                                {ZONE_COLORS.map((color) => (
+                                                                    <button
+                                                                        key={color}
+                                                                        type="button"
+                                                                        className={cn(
+                                                                            "h-8 w-8 rounded-md border transition-transform hover:scale-110",
+                                                                            zone.color === color
+                                                                                ? "border-foreground ring-2 ring-foreground/20"
+                                                                                : "border-border"
+                                                                        )}
+                                                                        style={{ backgroundColor: color }}
+                                                                        onClick={() => updateRadiusZone(zone.id, { color })}
+                                                                        title={`Color ${color}`}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                    {radiusZones.length > 1 && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-9 w-9 text-destructive"
+                                                            onClick={() => removeRadiusZone(zone.id)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
                                         ))}
                                     </div>
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="rounded-xl gap-2"
+                                        onClick={addRadiusZone}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Agregar radio
+                                    </Button>
+                                </div>
+
+                                <div>
+                                    <Label className="mb-2 block">Vista previa de zonas superpuestas</Label>
+                                    {getBranchLocation(zoneBranchId) ? (
+                                        <ZoneEditor
+                                            initialCoordinates={[]}
+                                            center={getBranchLocation(zoneBranchId)}
+                                            branchMarker={getBranchLocation(zoneBranchId)}
+                                            previewZones={radiusZones
+                                                .map((zone) => ({
+                                                    id: zone.id,
+                                                    name: zone.name || "Zona",
+                                                    color: zone.color,
+                                                    radiusKm: parseFloat(zone.radiusKm),
+                                                }))
+                                                .filter(
+                                                    (zone) =>
+                                                        Number.isFinite(zone.radiusKm) &&
+                                                        zone.radiusKm > 0
+                                                )
+                                                .map((zone) => ({
+                                                    ...zone,
+                                                    coordinates: generateCirclePolygon(
+                                                        getBranchLocation(zoneBranchId)!,
+                                                        zone.radiusKm
+                                                    ),
+                                                }))}
+                                            onChange={() => {}}
+                                            height="400px"
+                                            readOnly
+                                        />
+                                    ) : (
+                                        <div className="h-[400px] rounded-xl border border-dashed border-border flex items-center justify-center p-6 text-center">
+                                            <p className="text-sm text-muted-foreground">
+                                                Geolocalizá la sucursal para ver y crear zonas por radio.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-
-                            {/* Map Editor */}
-                            <div>
-                                <Label className="mb-2 block">Área de cobertura</Label>
-                                <ZoneEditor
-                                    initialCoordinates={zoneCoordinates}
-                                    center={getBranchLocation(zoneBranchId)}
-                                    branchMarker={getBranchLocation(zoneBranchId)}
-                                    zoneColor={zoneColor}
-                                    onChange={setZoneCoordinates}
-                                    height="400px"
-                                />
-                            </div>
-                        </div>
+                        )}
 
                         <div className="flex gap-3 pt-4">
                             <Button
@@ -709,9 +1023,20 @@ export default function BranchesPage() {
                             <Button
                                 className="flex-1 rounded-xl"
                                 onClick={handleSaveZone}
-                                disabled={!zoneName || zoneCoordinates.length < 3}
+                                disabled={
+                                    savingZone ||
+                                    (editZone
+                                        ? !zoneName || zoneCoordinates.length < 3
+                                        : !getBranchLocation(zoneBranchId))
+                                }
                             >
-                                Guardar
+                                {savingZone ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : editZone ? (
+                                    "Guardar"
+                                ) : (
+                                    "Crear zonas"
+                                )}
                             </Button>
                         </div>
                     </DialogContent>

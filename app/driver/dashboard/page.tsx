@@ -9,10 +9,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
 import { updateOrderStatus } from "@/app/actions"
-import type { Order } from "@/lib/types"
+import type { DeliveryZone, Order } from "@/lib/types"
 import { toast } from "sonner"
 import { useDriverLocation } from "@/hooks/use-driver-location"
 import { GoogleMapsProvider, LiveTrackingMap } from "@/components/maps"
+import { formatZoneMeta } from "@/lib/delivery-zones"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -23,6 +24,7 @@ export default function DriverDashboardPage() {
     const [showMap, setShowMap] = useState(false)
     const [storageError, setStorageError] = useState(false)
     const [branchLocations, setBranchLocations] = useState<Record<string, { lat: number; lng: number }>>({})
+    const [deliveryZones, setDeliveryZones] = useState<Record<string, DeliveryZone>>({})
     const router = useRouter()
 
     const { isTracking, lastLocation, error, locationStatus } = useDriverLocation({
@@ -112,6 +114,33 @@ export default function DriverDashboardPage() {
                         }
                     }
                     setBranchLocations(locs)
+                }
+            }
+
+            const zoneIds = [...new Set((data || []).map((o: Order) => o.deliveryZoneId).filter(Boolean))]
+            if (zoneIds.length > 0) {
+                const supabase = createClient()
+                const { data: zones } = await supabase
+                    .from("delivery_zones")
+                    .select("*")
+                    .in("id", zoneIds)
+
+                if (zones) {
+                    const mapped: Record<string, DeliveryZone> = {}
+                    for (const zone of zones) {
+                        mapped[zone.id] = {
+                            id: zone.id,
+                            branchId: zone.sucursal_id,
+                            name: zone.name,
+                            color: zone.color || "#3b82f6",
+                            coordinates: zone.coordinates || [],
+                            deliveryFee: parseFloat(zone.delivery_fee),
+                            minOrderAmount: parseFloat(zone.min_order_amount || 0),
+                            estimatedTimeMin: zone.estimated_time_min,
+                            isActive: zone.is_active,
+                        }
+                    }
+                    setDeliveryZones(mapped)
                 }
             }
         } catch {
@@ -255,6 +284,14 @@ export default function DriverDashboardPage() {
                                         <p className="text-xs text-muted-foreground truncate">
                                             {selectedOrder.address || "Retiro en local"}
                                         </p>
+                                        {selectedOrder.deliveryZoneId && deliveryZones[selectedOrder.deliveryZoneId] && (
+                                            <p
+                                                className="mt-1 text-xs font-medium"
+                                                style={{ color: deliveryZones[selectedOrder.deliveryZoneId].color }}
+                                            >
+                                                {deliveryZones[selectedOrder.deliveryZoneId].name} · {formatZoneMeta(deliveryZones[selectedOrder.deliveryZoneId])}
+                                            </p>
+                                        )}
                                     </div>
                                     <Button variant="ghost" size="sm" onClick={() => setShowMap(false)}>
                                         Cerrar
@@ -265,6 +302,7 @@ export default function DriverDashboardPage() {
                                     <LiveTrackingMap
                                         orderId={selectedOrder.id}
                                         driverId={driverId ?? undefined}
+                                        initialDriverLocation={lastLocation}
                                         destination={{
                                             lat: selectedOrder.addressLat!,
                                             lng: selectedOrder.addressLng!,
@@ -335,6 +373,22 @@ export default function DriverDashboardPage() {
                                             </div>
 
                                             <div className="space-y-2 mb-4">
+                                                {order.deliveryZoneId && deliveryZones[order.deliveryZoneId] && (
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <span
+                                                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                                                            style={{ backgroundColor: deliveryZones[order.deliveryZoneId].color }}
+                                                        />
+                                                        <span className="font-medium">
+                                                            {deliveryZones[order.deliveryZoneId].name}
+                                                        </span>
+                                                        {deliveryZones[order.deliveryZoneId].estimatedTimeMin && (
+                                                            <span className="text-muted-foreground">
+                                                                ~{deliveryZones[order.deliveryZoneId].estimatedTimeMin} min
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 <div className="flex items-center gap-2 text-sm">
                                                     <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
                                                     <span className="line-clamp-2">

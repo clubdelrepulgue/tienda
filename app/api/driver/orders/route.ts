@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
             branchId: row.sucursal_id || "",
             addressLat: row.address_lat ? parseFloat(row.address_lat) : null,
             addressLng: row.address_lng ? parseFloat(row.address_lng) : null,
+            deliveryZoneId: row.delivery_zone_id || null,
         }))
 
         return NextResponse.json(mappedOrders)

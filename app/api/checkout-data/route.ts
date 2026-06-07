@@ -18,7 +18,7 @@ export async function GET() {
         })
     } catch (error: any) {
         return NextResponse.json(
-            { error: error.message || "No se pudieron cargar los datos del checkout" },
+            { error: error.message || "No se pudieron cargar los datos de checkout" },
             { status: 500 }
         )
     }
