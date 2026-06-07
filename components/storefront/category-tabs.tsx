@@ -18,7 +18,7 @@ export function CategoryTabs({
   return (
     <div className="sticky top-[57px] z-40 border-b border-white/[0.07] bg-background/85 backdrop-blur-xl">
       <ScrollArea className="mx-auto max-w-6xl">
-        <div className="flex items-center gap-2.5 px-4 py-3.5 sm:px-5 lg:px-6">
+        <div className="flex items-center gap-2.5 px-4 py-2 sm:px-5 lg:px-6">
           <button
             onClick={() => onCategoryChange("all")}
             className={cn(

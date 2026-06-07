@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
                 return NextResponse.json({ orders: dispatchOrders, zones, drivers: availableDrivers })
             }
             default:
-                return NextResponse.json({ error: "Invalid type" }, { status: 400 })
+                return NextResponse.json({ error: "Tipo invalido" }, { status: 400 })
         }
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })

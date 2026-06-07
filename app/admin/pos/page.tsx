@@ -55,7 +55,7 @@ export default function POSPage() {
                 const openBranch = branchesData?.find((b: Branch) => b.isOpen)
                 if (openBranch) setSelectedBranch(openBranch.id)
             })
-            .catch(() => toast.error("Error loading data"))
+            .catch(() => toast.error("Error al cargar datos"))
     }, [])
 
     const filteredProducts = useMemo(() => {
@@ -108,15 +108,15 @@ export default function POSPage() {
 
     const handleCheckout = async () => {
         if (cart.length === 0) {
-            toast.error("Cart is empty")
+            toast.error("El carrito esta vacio")
             return
         }
         if (!customerName) {
-            toast.error("Enter customer name")
+            toast.error("Ingresa el nombre del cliente")
             return
         }
         if (!selectedBranch) {
-            toast.error("Select a branch")
+            toast.error("Selecciona una sucursal")
             return
         }
 
@@ -151,11 +151,11 @@ export default function POSPage() {
             }
 
             playNewOrderSound()
-            toast.success(`Order #${result.orderNumber} created!`)
+            toast.success(`Pedido #${result.orderNumber} creado`)
             clearCart()
             setIsCheckoutOpen(false)
         } catch {
-            toast.error("Error creating order")
+            toast.error("Error al crear el pedido")
         } finally {
             setLoading(false)
         }
@@ -170,7 +170,7 @@ export default function POSPage() {
                     <Tabs value={activeCategory} onValueChange={setActiveCategory}>
                         <TabsList className="bg-secondary/50 p-1 flex flex-wrap h-auto">
                             <TabsTrigger value="all" className="rounded-lg">
-                                All
+                                Todos
                             </TabsTrigger>
                             {categories.map((cat) => (
                                 <TabsTrigger key={cat.id} value={cat.id} className="rounded-lg">
@@ -229,7 +229,7 @@ export default function POSPage() {
                                 className="font-bold text-lg text-card-foreground"
                                 style={{ fontFamily: "var(--font-heading)" }}
                             >
-                                Current Order
+                                Pedido actual
                             </h2>
                         </div>
                         {cart.length > 0 && (
@@ -240,7 +240,7 @@ export default function POSPage() {
                                 onClick={clearCart}
                             >
                                 <Trash2 className="h-4 w-4 mr-1" />
-                                Clear
+                                Limpiar
                             </Button>
                         )}
                     </div>
@@ -250,7 +250,7 @@ export default function POSPage() {
                     {cart.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                             <ShoppingCart className="h-12 w-12 mb-2 opacity-20" />
-                            <p className="text-sm">Tap products to add</p>
+                            <p className="text-sm">Toca productos para agregarlos</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -327,7 +327,7 @@ export default function POSPage() {
                         onClick={() => setIsCheckoutOpen(true)}
                     >
                         <Receipt className="h-5 w-5 mr-2" />
-                        Charge
+                        Cobrar
                     </Button>
                 </div>
             </div>
@@ -336,13 +336,13 @@ export default function POSPage() {
             <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
                 <DialogContent className="sm:max-w-md rounded-2xl">
                     <DialogHeader>
-                        <DialogTitle className="text-xl">Complete Order</DialogTitle>
+                        <DialogTitle className="text-xl">Completar pedido</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 pt-4">
                         <div>
-                            <Label>Customer Name</Label>
+                            <Label>Nombre del cliente</Label>
                             <Input
-                                placeholder="Enter name"
+                                placeholder="Ingresa el nombre"
                                 value={customerName}
                                 onChange={(e) => setCustomerName(e.target.value)}
                                 className="rounded-xl mt-1.5"
@@ -350,13 +350,13 @@ export default function POSPage() {
                         </div>
 
                         <div>
-                            <Label>Branch</Label>
+                            <Label>Sucursal</Label>
                             <select
                                 value={selectedBranch}
                                 onChange={(e) => setSelectedBranch(e.target.value)}
                                 className="w-full mt-1.5 rounded-xl border border-input bg-background px-3 py-2 text-sm"
                             >
-                                <option value="">Select branch</option>
+                                <option value="">Selecciona una sucursal</option>
                                 {branches.map((b) => (
                                     <option key={b.id} value={b.id}>
                                         {b.name}
@@ -366,7 +366,7 @@ export default function POSPage() {
                         </div>
 
                         <div>
-                            <Label>Order Type</Label>
+                            <Label>Tipo de pedido</Label>
                             <RadioGroup
                                 value={orderType}
                                 onValueChange={(v) => setOrderType(v as "pickup" | "delivery")}
@@ -374,7 +374,7 @@ export default function POSPage() {
                             >
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="pickup" id="pickup" />
-                                    <Label htmlFor="pickup" className="cursor-pointer">Pickup</Label>
+                                    <Label htmlFor="pickup" className="cursor-pointer">Retiro</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="delivery" id="delivery" />
@@ -384,7 +384,7 @@ export default function POSPage() {
                         </div>
 
                         <div>
-                            <Label>Payment Method</Label>
+                            <Label>Metodo de pago</Label>
                             <div className="grid grid-cols-2 gap-3 mt-1.5">
                                 <button
                                     onClick={() => setPaymentMethod("cash")}
@@ -396,7 +396,7 @@ export default function POSPage() {
                                     )}
                                 >
                                     <Banknote className="h-6 w-6" />
-                                    <span className="text-sm font-medium">Cash</span>
+                                    <span className="text-sm font-medium">Efectivo</span>
                                 </button>
                                 <button
                                     onClick={() => setPaymentMethod("mercadopago")}
@@ -408,7 +408,7 @@ export default function POSPage() {
                                     )}
                                 >
                                     <CreditCard className="h-6 w-6" />
-                                    <span className="text-sm font-medium">Card</span>
+                                    <span className="text-sm font-medium">Tarjeta</span>
                                 </button>
                             </div>
                         </div>
@@ -426,7 +426,7 @@ export default function POSPage() {
                                 className="flex-1 rounded-xl h-12"
                                 onClick={() => setIsCheckoutOpen(false)}
                             >
-                                Cancel
+                                Cancelar
                             </Button>
                             <Button
                                 className="flex-1 rounded-xl h-12"
@@ -438,7 +438,7 @@ export default function POSPage() {
                                 ) : (
                                     <Receipt className="h-4 w-4 mr-2" />
                                 )}
-                                Complete
+                                Completar
                             </Button>
                         </div>
                     </div>

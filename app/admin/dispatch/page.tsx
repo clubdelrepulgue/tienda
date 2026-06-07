@@ -164,7 +164,7 @@ export default function DispatchPage() {
       toast.error(result.error)
       mutate()
     } else {
-      const driverName = drivers.find((d) => d.id === driverId)?.name || "Driver"
+      const driverName = drivers.find((d) => d.id === driverId)?.name || "Repartidor"
       toast.success(
         `${driverName} asignado a ${ids.length} orden${ids.length !== 1 ? "es" : ""}`
       )
@@ -205,10 +205,10 @@ export default function DispatchPage() {
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            Dispatch
+            Despacho
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Assign drivers and manage ready orders
+            Asigna repartidores y gestiona pedidos listos
           </p>
         </div>
 
@@ -224,7 +224,7 @@ export default function DispatchPage() {
             className="gap-2"
           >
             <UserCheck className="h-4 w-4" />
-            Assign Driver ({selectedDeliveryCount})
+            Asignar repartidor ({selectedDeliveryCount})
           </Button>
         )}
       </div>
@@ -249,7 +249,7 @@ export default function DispatchPage() {
             {deliveryOrders.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground border-2 border-dashed border-border/50 rounded-xl">
                 <Truck className="h-8 w-8 mb-2 opacity-20" />
-                <p className="text-sm">No delivery orders ready</p>
+                <p className="text-sm">No hay pedidos de delivery listos</p>
               </div>
             ) : (
               Array.from(ordersByZone.entries()).map(([zoneId, zoneOrders]) => {
@@ -357,7 +357,7 @@ export default function DispatchPage() {
                                           }
                                         >
                                           <Check className="h-3 w-3" />
-                                          Delivered
+                                          Entregado
                                         </Button>
                                       </div>
                                     ) : (
@@ -390,7 +390,7 @@ export default function DispatchPage() {
                 className="font-semibold text-foreground uppercase tracking-wide text-sm"
                 style={{ fontFamily: "var(--font-heading)" }}
               >
-                Pickup / Dine-in
+                Retiro / En local
               </h2>
               <Badge variant="outline" className="text-xs ml-auto">
                 {pickupOrders.length}
@@ -400,14 +400,14 @@ export default function DispatchPage() {
             {pickupOrders.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground border-2 border-dashed border-border/50 rounded-xl">
                 <Store className="h-8 w-8 mb-2 opacity-20" />
-                <p className="text-sm">No pickup orders ready</p>
+                <p className="text-sm">No hay pedidos de retiro listos</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {pickupOrders.map((order) => {
                   const isPickup = order.deliveryMethod === "pickup"
                   const FIcon = isPickup ? Store : UtensilsCrossed
-                  const fLabel = isPickup ? "Takeaway" : "Dine-in"
+                  const fLabel = isPickup ? "Retiro" : "En local"
 
                   return (
                     <Card
@@ -468,7 +468,7 @@ export default function DispatchPage() {
       <Sheet open={assignSheetOpen} onOpenChange={setAssignSheetOpen}>
         <SheetContent side="right" className="w-80 sm:w-96">
           <SheetHeader>
-            <SheetTitle>Asignar Driver</SheetTitle>
+            <SheetTitle>Asignar repartidor</SheetTitle>
             <p className="text-sm text-muted-foreground">
               {assignOrderIds.length} orden{assignOrderIds.length !== 1 ? "es" : ""}{" "}
               seleccionada{assignOrderIds.length !== 1 ? "s" : ""}

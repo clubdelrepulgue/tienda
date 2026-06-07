@@ -1,12 +1,31 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
-import { Clock, ChefHat, Package, CheckCircle2, Volume2, VolumeX, AlertCircle } from "lucide-react"
+import {
+    AlertCircle,
+    CheckCircle2,
+    ChefHat,
+    Clock,
+    ClipboardList,
+    Maximize2,
+    MessageSquareText,
+    PackageCheck,
+    Store,
+    Volume2,
+    VolumeX,
+} from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase/client"
 import { updateOrderStatus } from "@/app/actions"
 import type { Order, OrderStatus } from "@/lib/types"
@@ -14,51 +33,95 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { playNewOrderSound, playOrderReadySound, unlockAudio } from "@/lib/sounds"
 
+const MAX_VISIBLE_READY_ORDERS = 5
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 type KitchenColumn = {
-    id: OrderStatus
+    id: "new" | "preparing" | "ready"
     label: string
-    color: string
+    statuses: OrderStatus[]
+    icon: typeof Clock
+    accent: string
+    headerTint: string
+    badgeClassName: string
+    buttonClassName?: string
     nextStatus?: OrderStatus
-    buttonText: string
+    buttonText?: string
 }
 
 const COLUMNS: KitchenColumn[] = [
     {
         id: "new",
         label: "Nuevos",
-        color: "bg-chart-1/15 text-chart-1 border-chart-1/20",
-        nextStatus: "accepted",
+        statuses: ["new"],
+        icon: Clock,
+        accent: "bg-red-500",
+        headerTint: "from-red-500/14",
+        badgeClassName: "border-red-400/25 bg-red-500/12 text-red-200",
+        buttonClassName: "bg-red-500 text-white hover:bg-red-400 active:bg-red-600",
+        nextStatus: "preparing",
         buttonText: "Aceptar",
     },
     {
-        id: "accepted",
-        label: "Aceptados",
-        color: "bg-chart-2/15 text-chart-2 border-chart-2/20",
-        nextStatus: "preparing",
-        buttonText: "Preparar",
-    },
-    {
         id: "preparing",
-        label: "En Preparación",
-        color: "bg-accent/15 text-accent border-accent/20",
+        label: "En preparacion",
+        statuses: ["accepted", "preparing"],
+        icon: ChefHat,
+        accent: "bg-amber-400",
+        headerTint: "from-amber-400/14",
+        badgeClassName: "border-amber-300/25 bg-amber-400/12 text-amber-100",
+        buttonClassName: "bg-amber-400 text-black hover:bg-amber-300 active:bg-amber-500",
         nextStatus: "ready",
-        buttonText: "Listo",
+        buttonText: "Marcar como listo",
     },
     {
         id: "ready",
         label: "Listos",
-        color: "bg-chart-3/15 text-chart-3 border-chart-3/20",
-        buttonText: "Esperando",
+        statuses: ["ready"],
+        icon: PackageCheck,
+        accent: "bg-emerald-400",
+        headerTint: "from-emerald-400/14",
+        badgeClassName: "border-emerald-300/25 bg-emerald-400/12 text-emerald-100",
     },
 ]
 
-function formatElapsedTime(createdAt: string): string {
-    const elapsed = Date.now() - new Date(createdAt).getTime()
+function getElapsedMs(createdAt: string, now: number, readyAt?: string): number {
+    const started = new Date(createdAt).getTime()
+    const ended = readyAt ? new Date(readyAt).getTime() : now
+    return Math.max(0, ended - started)
+}
+
+function formatElapsedTime(createdAt: string, now: number, readyAt?: string): string {
+    const elapsed = getElapsedMs(createdAt, now, readyAt)
     const minutes = Math.floor(elapsed / 60000)
     const seconds = Math.floor((elapsed % 60000) / 1000)
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
+}
+
+function formatDateTime(value?: string): string {
+    if (!value) return "-"
+
+    return new Date(value).toLocaleString("es-UY", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+    })
+}
+
+function getOrderTypeLabel(order: Order): string {
+    if (order.orderType === "pos") return "Mostrador"
+    if (order.orderType === "phone") return "Telefono"
+    if (order.deliveryMethod === "delivery") return "Delivery"
+    if (order.deliveryMethod === "dine_in") return "Mesa"
+    return "Retiro"
+}
+
+function sortByReadyTimeDesc(a: Order, b: Order): number {
+    const bTime = new Date(b.readyAt || b.createdAt).getTime()
+    const aTime = new Date(a.readyAt || a.createdAt).getTime()
+    return bTime - aTime
 }
 
 export default function KitchenDisplayPage() {
@@ -70,9 +133,10 @@ export default function KitchenDisplayPage() {
     const [orders, setOrders] = useState<Order[]>([])
     const [soundEnabled, setSoundEnabled] = useState(true)
     const [fullscreen, setFullscreen] = useState(false)
+    const [historyOpen, setHistoryOpen] = useState(false)
+    const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set())
     const prevOrdersRef = useRef<Order[]>([])
 
-    // Unlock audio context on first interaction
     useEffect(() => {
         const unlock = () => {
             unlockAudio()
@@ -84,11 +148,9 @@ export default function KitchenDisplayPage() {
 
     useEffect(() => {
         if (initialOrders) {
-            // Check for new orders
             const prevIds = new Set(prevOrdersRef.current.map((o) => o.id))
             const newOrders = initialOrders.filter((o) => !prevIds.has(o.id) && o.status === "new")
 
-            // Check for orders transitioning to ready
             const readyOrders = initialOrders.filter((o) => {
                 const prevOrder = prevOrdersRef.current.find((po) => po.id === o.id)
                 return o.status === "ready" && prevOrder && prevOrder.status !== "ready"
@@ -97,7 +159,7 @@ export default function KitchenDisplayPage() {
             if (newOrders.length > 0 && soundEnabled) {
                 playNewOrderSound()
                 newOrders.forEach((o) => {
-                    toast.info(`New order #${o.orderNumber}`, {
+                    toast.info(`Nuevo pedido #${o.orderNumber}`, {
                         duration: 5000,
                     })
                 })
@@ -106,7 +168,7 @@ export default function KitchenDisplayPage() {
             if (readyOrders.length > 0 && soundEnabled) {
                 playOrderReadySound()
                 readyOrders.forEach((o) => {
-                    toast.success(`Order #${o.orderNumber} is ready!`, {
+                    toast.success(`Pedido #${o.orderNumber} listo`, {
                         duration: 5000,
                     })
                 })
@@ -117,7 +179,6 @@ export default function KitchenDisplayPage() {
         }
     }, [initialOrders, soundEnabled])
 
-    // Realtime subscription
     useEffect(() => {
         const supabase = createClient()
         const channel = supabase
@@ -136,19 +197,64 @@ export default function KitchenDisplayPage() {
         }
     }, [mutate])
 
-    // Update elapsed time every second
     const [now, setNow] = useState(Date.now())
     useEffect(() => {
         const interval = setInterval(() => setNow(Date.now()), 1000)
         return () => clearInterval(interval)
     }, [])
 
+    const readyHistory = useMemo(
+        () => orders.filter((order) => order.status === "ready").sort(sortByReadyTimeDesc),
+        [orders]
+    )
+
+    const readyPreviewIds = useMemo(
+        () => new Set(readyHistory.slice(0, MAX_VISIBLE_READY_ORDERS).map((order) => order.id)),
+        [readyHistory]
+    )
+
     const handleNextStatus = async (orderId: string, nextStatus: OrderStatus) => {
-        const result = await updateOrderStatus(orderId, nextStatus)
-        if (result.error) {
-            toast.error(result.error)
-        } else {
-            mutate()
+        const previousOrders = orders
+        const changedAt = new Date().toISOString()
+
+        setUpdatingIds((current) => {
+            const next = new Set(current)
+            next.add(orderId)
+            return next
+        })
+
+        setOrders((current) =>
+            current.map((order) =>
+                order.id === orderId
+                    ? {
+                        ...order,
+                        status: nextStatus,
+                        preparingAt: nextStatus === "preparing" ? changedAt : order.preparingAt,
+                        readyAt: nextStatus === "ready" ? changedAt : order.readyAt,
+                    }
+                    : order
+            )
+        )
+
+        try {
+            const result = await updateOrderStatus(orderId, nextStatus)
+
+            if (result.error) {
+                toast.error(result.error)
+                setOrders(previousOrders)
+                return
+            }
+
+            await mutate()
+        } catch (error) {
+            toast.error("No se pudo actualizar el pedido")
+            setOrders(previousOrders)
+        } finally {
+            setUpdatingIds((current) => {
+                const next = new Set(current)
+                next.delete(orderId)
+                return next
+            })
         }
     }
 
@@ -163,18 +269,17 @@ export default function KitchenDisplayPage() {
     }
 
     return (
-        <div className="h-[calc(100vh-4rem)] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
+        <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 overflow-hidden">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1
                         className="text-2xl font-bold text-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
-                        Kitchen Display
+                        Pantalla de cocina
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Manage orders in real-time
+                        Pedidos activos en tiempo real
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -182,7 +287,8 @@ export default function KitchenDisplayPage() {
                         variant="outline"
                         size="icon"
                         onClick={() => setSoundEnabled(!soundEnabled)}
-                        className="rounded-full"
+                        className="h-10 w-10 rounded-full border-white/10 bg-white/[0.035] hover:bg-white/[0.07]"
+                        aria-label={soundEnabled ? "Silenciar sonidos" : "Activar sonidos"}
                     >
                         {soundEnabled ? (
                             <Volume2 className="h-4 w-4" />
@@ -193,42 +299,60 @@ export default function KitchenDisplayPage() {
                     <Button
                         variant="outline"
                         onClick={toggleFullscreen}
-                        className="rounded-full"
+                        className="h-10 rounded-full border-white/10 bg-white/[0.035] px-4 hover:bg-white/[0.07]"
                     >
-                        {fullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                        <Maximize2 className="h-4 w-4" />
+                        {fullscreen ? "Salir" : "Pantalla completa"}
                     </Button>
                 </div>
             </div>
 
-            {/* Columns */}
-            <div className="flex-1 grid grid-cols-4 gap-4 min-h-0">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pr-1 lg:grid-cols-3 lg:overflow-hidden">
                 {COLUMNS.map((col) => {
-                    const colOrders = orders.filter((o) => o.status === col.id)
+                    const colOrders = orders
+                        .filter((order) => col.statuses.includes(order.status))
+                        .filter((order) => col.id !== "ready" || readyPreviewIds.has(order.id))
+                    const Icon = col.icon
 
                     return (
-                        <div key={col.id} className="flex flex-col min-h-0">
-                            {/* Column Header */}
-                            <div className={cn(
-                                "flex items-center justify-between p-3 rounded-t-xl border",
-                                col.color
-                            )}>
-                                <div className="flex items-center gap-2">
-                                    <span className="font-bold text-sm uppercase tracking-wide">
-                                        {col.label}
-                                    </span>
+                        <section
+                            key={col.id}
+                            className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-white/[0.075] bg-[#101114] shadow-[0_18px_52px_rgba(0,0,0,0.22)] lg:min-h-0"
+                        >
+                            <div className={cn("border-b border-white/[0.06] bg-gradient-to-b to-transparent p-4", col.headerTint)}>
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className={cn("h-2.5 w-2.5 rounded-full", col.accent)} />
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <Icon className="h-4 w-4 text-white/55" />
+                                                <h2 className="text-sm font-bold uppercase tracking-wide text-white">
+                                                    {col.label}
+                                                </h2>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-xs font-bold", col.badgeClassName)}>
+                                        {col.id === "ready" ? readyHistory.length : colOrders.length}
+                                    </Badge>
                                 </div>
-                                <Badge variant="outline" className={cn("text-xs", col.color)}>
-                                    {colOrders.length}
-                                </Badge>
+                                {col.id === "ready" && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setHistoryOpen(true)}
+                                        className="mt-3 h-9 w-full rounded-full border-emerald-300/20 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15 hover:text-emerald-50"
+                                    >
+                                        <ClipboardList className="h-4 w-4" />
+                                        Ver historial
+                                    </Button>
+                                )}
                             </div>
 
-                            {/* Orders */}
-                            <ScrollArea className="flex-1 bg-secondary/30 rounded-b-xl border-x border-b border-border p-2">
+                            <ScrollArea className="min-h-0 flex-1 p-3">
                                 <div className="space-y-3">
                                     {colOrders.length === 0 ? (
-                                        <div className="h-32 flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-border/50 rounded-xl">
-                                            <p className="text-sm">No orders</p>
-                                        </div>
+                                        <EmptyColumnState />
                                     ) : (
                                         colOrders.map((order) => (
                                             <KitchenOrderCard
@@ -237,15 +361,32 @@ export default function KitchenDisplayPage() {
                                                 column={col}
                                                 onNextStatus={handleNextStatus}
                                                 now={now}
+                                                updating={updatingIds.has(order.id)}
                                             />
                                         ))
                                     )}
                                 </div>
                             </ScrollArea>
-                        </div>
+                        </section>
                     )
                 })}
             </div>
+
+            <ReadyHistoryDialog
+                open={historyOpen}
+                onOpenChange={setHistoryOpen}
+                orders={readyHistory}
+                now={now}
+            />
+        </div>
+    )
+}
+
+function EmptyColumnState() {
+    return (
+        <div className="flex min-h-[132px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.11] bg-white/[0.025] p-6 text-center">
+            <PackageCheck className="mb-2 h-5 w-5 text-white/28" />
+            <p className="text-sm font-semibold text-white/58">Sin pedidos por ahora</p>
         </div>
     )
 }
@@ -255,55 +396,60 @@ interface KitchenOrderCardProps {
     column: KitchenColumn
     onNextStatus: (orderId: string, status: OrderStatus) => void
     now: number
+    updating: boolean
 }
 
-function KitchenOrderCard({ order, column, onNextStatus, now }: KitchenOrderCardProps) {
-    const elapsedTime = formatElapsedTime(order.createdAt)
-    const isDelayed = Date.now() - new Date(order.createdAt).getTime() > 20 * 60000 // 20 min
+function KitchenOrderCard({ order, column, onNextStatus, now, updating }: KitchenOrderCardProps) {
+    const isReady = order.status === "ready"
+    const elapsedTime = formatElapsedTime(order.createdAt, now, isReady ? order.readyAt : undefined)
+    const isDelayed = !isReady && getElapsedMs(order.createdAt, now) > 20 * 60000
 
     return (
         <Card className={cn(
-            "rounded-xl border-border overflow-hidden",
-            isDelayed && "border-red-500/50 ring-1 ring-red-500/20"
+            "overflow-hidden rounded-2xl border-white/[0.075] bg-[#17181c] py-0 shadow-[0_14px_38px_rgba(0,0,0,0.2)] transition-[opacity,transform,border-color,background-color] duration-200 hover:border-white/[0.13] hover:bg-[#1b1c20]",
+            updating && "pointer-events-none scale-[0.98] opacity-60",
+            isDelayed && "border-red-400/45 ring-1 ring-red-500/20"
         )}>
-            <CardContent className="p-3 space-y-3">
-                {/* Header */}
-                <div className="flex items-start justify-between">
-                    <div>
+            <CardContent className="space-y-4 p-4">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                            <span className="text-2xl font-bold text-foreground">
+                            <span className="text-3xl font-black leading-none text-white">
                                 #{order.orderNumber}
                             </span>
                             {isDelayed && (
-                                <AlertCircle className="h-5 w-5 text-red-500" />
+                                <AlertCircle className="h-5 w-5 shrink-0 text-red-300" />
                             )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                            {order.orderType === "pos" ? "Mostrador" : order.deliveryMethod}
-                        </p>
+                        <div className="mt-2 flex items-center gap-2 text-sm font-medium text-white/55">
+                            <Store className="h-4 w-4" />
+                            <span>{getOrderTypeLabel(order)}</span>
+                        </div>
                     </div>
                     <div className={cn(
-                        "text-right font-mono text-lg",
-                        isDelayed ? "text-red-500 font-bold" : "text-muted-foreground"
-                    )}>
-                        {elapsedTime}
+                        "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-lg font-black leading-none",
+                        isDelayed
+                            ? "border-red-300/25 bg-red-500/12 text-red-100"
+                            : isReady
+                                ? "border-emerald-300/25 bg-emerald-400/12 text-emerald-100"
+                                : "border-white/[0.08] bg-white/[0.045] text-white/86"
+                    )}
+                        style={{ fontFamily: "var(--font-heading)" }}
+                    >
+                        <Clock className="h-4 w-4" />
+                        <span>{elapsedTime}</span>
                     </div>
                 </div>
 
-                {/* Items */}
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                     {order.items.map((item, idx) => (
-                        <div key={idx} className="text-sm">
-                            <div className="flex items-baseline gap-2">
-                                <span className="font-bold text-foreground">
-                                    {item.quantity}x
-                                </span>
-                                <span className="text-card-foreground">
-                                    {item.name}
-                                </span>
+                        <div key={idx} className="rounded-xl border border-white/[0.055] bg-black/10 p-3">
+                            <div className="flex items-baseline gap-2 text-[15px] leading-snug">
+                                <span className="font-black text-white">{item.quantity}x</span>
+                                <span className="font-semibold text-white/92">{item.name}</span>
                             </div>
                             {item.modifiers.length > 0 && (
-                                <p className="text-xs text-muted-foreground ml-6">
+                                <p className="mt-1.5 pl-6 text-sm leading-relaxed text-white/58">
                                     {item.modifiers.map((m) => m.optionName).join(", ")}
                                 </p>
                             )}
@@ -311,28 +457,118 @@ function KitchenOrderCard({ order, column, onNextStatus, now }: KitchenOrderCard
                     ))}
                 </div>
 
-                {/* Notes */}
                 {order.deliveryNotes && (
-                    <div className="p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                        <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                            📝 {order.deliveryNotes}
-                        </p>
+                    <div className="flex gap-2 rounded-xl border border-amber-300/18 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-100">
+                        <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>{order.deliveryNotes}</p>
                     </div>
                 )}
 
-                {/* Action Button */}
-                {column.nextStatus && (
+                {column.nextStatus ? (
                     <Button
-                        className="w-full h-12 text-base font-semibold rounded-lg"
+                        className={cn("h-12 w-full rounded-xl text-base font-black shadow-none", column.buttonClassName)}
+                        disabled={updating}
                         onClick={() => onNextStatus(order.id, column.nextStatus!)}
                     >
-                        {column.nextStatus === "accepted" && <CheckCircle2 className="h-4 w-4 mr-2" />}
-                        {column.nextStatus === "preparing" && <ChefHat className="h-4 w-4 mr-2" />}
-                        {column.nextStatus === "ready" && <Package className="h-4 w-4 mr-2" />}
-                        {column.buttonText}
+                        {updating ? (
+                            "Actualizando..."
+                        ) : (
+                            <>
+                                {column.nextStatus === "preparing" && <ChefHat className="h-4 w-4" />}
+                                {column.nextStatus === "ready" && <PackageCheck className="h-4 w-4" />}
+                                {column.buttonText}
+                            </>
+                        )}
                     </Button>
+                ) : (
+                    <Badge className="h-10 w-full justify-center rounded-xl border-emerald-300/20 bg-emerald-400/12 text-sm font-black text-emerald-100 hover:bg-emerald-400/12">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Listo
+                    </Badge>
                 )}
             </CardContent>
         </Card>
+    )
+}
+
+function ReadyHistoryDialog({
+    open,
+    onOpenChange,
+    orders,
+    now,
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    orders: Order[]
+    now: number
+}) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-h-[86vh] overflow-hidden rounded-2xl border-white/[0.08] bg-[#101114] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,0.48)] sm:max-w-4xl">
+                <DialogHeader className="border-b border-white/[0.07] px-5 py-4">
+                    <DialogTitle className="flex items-center gap-2 text-xl">
+                        <ClipboardList className="h-5 w-5 text-emerald-200" />
+                        Historial de listos
+                    </DialogTitle>
+                    <DialogDescription>
+                        Pedidos terminados ordenados del mas reciente al mas antiguo.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[68vh] px-5 py-4">
+                    {orders.length === 0 ? (
+                        <EmptyColumnState />
+                    ) : (
+                        <div className="space-y-3">
+                            {orders.map((order) => (
+                                <div
+                                    key={order.id}
+                                    className="rounded-2xl border border-white/[0.075] bg-white/[0.035] p-4"
+                                >
+                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                        <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-2xl font-black">#{order.orderNumber}</span>
+                                                <Badge variant="outline" className="rounded-full border-white/[0.09] bg-white/[0.04] text-white/70">
+                                                    {getOrderTypeLabel(order)}
+                                                </Badge>
+                                                <Badge variant="outline" className="rounded-full border-emerald-300/20 bg-emerald-400/10 text-emerald-100">
+                                                    <Clock className="h-3.5 w-3.5" />
+                                                    {formatElapsedTime(order.createdAt, now, order.readyAt)}
+                                                </Badge>
+                                            </div>
+                                            <div className="mt-2 grid gap-1 text-sm text-white/52 sm:grid-cols-2">
+                                                <span>Creado: {formatDateTime(order.createdAt)}</span>
+                                                <span>Listo: {formatDateTime(order.readyAt)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 space-y-1.5">
+                                        {order.items.map((item, idx) => (
+                                            <div key={idx} className="text-[15px] leading-relaxed text-white/84">
+                                                <span className="font-black text-white">{item.quantity}x</span>{" "}
+                                                {item.name}
+                                                {item.modifiers.length > 0 && (
+                                                    <span className="text-sm text-white/55">
+                                                        {" "}({item.modifiers.map((m) => m.optionName).join(", ")})
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {order.deliveryNotes && (
+                                        <div className="mt-3 flex gap-2 rounded-xl border border-amber-300/16 bg-amber-400/10 p-3 text-xs text-amber-100">
+                                            <MessageSquareText className="h-4 w-4 shrink-0" />
+                                            <span>{order.deliveryNotes}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </ScrollArea>
+            </DialogContent>
+        </Dialog>
     )
 }

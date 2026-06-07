@@ -31,16 +31,16 @@ export function ProductGrid({
     .filter((g) => g.items.length > 0)
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-9 px-4 pb-28 pt-6 sm:px-5 md:pb-10 lg:px-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-7 px-4 pb-28 pt-2 sm:px-5 md:gap-8 md:pb-10 lg:px-6">
       {groupedByCategory.map(({ category, items }) => (
         <section key={category.id} id={`category-${category.slug}`}>
           <h2
-            className="mb-4 text-lg font-bold text-foreground"
+            className="mb-3 text-lg font-bold text-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
             {category.name}
           </h2>
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:gap-[18px] lg:grid-cols-3">
+          <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-[18px] lg:grid-cols-4">
             {items.map((product) => (
               <ProductCard
                 key={product.id}

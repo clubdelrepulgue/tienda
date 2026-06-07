@@ -120,7 +120,7 @@ export default function ProductsPage() {
 
   const handleSave = async () => {
     if (!formName || !formPrice || !formCategory) {
-      toast.error("Please fill all required fields")
+      toast.error("Completa todos los campos obligatorios")
       return
     }
 
@@ -139,7 +139,7 @@ export default function ProductsPage() {
           .upload(fileName, item.file)
 
         if (uploadError) {
-          toast.error("Error uploading image: " + uploadError.message)
+          toast.error("Error al subir la imagen: " + uploadError.message)
           setSaving(false)
           return
         }
@@ -167,7 +167,7 @@ export default function ProductsPage() {
           setSaving(false)
           return
         }
-        toast.success("Product updated")
+        toast.success("Producto actualizado")
       } else {
         const result = await createProduct({
           nombre: formName,
@@ -182,13 +182,13 @@ export default function ProductsPage() {
           setSaving(false)
           return
         }
-        toast.success("Product created")
+        toast.success("Producto creado")
       }
       setDialogOpen(false)
       mutateProducts()
     } catch (error) {
       console.error(error)
-      toast.error("Something went wrong")
+      toast.error("Algo salio mal")
     } finally {
       setSaving(false)
     }
@@ -212,7 +212,7 @@ export default function ProductsPage() {
 
   const getCategoryName = (id: string) => {
     const safeCategories = Array.isArray(categories) ? categories : []
-    return safeCategories.find((c) => c.id === id)?.name || "Unknown"
+    return safeCategories.find((c) => c.id === id)?.name || "Sin categoria"
   }
 
   if (productsLoading) {
@@ -241,10 +241,10 @@ export default function ProductsPage() {
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            Products
+            Productos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your menu items
+            Administra los productos del menu
           </p>
         </div>
         <Button
@@ -252,7 +252,7 @@ export default function ProductsPage() {
           onClick={openCreate}
         >
           <Plus className="h-4 w-4" />
-          Add Product
+          Agregar producto
         </Button>
       </div>
 
@@ -262,7 +262,7 @@ export default function ProductsPage() {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search products..."
+                placeholder="Buscar productos..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
@@ -275,11 +275,11 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground">Product</TableHead>
-                  <TableHead className="text-muted-foreground">Category</TableHead>
-                  <TableHead className="text-muted-foreground">Price</TableHead>
-                  <TableHead className="text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-muted-foreground text-right">Actions</TableHead>
+                  <TableHead className="text-muted-foreground">Producto</TableHead>
+                  <TableHead className="text-muted-foreground">Categoria</TableHead>
+                  <TableHead className="text-muted-foreground">Precio</TableHead>
+                  <TableHead className="text-muted-foreground">Estado</TableHead>
+                  <TableHead className="text-muted-foreground text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -322,7 +322,7 @@ export default function ProductsPage() {
                       <Switch
                         checked={product.active}
                         onCheckedChange={() => handleToggleActive(product.id)}
-                        aria-label={`Toggle ${product.name} active status`}
+                        aria-label={`Cambiar estado activo de ${product.name}`}
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -331,7 +331,7 @@ export default function ProductsPage() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => openEdit(product)}
-                        aria-label={`Edit ${product.name}`}
+                        aria-label={`Editar ${product.name}`}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -352,19 +352,19 @@ export default function ProductsPage() {
               className="text-card-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              {editProduct ? "Edit Product" : "Create Product"}
+              {editProduct ? "Editar producto" : "Crear producto"}
             </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
 
             {/* Images Grid */}
             <div>
-              <Label className="text-sm text-muted-foreground mb-2 block">Images</Label>
+              <Label className="text-sm text-muted-foreground mb-2 block">Imagenes</Label>
               <div className="grid grid-cols-3 gap-3">
                 {/* Existing Images */}
                 {existingImages.map((url, i) => (
                   <div key={`existing-${i}`} className="relative aspect-square rounded-xl overflow-hidden bg-secondary group border border-border">
-                    <Image src={url} alt={`Image ${i}`} fill className="object-cover" />
+                    <Image src={url} alt={`Imagen ${i}`} fill className="object-cover" />
                     <button
                       onClick={() => handleRemoveExisting(url)}
                       className="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
@@ -377,21 +377,21 @@ export default function ProductsPage() {
                 {/* New Image Previews */}
                 {newImageFiles.map((item, i) => (
                   <div key={`new-${i}`} className="relative aspect-square rounded-xl overflow-hidden bg-secondary group border border-border">
-                    <Image src={item.preview} alt={`New Image ${i}`} fill className="object-cover" />
+                    <Image src={item.preview} alt={`Nueva imagen ${i}`} fill className="object-cover" />
                     <button
                       onClick={() => handleRemoveNew(i)}
                       className="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                     >
                       <X className="h-3 w-3" />
                     </button>
-                    <div className="absolute bottom-1 right-1 bg-primary text-[10px] px-1 rounded text-primary-foreground font-bold">NEW</div>
+                    <div className="absolute bottom-1 right-1 bg-primary text-[10px] px-1 rounded text-primary-foreground font-bold">NUEVA</div>
                   </div>
                 ))}
 
                 {/* Add Button */}
                 <Label className="relative aspect-square rounded-xl border-2 border-dashed border-border hover:border-primary/50 cursor-pointer flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors bg-secondary/30">
                   <Upload className="h-5 w-5" />
-                  <span className="text-[10px] font-medium">Add Image</span>
+                  <span className="text-[10px] font-medium">Agregar imagen</span>
                   <input
                     type="file"
                     multiple
@@ -405,18 +405,18 @@ export default function ProductsPage() {
 
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Name
+                Nombre
               </Label>
               <Input
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="Product name"
+                placeholder="Nombre del producto"
                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
               />
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Price
+                Precio
               </Label>
               <Input
                 type="number"
@@ -429,11 +429,11 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Category
+                Categoria
               </Label>
               <Select value={formCategory} onValueChange={setFormCategory}>
                 <SelectTrigger className="rounded-xl bg-secondary border-0 text-foreground">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Selecciona una categoria" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
                   {(Array.isArray(categories) ? categories : []).map((cat) => (
@@ -446,7 +446,7 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Modifier Groups
+                Grupos de modificadores
               </Label>
               <div className="flex flex-col gap-2 max-h-40 overflow-y-auto mt-2 border border-border p-3 rounded-xl bg-secondary/50">
                 {(Array.isArray(modifiers) ? modifiers : []).map((mod) => (
@@ -465,12 +465,12 @@ export default function ProductsPage() {
                   </div>
                 ))}
                 {(!modifiers || modifiers.length === 0) && (
-                  <span className="text-xs text-muted-foreground text-center py-2">No modifiers available</span>
+                  <span className="text-xs text-muted-foreground text-center py-2">No hay modificadores disponibles</span>
                 )}
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <Label className="text-sm text-muted-foreground">Active</Label>
+              <Label className="text-sm text-muted-foreground">Activo</Label>
               <Switch checked={formActive} onCheckedChange={setFormActive} />
             </div>
           </div>
@@ -480,7 +480,7 @@ export default function ProductsPage() {
               onClick={() => setDialogOpen(false)}
               className="rounded-xl"
             >
-              Cancel
+              Cancelar
             </Button>
             <Button
               onClick={handleSave}
@@ -490,9 +490,9 @@ export default function ProductsPage() {
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : editProduct ? (
-                "Save Changes"
+                "Guardar cambios"
               ) : (
-                "Create Product"
+                "Crear producto"
               )}
             </Button>
           </DialogFooter>

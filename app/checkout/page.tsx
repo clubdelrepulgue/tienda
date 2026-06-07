@@ -27,7 +27,7 @@ function getBranchCity(address: string) {
     .filter(Boolean)
 
   if (parts.length >= 2) return parts[parts.length - 2]
-  return parts[0] || "City not configured"
+  return parts[0] || "Ciudad no configurada"
 }
 
 function getDistanceKm(
@@ -110,7 +110,7 @@ export default function CheckoutPage() {
         if (Array.isArray(data?.deliveryZones)) setAllDeliveryZones(data.deliveryZones)
       })
       .catch(() => {
-        toast.error("Unable to load delivery zones")
+        toast.error("No se pudieron cargar las zonas de delivery")
       })
   }, [])
 
@@ -157,7 +157,7 @@ export default function CheckoutPage() {
       }
 
       if (!best?.zone && allDeliveryZones.length > 0) {
-        toast.warning("That address is outside our delivery zones")
+        toast.warning("Esa direccion esta fuera de nuestras zonas de delivery")
       }
     }
   }, [allDeliveryZones, branches, selectedLocation])
@@ -197,23 +197,23 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!name || !phone) {
-      toast.error("Please fill in your name and phone number")
+      toast.error("Completa tu nombre y telefono")
       return
     }
     if (deliveryMethod === "delivery" && !address) {
-      toast.error("Please enter a delivery address")
+      toast.error("Ingresa una direccion de delivery")
       return
     }
     if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedLocation) {
-      toast.error("Mark your location on the map to confirm delivery zone")
+      toast.error("Marca tu ubicacion en el mapa para confirmar la zona de delivery")
       return
     }
     if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedZone) {
-      toast.error("Your address is outside our delivery zones")
+      toast.error("Tu direccion esta fuera de nuestras zonas de delivery")
       return
     }
     if (items.length === 0) {
-      toast.error("Your cart is empty")
+      toast.error("Tu carrito esta vacio")
       return
     }
 
@@ -245,10 +245,10 @@ export default function CheckoutPage() {
       }
 
       clearCart()
-      toast.success(`Order #${result.orderNumber} placed!`)
+      toast.success(`Pedido #${result.orderNumber} realizado`)
       router.push(`/order/${result.trackingToken}`)
     } catch {
-      toast.error("Something went wrong. Please try again.")
+      toast.error("Algo salio mal. Intenta nuevamente.")
     } finally {
       setLoading(false)
     }
@@ -257,9 +257,9 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-6">
-        <p className="text-muted-foreground">Your cart is empty</p>
+        <p className="text-muted-foreground">Tu carrito esta vacio</p>
         <Button asChild variant="outline">
-          <Link href="/">Back to Menu</Link>
+          <Link href="/">Volver al menu</Link>
         </Button>
       </div>
     )
@@ -271,7 +271,7 @@ export default function CheckoutPage() {
         <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
           <div className="mx-auto max-w-3xl flex items-center gap-3 px-4 py-3">
             <Button variant="ghost" size="icon" className="rounded-full" asChild>
-              <Link href="/" aria-label="Back to menu">
+              <Link href="/" aria-label="Volver al menu">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
@@ -279,7 +279,7 @@ export default function CheckoutPage() {
               className="text-lg font-bold text-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Checkout
+              Pago
             </h1>
           </div>
         </header>
@@ -289,7 +289,7 @@ export default function CheckoutPage() {
             {/* Delivery Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                Delivery Method
+                Metodo de entrega
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -345,7 +345,7 @@ export default function CheckoutPage() {
                         : "text-muted-foreground"
                     )}
                   >
-                    Pickup
+                    Retiro
                   </span>
                 </button>
               </div>
@@ -407,16 +407,16 @@ export default function CheckoutPage() {
             {/* Contact Info */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                Contact Info
+                Datos de contacto
               </h2>
               <div className="flex flex-col gap-4">
                 <div>
                   <Label htmlFor="name" className="text-sm text-muted-foreground mb-1.5 block">
-                    Name
+                    Nombre
                   </Label>
                   <Input
                     id="name"
-                    placeholder="Your name"
+                    placeholder="Tu nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
@@ -424,7 +424,7 @@ export default function CheckoutPage() {
                 </div>
                 <div>
                   <Label htmlFor="phone" className="text-sm text-muted-foreground mb-1.5 block">
-                    Phone
+                    Telefono
                   </Label>
                   <Input
                     id="phone"
@@ -438,11 +438,11 @@ export default function CheckoutPage() {
                   <>
                     <div>
                       <Label htmlFor="address" className="text-sm text-muted-foreground mb-1.5 block">
-                        Address
+                        Direccion
                       </Label>
                       <Input
                         id="address"
-                        placeholder="Street, number, apartment"
+                        placeholder="Calle, numero, apartamento"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                         className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
@@ -470,11 +470,11 @@ export default function CheckoutPage() {
 
                     <div>
                       <Label htmlFor="notes" className="text-sm text-muted-foreground mb-1.5 block">
-                        Delivery Notes
+                        Notas para el delivery
                       </Label>
                       <Textarea
                         id="notes"
-                        placeholder="Ring bell, leave at door, etc."
+                        placeholder="Tocar timbre, dejar en puerta, etc."
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         rows={2}
@@ -489,7 +489,7 @@ export default function CheckoutPage() {
             {/* Payment Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                Payment Method
+                Metodo de pago
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -545,7 +545,7 @@ export default function CheckoutPage() {
                         : "text-muted-foreground"
                     )}
                   >
-                    Cash
+                    Efectivo
                   </span>
                 </button>
               </div>
@@ -556,7 +556,7 @@ export default function CheckoutPage() {
           <aside className="lg:w-80 shrink-0">
             <div className="rounded-2xl bg-card border border-border p-5 lg:sticky lg:top-20 space-y-4">
               <h2 className="font-semibold text-card-foreground text-sm uppercase tracking-wide">
-                Order Summary
+                Resumen del pedido
               </h2>
               <div className="flex flex-col gap-3">
                 {items.map((item) => {
@@ -625,7 +625,7 @@ export default function CheckoutPage() {
                     Delivery
                   </span>
                   <span>
-                    {deliveryFee > 0 ? `$${deliveryFee.toFixed(2)}` : "Free"}
+                    {deliveryFee > 0 ? `$${deliveryFee.toFixed(2)}` : "Gratis"}
                   </span>
                 </div>
                 
@@ -645,10 +645,10 @@ export default function CheckoutPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Placing Order...
+                    Realizando pedido...
                   </>
                 ) : (
-                  "Place Order"
+                  "Realizar pedido"
                 )}
               </Button>
             </div>

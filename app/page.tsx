@@ -22,6 +22,7 @@ export default async function StorefrontPage() {
       categories={categories}
       products={products}
       modifierGroups={modifierGroups}
+      showCover
     />
   )
 }

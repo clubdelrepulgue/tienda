@@ -198,6 +198,7 @@ function mapOrder(row: any, items: CartItem[]): Order {
         addressLng: row.address_lng != null ? parseFloat(row.address_lng) : null,
         driverId: row.driver_id || null,
         deliveryZoneId: row.delivery_zone_id || null,
+        orderType: row.order_type || "online",
     }
 }
 

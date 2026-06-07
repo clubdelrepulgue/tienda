@@ -98,7 +98,7 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
 
     const handleAddToCart = (product: Product, discountedPrice: number, rule: UpsellRule) => {
         addItem(product, [], discountedPrice)
-        toast.success(`Added ${product.name} with ${rule.discountPercentage}% off!`)
+        toast.success(`${product.name} agregado con ${rule.discountPercentage}% de descuento`)
     }
 
     if (suggestions.length === 0) return null
@@ -113,11 +113,11 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
                             className="text-lg font-bold text-card-foreground"
                             style={{ fontFamily: "var(--font-heading)" }}
                         >
-                            Complete your order
+                            Completa tu pedido
                         </DialogTitle>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                        Customers also added these items
+                        Otros clientes tambien sumaron estos productos
                     </p>
                 </DialogHeader>
 
@@ -182,7 +182,7 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
                         className="w-full rounded-xl"
                         onClick={onClose}
                     >
-                        Continue to checkout
+                        Continuar al pago
                     </Button>
                 </div>
             </DialogContent>

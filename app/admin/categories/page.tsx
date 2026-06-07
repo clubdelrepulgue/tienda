@@ -82,7 +82,7 @@ export default function CategoriesPage() {
 
     const handleSave = async () => {
         if (!formName || !formSlug) {
-            toast.error("Please fill all required fields")
+            toast.error("Completa todos los campos obligatorios")
             return
         }
 
@@ -98,7 +98,7 @@ export default function CategoriesPage() {
                     toast.error(result.error)
                     return
                 }
-                toast.success("Category updated")
+                toast.success("Categoria actualizada")
             } else {
                 const result = await createCategory({
                     nombre: formName,
@@ -109,19 +109,19 @@ export default function CategoriesPage() {
                     toast.error(result.error)
                     return
                 }
-                toast.success("Category created")
+                toast.success("Categoria creada")
             }
             setDialogOpen(false)
             mutateCategories()
         } catch {
-            toast.error("Something went wrong")
+            toast.error("Algo salio mal")
         } finally {
             setSaving(false)
         }
     }
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm("Are you sure you want to delete this category? Products linked to it might be affected.")) return
+        if (!window.confirm("Seguro que quieres eliminar esta categoria? Los productos vinculados podrian verse afectados.")) return
 
         try {
             const result = await deleteCategory(id)
@@ -129,10 +129,10 @@ export default function CategoriesPage() {
                 toast.error(result.error)
                 return
             }
-            toast.success("Category deleted")
+            toast.success("Categoria eliminada")
             mutateCategories()
         } catch {
-            toast.error("Failed to delete category")
+            toast.error("No se pudo eliminar la categoria")
         }
     }
 
@@ -162,10 +162,10 @@ export default function CategoriesPage() {
                         className="text-2xl font-bold text-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
-                        Categories
+                        Categorias
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Organize your products into categories
+                        Organiza tus productos por categorias
                     </p>
                 </div>
                 <Button
@@ -173,7 +173,7 @@ export default function CategoriesPage() {
                     onClick={openCreate}
                 >
                     <Plus className="h-4 w-4" />
-                    Add Category
+                    Agregar categoria
                 </Button>
             </div>
 
@@ -183,7 +183,7 @@ export default function CategoriesPage() {
                         <div className="relative flex-1 max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Search categories..."
+                                placeholder="Buscar categorias..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 className="pl-9 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
@@ -196,10 +196,10 @@ export default function CategoriesPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="border-border hover:bg-transparent">
-                                    <TableHead className="text-muted-foreground">Order</TableHead>
-                                    <TableHead className="text-muted-foreground">Name</TableHead>
+                                    <TableHead className="text-muted-foreground">Orden</TableHead>
+                                    <TableHead className="text-muted-foreground">Nombre</TableHead>
                                     <TableHead className="text-muted-foreground">Slug</TableHead>
-                                    <TableHead className="text-muted-foreground text-right">Actions</TableHead>
+                                    <TableHead className="text-muted-foreground text-right">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -243,7 +243,7 @@ export default function CategoriesPage() {
                                 {filtered.length === 0 && (
                                     <TableRow>
                                         <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                            No categories found.
+                                            No se encontraron categorias.
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -261,13 +261,13 @@ export default function CategoriesPage() {
                             className="text-card-foreground"
                             style={{ fontFamily: "var(--font-heading)" }}
                         >
-                            {editCategory ? "Edit Category" : "Create Category"}
+                            {editCategory ? "Editar categoria" : "Crear categoria"}
                         </DialogTitle>
                     </DialogHeader>
                     <div className="flex flex-col gap-4 py-4">
                         <div>
                             <Label className="text-sm text-muted-foreground mb-1.5 block">
-                                Name
+                                Nombre
                             </Label>
                             <Input
                                 value={formName}
@@ -289,7 +289,7 @@ export default function CategoriesPage() {
                         </div>
                         <div>
                             <Label className="text-sm text-muted-foreground mb-1.5 block">
-                                Order (Display priority)
+                                Orden (prioridad de visualizacion)
                             </Label>
                             <Input
                                 type="number"
@@ -306,7 +306,7 @@ export default function CategoriesPage() {
                             onClick={() => setDialogOpen(false)}
                             className="rounded-xl"
                         >
-                            Cancel
+                            Cancelar
                         </Button>
                         <Button
                             onClick={handleSave}
@@ -316,9 +316,9 @@ export default function CategoriesPage() {
                             {saving ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : editCategory ? (
-                                "Save Changes"
+                                "Guardar cambios"
                             ) : (
-                                "Create Category"
+                                "Crear categoria"
                             )}
                         </Button>
                     </DialogFooter>

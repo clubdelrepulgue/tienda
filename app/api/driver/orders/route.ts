@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     const driverId = searchParams.get("driverId")
 
     if (!driverId) {
-        return NextResponse.json({ error: "Driver ID required" }, { status: 400 })
+        return NextResponse.json({ error: "ID de repartidor requerido" }, { status: 400 })
     }
 
     try {

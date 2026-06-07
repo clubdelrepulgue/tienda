@@ -36,7 +36,7 @@ export default function AdminLoginPage() {
             }
 
             if (!data.user) {
-                setError("Login failed")
+                setError("No se pudo iniciar sesion")
                 return
             }
 
@@ -53,11 +53,11 @@ export default function AdminLoginPage() {
                 return
             }
 
-            toast.success("Welcome back!")
+            toast.success("Bienvenido de nuevo")
             router.push("/admin")
             router.refresh()
         } catch {
-            setError("Something went wrong")
+            setError("Algo salio mal")
         } finally {
             setLoading(false)
         }
@@ -72,17 +72,17 @@ export default function AdminLoginPage() {
                             className="text-2xl font-bold text-primary"
                             style={{ fontFamily: "var(--font-heading)" }}
                         >
-                            BLAZR
+                            BLZR
                         </span>
                     </div>
                     <CardTitle
                         className="text-xl text-card-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
-                        Admin Login
+                        Acceso admin
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Sign in to manage your restaurant
+                        Inicia sesion para administrar tu restaurante
                     </p>
                 </CardHeader>
                 <CardContent>
@@ -109,7 +109,7 @@ export default function AdminLoginPage() {
                         </div>
                         <div>
                             <Label htmlFor="password" className="text-sm text-muted-foreground mb-1.5 block">
-                                Password
+                                Contrasena
                             </Label>
                             <Input
                                 id="password"
@@ -129,12 +129,12 @@ export default function AdminLoginPage() {
                             {loading ? (
                                 <>
                                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    Signing in...
+                                    Iniciando sesion...
                                 </>
                             ) : (
                                 <>
                                     <LogIn className="h-4 w-4 mr-2" />
-                                    Sign In
+                                    Iniciar sesion
                                 </>
                             )}
                         </Button>
