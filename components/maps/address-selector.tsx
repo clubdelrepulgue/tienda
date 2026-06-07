@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useCallback, useRef, useEffect } from "react"
-import { Map, useMap, AdvancedMarker, Pin } from "@vis.gl/react-google-maps"
+import { useState, useCallback, useEffect, useRef } from "react"
+import { Map, Marker, useMap } from "@vis.gl/react-google-maps"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { MapPin, Search, Navigation } from "lucide-react"
@@ -19,9 +19,31 @@ interface AddressSelectorProps {
     }[]
     height?: string
     placeholder?: string
+    defaultCenter?: { lat: number; lng: number }
+    searchCenter?: { lat: number; lng: number }
+    searchRadiusKm?: number
+    branchMarker?: { lat: number; lng: number; title?: string }
+    showInstructions?: boolean
+    simpleMap?: boolean
+    reverseGeocodeOnSelect?: boolean
+    lazyMap?: boolean
 }
 
-const defaultCenter = { lat: -34.6037, lng: -58.3816 }
+const fallbackCenter = { lat: -34.6037, lng: -58.3816 }
+
+function MapInstanceSync({
+    onMapReady,
+}: {
+    onMapReady: (map: google.maps.Map) => void
+}) {
+    const map = useMap()
+
+    useEffect(() => {
+        if (map) onMapReady(map)
+    }, [map, onMapReady])
+
+    return null
+}
 
 // Función para verificar si un punto está dentro de un polígono (point-in-polygon)
 function isPointInPolygon(
@@ -43,55 +65,21 @@ function isPointInPolygon(
     return inside
 }
 
-// Marcador tradicional que funciona sin Map ID
-function TraditionalMarker({
-    map,
-    position,
-    color = "#ef4444",
-    title,
-}: {
-    map: google.maps.Map
-    position: google.maps.LatLngLiteral
-    color?: string
-    title?: string
-}) {
-    const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
-
-    useEffect(() => {
-        const pinElement = document.createElement("div")
-        pinElement.innerHTML = `
-            <svg width="32" height="40" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 0C7.163 0 0 7.163 0 16c0 12 16 24 16 24s16-12 16-24C32 7.163 24.837 0 16 0z" fill="${color}"/>
-                <circle cx="16" cy="16" r="8" fill="white"/>
-            </svg>
-        `
-        pinElement.style.cursor = "pointer"
-
-        const marker = new google.maps.marker.AdvancedMarkerElement({
-            map,
-            position,
-            title,
-            content: pinElement,
-        })
-
-        markerRef.current = marker
-
-        return () => {
-            marker.map = null
-        }
-    }, [map, position, color, title])
-
-    return null
-}
-
 export function AddressSelector({
     value,
     onChange,
     zones = [],
     height = "300px",
     placeholder = "Buscar dirección...",
+    defaultCenter,
+    searchCenter,
+    searchRadiusKm = 25,
+    branchMarker,
+    showInstructions = true,
+    simpleMap = false,
+    reverseGeocodeOnSelect = false,
+    lazyMap = false,
 }: AddressSelectorProps) {
-    const map = useMap()
     const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
         value ? { lat: value.lat, lng: value.lng } : null
     )
@@ -99,7 +87,11 @@ export function AddressSelector({
     const [isSearching, setIsSearching] = useState(false)
     const [selectedZone, setSelectedZone] = useState<string | null>(null)
     const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null)
-    const hasMapId = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID
+    const [mapVisible, setMapVisible] = useState(!lazyMap)
+    // Pending pan/zoom to apply once the map mounts (used when lazyMap triggers map open)
+    const pendingPanRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null)
+    const mapCenter = defaultCenter || branchMarker || fallbackCenter
+    const geocodeCenter = searchCenter || mapCenter
 
     // Geocodificación inversa para obtener dirección
     const reverseGeocode = useCallback(async (lat: number, lng: number): Promise<string> => {
@@ -133,30 +125,49 @@ export function AddressSelector({
         [zones]
     )
 
-    // Manejar clic en el mapa
-    const handleMapClick = useCallback(
-        async (e: google.maps.MapMouseEvent) => {
-            if (!e.latLng) return
-
-            const lat = e.latLng.lat()
-            const lng = e.latLng.lng()
-
+    const selectPoint = useCallback(
+        async (lat: number, lng: number, providedAddress?: string) => {
             setMarker({ lat, lng })
 
             const zone = checkZone(lat, lng)
-            const address = await reverseGeocode(lat, lng)
+            const address =
+                providedAddress ||
+                (reverseGeocodeOnSelect ? await reverseGeocode(lat, lng) : "")
+            const resolvedAddress = address || "Ubicación seleccionada"
+
+            setSearchQuery(resolvedAddress)
 
             onChange({
                 lat,
                 lng,
-                address: address || "Ubicación seleccionada",
+                address: resolvedAddress,
             })
 
             if (!zone && zones.length > 0) {
                 toast.warning("Esta ubicación está fuera de nuestras zonas de delivery")
             }
         },
-        [checkZone, onChange, reverseGeocode, zones]
+        [checkZone, onChange, reverseGeocode, reverseGeocodeOnSelect, zones]
+    )
+
+    // Manejar clic en el mapa
+    const handleMapClick = useCallback(
+        async (e: { detail?: { latLng?: { lat: number; lng: number } | null } }) => {
+            const latLng = e.detail?.latLng
+            if (!latLng) return
+
+            const lat = latLng.lat
+            const lng = latLng.lng
+            await selectPoint(lat, lng)
+        },
+        [selectPoint]
+    )
+
+    const handleMarkerDragEnd = useCallback(
+        async (position: google.maps.LatLngLiteral) => {
+            await selectPoint(position.lat, position.lng)
+        },
+        [selectPoint]
     )
 
     // Buscar dirección
@@ -166,28 +177,39 @@ export function AddressSelector({
         setIsSearching(true)
         try {
             const geocoder = new google.maps.Geocoder()
-            const result = await geocoder.geocode({ address: searchQuery })
+            const radiusDegrees = searchRadiusKm / 111
+            const bounds = new google.maps.LatLngBounds(
+                {
+                    lat: geocodeCenter.lat - radiusDegrees,
+                    lng: geocodeCenter.lng - radiusDegrees,
+                },
+                {
+                    lat: geocodeCenter.lat + radiusDegrees,
+                    lng: geocodeCenter.lng + radiusDegrees,
+                }
+            )
+            const result = await geocoder.geocode({
+                address: searchQuery,
+                bounds,
+                region: "UY",
+                componentRestrictions: { country: "UY" },
+            })
 
             if (result.results && result.results.length > 0) {
                 const location = result.results[0].geometry.location
                 const lat = location.lat()
                 const lng = location.lng()
-
-                setMarker({ lat, lng })
-                map?.panTo({ lat, lng })
-                map?.setZoom(16)
-
-                const zone = checkZone(lat, lng)
                 const address = result.results[0].formatted_address
 
-                onChange({
-                    lat,
-                    lng,
-                    address,
-                })
+                await selectPoint(lat, lng, address)
 
-                if (!zone && zones.length > 0) {
-                    toast.warning("Esta ubicación está fuera de nuestras zonas de delivery")
+                // Auto-open map after successful search so user can confirm pin
+                if (!mapVisible) {
+                    pendingPanRef.current = { lat, lng, zoom: 16 }
+                    setMapVisible(true)
+                } else {
+                    mapInstance?.panTo({ lat, lng })
+                    mapInstance?.setZoom(16)
                 }
             } else {
                 toast.error("No se encontró la dirección")
@@ -198,44 +220,62 @@ export function AddressSelector({
         } finally {
             setIsSearching(false)
         }
-    }, [searchQuery, map, checkZone, onChange, zones])
+    }, [searchQuery, geocodeCenter, mapInstance, mapVisible, searchRadiusKm, selectPoint])
 
     // Usar ubicación actual
     const handleUseCurrentLocation = useCallback(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const { latitude, longitude } = position.coords
-                    setMarker({ lat: latitude, lng: longitude })
-                    map?.panTo({ lat: latitude, lng: longitude })
-                    map?.setZoom(16)
-
-                    const zone = checkZone(latitude, longitude)
-                    const address = await reverseGeocode(latitude, longitude)
-
-                    onChange({
-                        lat: latitude,
-                        lng: longitude,
-                        address: address || "Mi ubicación actual",
-                    })
-
-                    if (!zone && zones.length > 0) {
-                        toast.warning("Esta ubicación está fuera de nuestras zonas de delivery")
-                    }
-                },
-                (error) => {
-                    console.error("Geolocation error:", error)
-                    toast.error("No se pudo obtener tu ubicación")
-                }
-            )
-        } else {
+        if (!navigator.geolocation) {
             toast.error("Tu navegador no soporta geolocalización")
+            return
         }
-    }, [map, checkZone, onChange, reverseGeocode, zones])
 
-    const handleMapLoad = useCallback((map: google.maps.Map) => {
+        if (!window.isSecureContext) {
+            toast.error("Para usar GPS abrí la web con HTTPS o desde localhost. En IP local con http el navegador lo bloquea.")
+            return
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords
+
+                await selectPoint(latitude, longitude, "Mi ubicación actual")
+
+                // Auto-open map so user sees their pin
+                if (!mapVisible) {
+                    pendingPanRef.current = { lat: latitude, lng: longitude, zoom: 16 }
+                    setMapVisible(true)
+                } else {
+                    mapInstance?.panTo({ lat: latitude, lng: longitude })
+                    mapInstance?.setZoom(16)
+                }
+            },
+            (error) => {
+                console.error("Geolocation error:", error)
+                const message =
+                    error.code === error.PERMISSION_DENIED
+                        ? "El navegador no tiene permiso para usar tu ubicación. Habilitalo en la barra de dirección."
+                        : "No se pudo obtener tu ubicación. Probá buscar la dirección o mover el pin."
+                toast.error(message)
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+        )
+    }, [mapInstance, mapVisible, selectPoint])
+
+    const handleMapReady = useCallback((map: google.maps.Map) => {
         setMapInstance(map)
+        // Apply deferred pan/zoom (happens when map was opened lazily after a search/GPS)
+        if (pendingPanRef.current) {
+            map.panTo({ lat: pendingPanRef.current.lat, lng: pendingPanRef.current.lng })
+            map.setZoom(pendingPanRef.current.zoom)
+            pendingPanRef.current = null
+        }
     }, [])
+
+    useEffect(() => {
+        if (!mapInstance || marker) return
+        mapInstance.panTo(mapCenter)
+        mapInstance.setZoom(branchMarker ? 13 : 12)
+    }, [branchMarker, mapInstance, mapCenter, marker])
 
     return (
         <div className="space-y-3">
@@ -271,104 +311,85 @@ export function AddressSelector({
                 </Button>
             </div>
 
-            {/* Map */}
-            <div className="relative">
-                <div style={{ height }} className="rounded-xl overflow-hidden border border-border">
-                    <Map
-                        defaultCenter={defaultCenter}
-                        defaultZoom={13}
-                        gestureHandling="greedy"
-                        disableDefaultUI={false}
-                        mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || undefined}
-                        onClick={handleMapClick}
-                        onLoad={handleMapLoad}
-                    >
-                        {/* Show zones */}
-                        {zones.map((zone) => (
-                            <Polygon
-                                key={zone.id}
-                                paths={zone.coordinates}
-                                strokeColor={zone.color}
-                                fillColor={zone.color}
-                                fillOpacity={selectedZone === zone.id ? 0.35 : 0.15}
-                                strokeWeight={selectedZone === zone.id ? 3 : 1}
-                            />
-                        ))}
+            {/* Map — lazy: only mounts when mapVisible is true */}
+            {mapVisible ? (
+                <div className="relative">
+                    <div style={{ height }} className="rounded-xl overflow-hidden border border-border">
+                        <Map
+                            defaultCenter={mapCenter}
+                            defaultZoom={branchMarker ? 13 : 12}
+                            gestureHandling="greedy"
+                            disableDefaultUI={simpleMap}
+                            zoomControl={!simpleMap}
+                            fullscreenControl={!simpleMap}
+                            streetViewControl={false}
+                            mapTypeControl={!simpleMap}
+                            mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || undefined}
+                            onClick={handleMapClick}
+                        >
+                            <MapInstanceSync onMapReady={handleMapReady} />
 
-                        {/* Marker with Map ID */}
-                        {marker && hasMapId && (
-                            <AdvancedMarker position={marker} title="Tu ubicación">
-                                <Pin
-                                    background="#ef4444"
-                                    borderColor="#b91c1c"
-                                    glyphColor="#ffffff"
-                                    scale={1}
+                            {/* Show zones */}
+                            {zones.map((zone) => (
+                                <Polygon
+                                    key={zone.id}
+                                    paths={zone.coordinates}
+                                    strokeColor={zone.color}
+                                    fillColor={zone.color}
+                                    fillOpacity={selectedZone === zone.id ? 0.35 : 0.15}
+                                    strokeWeight={selectedZone === zone.id ? 3 : 1}
                                 />
-                            </AdvancedMarker>
-                        )}
+                            ))}
 
-                        {/* Marker without Map ID */}
-                        {marker && !hasMapId && mapInstance && (
-                            <TraditionalMarker
-                                map={mapInstance}
-                                position={marker}
-                                color="#ef4444"
-                                title="Tu ubicación"
-                            />
-                        )}
-                    </Map>
-                </div>
+                            {/* Branch marker */}
+                            {branchMarker && (
+                                <Marker
+                                    position={{ lat: branchMarker.lat, lng: branchMarker.lng }}
+                                    title={branchMarker.title || "Sucursal"}
+                                    zIndex={20}
+                                />
+                            )}
 
-                {/* Instructions */}
-                {!marker && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="bg-background/90 backdrop-blur-sm px-4 py-3 rounded-xl shadow-lg border border-border">
-                            <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-primary" />
-                                <p className="text-sm text-foreground">
-                                    Haz clic en el mapa para seleccionar tu ubicación
-                                </p>
+                            {/* Customer marker */}
+                            {marker && (
+                                <Marker
+                                    position={marker}
+                                    title="Tu ubicación"
+                                    draggable
+                                    onDragEnd={(event) => {
+                                        const lat = event.latLng?.lat()
+                                        const lng = event.latLng?.lng()
+                                        if (lat == null || lng == null) return
+                                        handleMarkerDragEnd({ lat, lng })
+                                    }}
+                                />
+                            )}
+                        </Map>
+                    </div>
+
+                    {/* Instructions */}
+                    {showInstructions && !marker && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="bg-background/90 backdrop-blur-sm px-4 py-3 rounded-xl shadow-lg border border-border">
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-primary" />
+                                    <p className="text-sm text-foreground">
+                                        Haz clic en el mapa para seleccionar tu ubicación
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Selected address display */}
-            {value?.address && (
-                <div className="text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">Dirección:</span>{" "}
-                    {value.address}
+                    )}
                 </div>
-            )}
-
-            {/* Zone indicator */}
-            {marker && (
-                <div className="flex items-center gap-2">
-                    {selectedZone ? (
-                        <>
-                            <div
-                                className="w-3 h-3 rounded-full"
-                                style={{
-                                    backgroundColor:
-                                        zones.find((z) => z.id === selectedZone)?.color ||
-                                        "#22c55e",
-                                }}
-                            />
-                            <span className="text-sm text-green-600">
-                                Dentro de la zona:{" "}
-                                {zones.find((z) => z.id === selectedZone)?.name}
-                            </span>
-                        </>
-                    ) : zones.length > 0 ? (
-                        <>
-                            <div className="w-3 h-3 rounded-full bg-red-500" />
-                            <span className="text-sm text-red-500">
-                                Fuera de las zonas de delivery
-                            </span>
-                        </>
-                    ) : null}
-                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => setMapVisible(true)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors py-5 text-sm"
+                >
+                    <MapPin className="h-4 w-4" />
+                    Ver mapa para confirmar ubicación
+                </button>
             )}
         </div>
     )

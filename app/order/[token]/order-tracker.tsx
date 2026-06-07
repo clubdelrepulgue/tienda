@@ -29,11 +29,11 @@ interface OrderTrackerProps {
 }
 
 const steps: { status: OrderStatus; label: string; icon: any }[] = [
-    { status: "new", label: "Order Placed", icon: Clock },
-    { status: "accepted", label: "Accepted", icon: Check },
-    { status: "preparing", label: "Preparing", icon: ChefHat },
-    { status: "ready", label: "Ready", icon: Package },
-    { status: "delivered", label: "Delivered", icon: Truck },
+    { status: "new", label: "Pedido recibido", icon: Clock },
+    { status: "accepted", label: "Aceptado", icon: Check },
+    { status: "preparing", label: "Preparando", icon: ChefHat },
+    { status: "ready", label: "Listo", icon: Package },
+    { status: "delivered", label: "Entregado", icon: Truck },
 ]
 
 const statusIndex: Record<string, number> = {
@@ -126,7 +126,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                 <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
                     <div className="mx-auto max-w-2xl flex items-center gap-3 px-4 py-3">
                         <Button variant="ghost" size="icon" className="rounded-full" asChild>
-                            <Link href="/" aria-label="Back to menu">
+                            <Link href="/" aria-label="Volver al menú">
                                 <ArrowLeft className="h-5 w-5" />
                             </Link>
                         </Button>
@@ -138,7 +138,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                                 Order #{order.orderNumber}
                             </h1>
                             <p className="text-xs text-muted-foreground">
-                                Track your order in real time
+                                Seguí tu pedido en tiempo real
                             </p>
                         </div>
                     </div>
@@ -151,10 +151,10 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                             {isCancelled ? (
                                 <div className="text-center py-4">
                                     <Badge className="bg-destructive/15 text-destructive border-destructive/20 text-sm px-4 py-1.5">
-                                        Order Cancelled
+                                        Pedido cancelado
                                     </Badge>
                                     <p className="text-sm text-muted-foreground mt-3">
-                                        This order has been cancelled.
+                                        Este pedido fue cancelado.
                                     </p>
                                 </div>
                             ) : (
@@ -229,7 +229,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                     <Card className="rounded-2xl bg-card border-border">
                         <CardContent className="p-5">
                             <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                                Order Details
+                                Detalle del pedido
                             </h2>
                             <div className="flex flex-col gap-3">
                                 {order.items.map((item) => {
@@ -269,7 +269,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                                     <span>
                                         {order.deliveryFee > 0
                                             ? `$${order.deliveryFee.toFixed(2)}`
-                                            : "Free"}
+                                            : "Gratis"}
                                     </span>
                                 </div>
                                 <Separator />
@@ -285,7 +285,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                     <Card className="rounded-2xl bg-card border-border">
                         <CardContent className="p-5">
                             <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                                Info
+                                Información
                             </h2>
                             <div className="flex flex-col gap-3 text-sm">
                                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -320,7 +320,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
 
                     <div className="text-center">
                         <Button asChild variant="outline" className="rounded-xl">
-                            <Link href="/">Order Again</Link>
+                            <Link href="/">Pedir de nuevo</Link>
                         </Button>
                     </div>
                 </main>
