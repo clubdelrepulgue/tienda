@@ -109,7 +109,11 @@ export default function CheckoutPage() {
         if (Array.isArray(data?.deliveryZones)) setAllDeliveryZones(data.deliveryZones)
       })
       .catch(() => {
+<<<<<<< HEAD
         toast.error("No se pudieron cargar las zonas de envío")
+=======
+        toast.error("No se pudieron cargar las zonas de delivery")
+>>>>>>> origin/dis
       })
   }, [])
 
@@ -156,7 +160,11 @@ export default function CheckoutPage() {
       }
 
       if (!best?.zone && allDeliveryZones.length > 0) {
+<<<<<<< HEAD
         toast.warning("Esa dirección está fuera de las zonas de envío")
+=======
+        toast.warning("Esa direccion esta fuera de nuestras zonas de delivery")
+>>>>>>> origin/dis
       }
     }
   }, [allDeliveryZones, branches, selectedLocation])
@@ -196,6 +204,7 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!name || !phone) {
+<<<<<<< HEAD
       toast.error("Por favor completá tu nombre y teléfono")
       return
     }
@@ -213,6 +222,25 @@ export default function CheckoutPage() {
     }
     if (items.length === 0) {
       toast.error("Tu carrito está vacío")
+=======
+      toast.error("Completa tu nombre y telefono")
+      return
+    }
+    if (deliveryMethod === "delivery" && !address) {
+      toast.error("Ingresa una direccion de delivery")
+      return
+    }
+    if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedLocation) {
+      toast.error("Marca tu ubicacion en el mapa para confirmar la zona de delivery")
+      return
+    }
+    if (deliveryMethod === "delivery" && deliveryZones.length > 0 && !selectedZone) {
+      toast.error("Tu direccion esta fuera de nuestras zonas de delivery")
+      return
+    }
+    if (items.length === 0) {
+      toast.error("Tu carrito esta vacio")
+>>>>>>> origin/dis
       return
     }
 
@@ -244,10 +272,17 @@ export default function CheckoutPage() {
       }
 
       clearCart()
+<<<<<<< HEAD
       toast.success(`¡Pedido #${result.orderNumber} realizado!`)
       router.push(`/order/${result.trackingToken}`)
     } catch {
       toast.error("Algo salió mal. Por favor intentá de nuevo.")
+=======
+      toast.success(`Pedido #${result.orderNumber} realizado`)
+      router.push(`/order/${result.trackingToken}`)
+    } catch {
+      toast.error("Algo salio mal. Intenta nuevamente.")
+>>>>>>> origin/dis
     } finally {
       setLoading(false)
     }
@@ -256,9 +291,15 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-6">
+<<<<<<< HEAD
         <p className="text-muted-foreground">Tu carrito está vacío</p>
         <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
           <Link href="/">Ver menú</Link>
+=======
+        <p className="text-muted-foreground">Tu carrito esta vacio</p>
+        <Button asChild variant="outline">
+          <Link href="/">Volver al menu</Link>
+>>>>>>> origin/dis
         </Button>
       </div>
     )
@@ -269,8 +310,13 @@ export default function CheckoutPage() {
       <div className="min-h-screen bg-secondary">
         <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
           <div className="mx-auto max-w-3xl flex items-center gap-3 px-4 py-3">
+<<<<<<< HEAD
             <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" asChild>
               <Link href="/" aria-label="Volver al menú">
+=======
+            <Button variant="ghost" size="icon" className="rounded-full" asChild>
+              <Link href="/" aria-label="Volver al menu">
+>>>>>>> origin/dis
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
@@ -278,7 +324,11 @@ export default function CheckoutPage() {
               className="text-lg font-bold text-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
+<<<<<<< HEAD
               Finalizar pedido
+=======
+              Pago
+>>>>>>> origin/dis
             </h1>
           </div>
         </header>
@@ -288,7 +338,11 @@ export default function CheckoutPage() {
             {/* Delivery Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
+<<<<<<< HEAD
                 Método de entrega
+=======
+                Metodo de entrega
+>>>>>>> origin/dis
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -344,7 +398,11 @@ export default function CheckoutPage() {
                         : "text-muted-foreground"
                     )}
                   >
+<<<<<<< HEAD
                     Retiro en local
+=======
+                    Retiro
+>>>>>>> origin/dis
                   </span>
                 </button>
               </div>
@@ -370,7 +428,11 @@ export default function CheckoutPage() {
                 </div>
                 <div>
                   <Label htmlFor="phone" className="text-sm text-muted-foreground mb-1.5 block">
+<<<<<<< HEAD
                     Teléfono
+=======
+                    Telefono
+>>>>>>> origin/dis
                   </Label>
                   <Input
                     id="phone"
@@ -382,6 +444,22 @@ export default function CheckoutPage() {
                 </div>
                 {deliveryMethod === "delivery" && (
                   <>
+<<<<<<< HEAD
+=======
+                    <div>
+                      <Label htmlFor="address" className="text-sm text-muted-foreground mb-1.5 block">
+                        Direccion
+                      </Label>
+                      <Input
+                        id="address"
+                        placeholder="Calle, numero, apartamento"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                      />
+                    </div>
+
+>>>>>>> origin/dis
                     {/* Map Address Selector */}
                     <div className="pt-2">
                       <Label className="text-sm text-muted-foreground mb-1.5 block">
@@ -441,7 +519,11 @@ export default function CheckoutPage() {
 
                     <div>
                       <Label htmlFor="notes" className="text-sm text-muted-foreground mb-1.5 block">
+<<<<<<< HEAD
                         Notas de entrega
+=======
+                        Notas para el delivery
+>>>>>>> origin/dis
                       </Label>
                       <Textarea
                         id="notes"
@@ -460,7 +542,11 @@ export default function CheckoutPage() {
             {/* Payment Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
               <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
+<<<<<<< HEAD
                 Método de pago
+=======
+                Metodo de pago
+>>>>>>> origin/dis
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -596,11 +682,15 @@ export default function CheckoutPage() {
                     {selectedZoneInfo ? `Delivery · ${selectedZoneInfo.name}` : "Delivery"}
                   </span>
                   <span>
+<<<<<<< HEAD
                     {shouldCalculateDelivery
                       ? "A calcular"
                       : deliveryFee > 0
                         ? `$${deliveryFee.toFixed(2)}`
                         : "Gratis"}
+=======
+                    {deliveryFee > 0 ? `$${deliveryFee.toFixed(2)}` : "Gratis"}
+>>>>>>> origin/dis
                   </span>
                 </div>
                 
@@ -620,10 +710,17 @@ export default function CheckoutPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
+<<<<<<< HEAD
                     Procesando pedido...
                   </>
                 ) : (
                   "Confirmar pedido"
+=======
+                    Realizando pedido...
+                  </>
+                ) : (
+                  "Realizar pedido"
+>>>>>>> origin/dis
                 )}
               </Button>
             </div>

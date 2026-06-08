@@ -1,19 +1,28 @@
 import Link from 'next/link'
 import { ArrowRight, Store } from 'lucide-react'
 
-import { GradientBackground } from '@/components/ui/paper-design-shader-background'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 export default function LandingPage() {
   return (
     <main className="relative flex min-h-screen h-full w-full items-center justify-center overflow-hidden">
-      <GradientBackground />
-      <div className="absolute inset-0 -z-10 bg-black/20" />
+      <video
+        className="absolute inset-0 -z-20 h-full w-full object-cover"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="metadata"
+        aria-hidden="true"
+      >
+        <source src="/VIDEO%20PORTADA%20BLZR.mp4" type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 -z-10 bg-black/55" />
 
       <section className="mx-auto flex w-full max-w-5xl flex-col items-center px-6 py-20 text-center">
         <Badge className="mb-6 rounded-full border-white/15 bg-black/20 px-4 py-1 text-white shadow-none backdrop-blur-sm">
-          BLAZR Commerce Platform
+          BLZR Commerce Platform
         </Badge>
 
         <h1 className="max-w-4xl font-heading text-5xl font-light tracking-tight text-white text-balance sm:text-6xl md:text-7xl">

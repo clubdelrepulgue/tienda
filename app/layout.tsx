@@ -18,25 +18,16 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
-  title: 'BLAZR - Fast Food Ordering',
-  description: 'Order your favorite burgers, chicken, sides and drinks with lightning-fast delivery.',
+  title: 'BLZR - Pedidos online',
+  description: 'Pedi tus burgers, papas, bebidas y postres favoritos de forma rapida.',
   generator: 'v0.app',
   icons: {
     icon: [
       {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
+        url: '/favicon.webp',
+        type: 'image/webp',
       },
     ],
-    apple: '/apple-icon.png',
   },
 }
 
@@ -74,7 +65,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
         <Script id="blazr-preloader-state" strategy="beforeInteractive">
           {preloaderBootstrapScript}

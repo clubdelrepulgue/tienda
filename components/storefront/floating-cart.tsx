@@ -26,7 +26,7 @@ export function FloatingCart({ onCartOpen }: FloatingCartProps) {
             {totalItems}
           </span>
         </div>
-        <span className="flex-1 text-center md:text-left">View Cart</span>
+        <span className="flex-1 text-center md:text-left">Ver carrito</span>
         <span>${totalPrice.toFixed(2)}</span>
       </Button>
     </div>

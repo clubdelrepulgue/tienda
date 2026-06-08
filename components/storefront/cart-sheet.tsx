@@ -34,16 +34,16 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
             style={{ fontFamily: "var(--font-heading)" }}
           >
             <ShoppingBag className="h-5 w-5 text-primary" />
-            Your Cart ({items.length})
+            Tu carrito ({items.length})
           </SheetTitle>
         </SheetHeader>
 
         {items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6">
             <ShoppingBag className="h-12 w-12 text-muted-foreground/40" />
-            <p className="text-muted-foreground text-sm">Your cart is empty</p>
+            <p className="text-muted-foreground text-sm">Tu carrito esta vacio</p>
             <Button variant="outline" size="sm" onClick={onClose}>
-              Browse Menu
+              Ver menu
             </Button>
           </div>
         ) : (
@@ -90,7 +90,7 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
                               onClick={() =>
                                 updateQty(item.id, item.quantity - 1)
                               }
-                              aria-label="Decrease quantity"
+                              aria-label="Disminuir cantidad"
                             >
                               <Minus className="h-3 w-3" />
                             </Button>
@@ -104,7 +104,7 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
                               onClick={() =>
                                 updateQty(item.id, item.quantity + 1)
                               }
-                              aria-label="Increase quantity"
+                              aria-label="Aumentar cantidad"
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
@@ -114,7 +114,7 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
                             size="icon"
                             className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                             onClick={() => removeItem(item.id)}
-                            aria-label={`Remove ${item.name} from cart`}
+                            aria-label={`Quitar ${item.name} del carrito`}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -139,7 +139,7 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
                 asChild
                 onClick={onClose}
               >
-                <Link href="/checkout">Continue to Checkout</Link>
+                <Link href="/checkout">Continuar al pago</Link>
               </Button>
             </div>
           </>

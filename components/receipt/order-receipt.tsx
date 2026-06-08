@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import type { Order } from "@/lib/types"
 
 const RECEIPT_CONFIG = {
-  businessName: "BLAZR",
+  businessName: "BLZR",
   instagram: "",
   phone: "",
   thankYouMessage: "¡Gracias por tu pedido!",

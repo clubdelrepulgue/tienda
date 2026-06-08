@@ -15,12 +15,14 @@ interface StorefrontShellProps {
     categories: Category[]
     products: Product[]
     modifierGroups: ModifierGroup[]
+    showCover?: boolean
 }
 
 export function StorefrontShell({
     categories,
     products,
     modifierGroups,
+    showCover = false,
 }: StorefrontShellProps) {
     const [activeCategory, setActiveCategory] = useState("all")
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -48,6 +50,7 @@ export function StorefrontShell({
     return (
         <div className="min-h-screen bg-background">
             <Header onCartOpen={() => setCartOpen(true)} />
+            {showCover && <CoverVideo />}
             <CategoryTabs
                 categories={categories}
                 activeCategory={activeCategory}
@@ -72,5 +75,23 @@ export function StorefrontShell({
             <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} />
             <FloatingCart onCartOpen={() => setCartOpen(true)} />
         </div>
+    )
+}
+
+function CoverVideo() {
+    return (
+        <section className="border-b border-white/[0.07] px-4 py-[5px] sm:px-6">
+            <video
+                className="mx-auto block h-auto w-full max-w-6xl"
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="metadata"
+                aria-hidden="true"
+            >
+                <source src="/VIDEO%20PORTADA%20BLZR.mp4" type="video/mp4" />
+            </video>
+        </section>
     )
 }

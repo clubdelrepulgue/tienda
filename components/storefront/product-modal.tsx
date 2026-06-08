@@ -78,7 +78,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
       quantity,
       modifiers: selectedModifiers,
     })
-    toast.success(`${product.name} added to cart`)
+    toast.success(`${product.name} agregado al carrito`)
     setQuantity(1)
     setSelectedModifiers([])
     onClose()
@@ -121,7 +121,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
             size="icon"
             className="absolute top-3 right-3 z-20 h-8 w-8 rounded-full bg-background/80 text-foreground backdrop-blur-sm hover:bg-background"
             onClick={handleClose}
-            aria-label="Close product details"
+            aria-label="Cerrar detalles del producto"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -137,7 +137,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                   </h4>
                   {group.required && (
                     <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full font-medium">
-                      Required
+                      Obligatorio
                     </span>
                   )}
                 </div>
@@ -238,7 +238,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
               size="icon"
               className="h-9 w-9 rounded-lg"
               onClick={() => setQuantity(Math.max(1, quantity - 1))}
-              aria-label="Decrease quantity"
+              aria-label="Disminuir cantidad"
             >
               <Minus className="h-4 w-4" />
             </Button>
@@ -250,7 +250,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
               size="icon"
               className="h-9 w-9 rounded-lg"
               onClick={() => setQuantity(quantity + 1)}
-              aria-label="Increase quantity"
+              aria-label="Aumentar cantidad"
             >
               <Plus className="h-4 w-4" />
             </Button>
@@ -259,7 +259,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
             className="flex-1 h-11 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
             onClick={handleAddToCart}
           >
-            Add to Cart - ${itemTotal.toFixed(2)}
+            Agregar al carrito - ${itemTotal.toFixed(2)}
           </Button>
         </div>
       </DialogContent>
