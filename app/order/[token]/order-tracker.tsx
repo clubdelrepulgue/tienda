@@ -126,11 +126,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                 <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
                     <div className="mx-auto max-w-2xl flex items-center gap-3 px-4 py-3">
                         <Button variant="ghost" size="icon" className="rounded-full" asChild>
-<<<<<<< HEAD
                             <Link href="/" aria-label="Volver al menú">
-=======
-                            <Link href="/" aria-label="Volver al menu">
->>>>>>> origin/dis
                                 <ArrowLeft className="h-5 w-5" />
                             </Link>
                         </Button>
@@ -142,11 +138,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                                 Pedido #{order.orderNumber}
                             </h1>
                             <p className="text-xs text-muted-foreground">
-<<<<<<< HEAD
                                 Seguí tu pedido en tiempo real
-=======
-                                Sigue tu pedido en tiempo real
->>>>>>> origin/dis
                             </p>
                         </div>
                     </div>
