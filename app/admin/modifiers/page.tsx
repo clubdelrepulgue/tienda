@@ -20,6 +20,7 @@ import {
 import type { ModifierGroup, ModifierOption } from "@/lib/types"
 import { toast } from "sonner"
 import { createModifierGroup, updateModifierGroup } from "@/app/actions"
+import { formatPrice } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -222,7 +223,7 @@ export default function ModifiersPage() {
                     </div>
                     <span className="text-sm text-muted-foreground">
                       {option.price > 0
-                        ? `+$${option.price.toFixed(2)}`
+                        ? `+${formatPrice(option.price)}`
                         : "Gratis"}
                     </span>
                   </div>

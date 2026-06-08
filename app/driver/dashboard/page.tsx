@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import { useDriverLocation } from "@/hooks/use-driver-location"
 import { GoogleMapsProvider, LiveTrackingMap } from "@/components/maps"
 import { formatZoneMeta } from "@/lib/delivery-zones"
+import { formatPrice } from "@/lib/utils"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -368,7 +369,7 @@ export default function DriverDashboardPage() {
                                                     </Badge>
                                                 </div>
                                                 <span className="text-sm text-muted-foreground">
-                                                    ${order.total.toFixed(2)}
+                                                    {formatPrice(order.total)}
                                                 </span>
                                             </div>
 
@@ -462,7 +463,7 @@ export default function DriverDashboardPage() {
                                                 </div>
                                             </div>
                                             <span className="text-sm font-medium shrink-0">
-                                                ${order.total.toFixed(2)}
+                                                {formatPrice(order.total)}
                                             </span>
                                         </div>
                                     ))}

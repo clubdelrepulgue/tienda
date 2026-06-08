@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 import type { Order, OrderStatus } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 import { GoogleMapsProvider, LiveTrackingMap } from "@/components/maps"
 
 interface OrderTrackerProps {
@@ -250,7 +250,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                                                 )}
                                             </div>
                                             <span className="text-sm font-medium text-card-foreground">
-                                                ${((item.price + modPrice) * item.quantity).toFixed(2)}
+                                                {formatPrice((item.price + modPrice) * item.quantity)}
                                             </span>
                                         </div>
                                     )
@@ -262,20 +262,20 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                             <div className="flex flex-col gap-2 text-sm">
                                 <div className="flex justify-between text-muted-foreground">
                                     <span>Subtotal</span>
-                                    <span>${order.subtotal.toFixed(2)}</span>
+                                    <span>{formatPrice(order.subtotal)}</span>
                                 </div>
                                 <div className="flex justify-between text-muted-foreground">
                                     <span>Delivery</span>
                                     <span>
                                         {order.deliveryFee > 0
-                                            ? `$${order.deliveryFee.toFixed(2)}`
+                                            ? formatPrice(order.deliveryFee)
                                             : "Gratis"}
                                     </span>
                                 </div>
                                 <Separator />
                                 <div className="flex justify-between font-bold text-lg text-card-foreground">
                                     <span>Total</span>
-                                    <span className="text-primary">${order.total.toFixed(2)}</span>
+                                    <span className="text-primary">{formatPrice(order.total)}</span>
                                 </div>
                             </div>
                         </CardContent>

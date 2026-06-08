@@ -173,11 +173,11 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-dvh bg-background">
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          "hidden shrink-0 flex-col border-r border-sidebar-border/80 bg-[#0b0c0e] transition-[width] duration-300 ease-in-out md:flex",
+          "sticky top-0 hidden h-dvh max-h-dvh min-h-dvh shrink-0 flex-col border-r border-sidebar-border/80 bg-[#0b0c0e] transition-[width] duration-300 ease-in-out md:flex",
           sidebarCollapsed ? "w-[76px]" : "w-64"
         )}
       >
@@ -240,7 +240,7 @@ export default function AdminLayout({
             </Link>
           </Button>
         </div>
-        <ScrollArea className="flex-1">
+        <ScrollArea className="min-h-0 flex-1">
           <NavContent pathname={pathname} collapsed={sidebarCollapsed} />
         </ScrollArea>
         <div className={cn("border-t border-sidebar-border/80", sidebarCollapsed ? "p-2" : "p-3")}>
@@ -258,16 +258,26 @@ export default function AdminLayout({
                 <span className="sr-only">Abrir navegacion</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 border-sidebar-border bg-[#0b0c0e] p-0">
+            <SheetContent side="left" className="flex h-dvh max-h-dvh w-64 flex-col border-sidebar-border bg-[#0b0c0e] p-0">
               <SheetTitle className="sr-only">Navegacion</SheetTitle>
-              <div className="flex items-center gap-2 border-b border-sidebar-border/80 p-4">
+              <div className="flex shrink-0 items-center gap-2 border-b border-sidebar-border/80 p-4">
                 <Image src={blzrLogo} alt="BLZR" priority className="h-7 w-auto" />
                 <span className="rounded-full border border-white/[0.07] bg-white/[0.05] px-2 py-0.5 text-xs font-semibold text-sidebar-accent-foreground">
                   Admin
                 </span>
               </div>
-              <div onClick={() => setMobileOpen(false)}>
-                <NavContent pathname={pathname} />
+              <ScrollArea className="min-h-0 flex-1">
+                <div onClick={() => setMobileOpen(false)}>
+                  <NavContent pathname={pathname} />
+                </div>
+              </ScrollArea>
+              <div className="shrink-0 border-t border-sidebar-border/80 p-3">
+                <SignOutButton
+                  onClick={() => {
+                    setMobileOpen(false)
+                    handleSignOut()
+                  }}
+                />
               </div>
             </SheetContent>
           </Sheet>

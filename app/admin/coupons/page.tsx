@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createCoupon, updateCoupon, deleteCoupon } from "@/app/actions"
 import type { Coupon } from "@/lib/types"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -168,11 +168,11 @@ export default function CouponsPage() {
                                 <span className="font-bold text-2xl text-primary">
                                     {coupon.discountType === "percentage"
                                         ? `${coupon.discountValue}%`
-                                        : `$${coupon.discountValue.toFixed(2)}`}
+                                        : formatPrice(coupon.discountValue)}
                                 </span>
                                 {coupon.minOrderAmount > 0 && (
                                     <span className="text-muted-foreground">
-                                        Mín: ${coupon.minOrderAmount}
+                                        Mín: {formatPrice(coupon.minOrderAmount)}
                                     </span>
                                 )}
                             </div>

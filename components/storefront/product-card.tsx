@@ -4,6 +4,7 @@ import Image from "next/image"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Product } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 
 interface ProductCardProps {
   product: Product
@@ -24,7 +25,7 @@ export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps)
           onSelect(product)
         }
       }}
-      aria-label={`Ver ${product.name}, $${product.price.toFixed(2)}`}
+      aria-label={`Ver ${product.name}, ${formatPrice(product.price)}`}
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-t-2xl bg-[#111] sm:rounded-t-[22px]">
         <Image
@@ -39,7 +40,7 @@ export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps)
         <div className="flex-1 min-w-0">
           <h3 className="mb-1 truncate text-sm font-bold leading-tight text-white sm:mb-1.5 sm:text-[15px]">{product.name}</h3>
           <p className="text-[15px] font-extrabold leading-none text-primary sm:text-[17px]">
-            ${product.price.toFixed(2)}
+            {formatPrice(product.price)}
           </p>
         </div>
         <Button

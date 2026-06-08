@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { FirstVisitPreloader } from '@/components/ui/first-visit-preloader'
 import { FIRST_VISIT_PRELOADER_STORAGE_KEY } from '@/lib/preloader'
 import { Toaster } from "sonner"
+import { AlertCircle, CheckCircle2, Info, TriangleAlert } from 'lucide-react'
 import './globals.css'
 
 const inter = Inter({
@@ -74,7 +75,24 @@ export default function RootLayout({
         <div className="blazr-app-shell">
           {children}
         </div>
-        <Toaster position="top-center" richColors />
+        <Toaster
+          position="top-center"
+          theme="dark"
+          duration={3200}
+          gap={10}
+          offset={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
+          mobileOffset={{
+            top: 'calc(env(safe-area-inset-top, 0px) + 14px)',
+            left: '14px',
+            right: '14px',
+          }}
+          icons={{
+            success: <CheckCircle2 />,
+            error: <AlertCircle />,
+            info: <Info />,
+            warning: <TriangleAlert />,
+          }}
+        />
         <Analytics />
       </body>
     </html>

@@ -1,4 +1,5 @@
 import type { DeliveryZone } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 
 export function isPointInPolygon(
   point: { lat: number; lng: number },
@@ -49,10 +50,10 @@ export function getZoneDeliveryFee(zone: DeliveryZone | undefined, subtotal: num
 }
 
 export function formatZoneMeta(zone: DeliveryZone) {
-  const parts = [`Envio $${zone.deliveryFee.toFixed(2)}`]
+  const parts = [`Envio ${formatPrice(zone.deliveryFee)}`]
 
   if (zone.minOrderAmount > 0) {
-    parts.push(`gratis desde $${zone.minOrderAmount.toFixed(2)}`)
+    parts.push(`gratis desde ${formatPrice(zone.minOrderAmount)}`)
   }
 
   if (zone.estimatedTimeMin) {

@@ -11,27 +11,32 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { ProductModal } from "@/components/storefront/product-modal"
 import { createOrder } from "@/app/actions"
-import type { Product, Category, Branch } from "@/lib/types"
+import type { Product, Category, Branch, CartItemModifier, ModifierGroup, CartItem as OrderCartItem } from "@/lib/types"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
 
-interface CartItem {
+interface PosCartItem {
     tempId: string
     productId: string
     name: string
     image: string
     price: number
     quantity: number
+    modifiers: CartItemModifier[]
 }
 
 export default function POSPage() {
     const [products, setProducts] = useState<Product[]>([])
     const [categories, setCategories] = useState<Category[]>([])
     const [branches, setBranches] = useState<Branch[]>([])
+    const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([])
     const [activeCategory, setActiveCategory] = useState<string>("all")
-    const [cart, setCart] = useState<CartItem[]>([])
+    const [cart, setCart] = useState<PosCartItem[]>([])
+    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+    const [productModalOpen, setProductModalOpen] = useState(false)
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
     const [loading, setLoading] = useState(false)
 
@@ -47,11 +52,13 @@ export default function POSPage() {
             fetch("/api/admin?type=products").then((r) => r.json()),
             fetch("/api/admin?type=categories").then((r) => r.json()),
             fetch("/api/admin?type=branches").then((r) => r.json()),
+            fetch("/api/admin?type=modifiers").then((r) => r.json()),
         ])
-            .then(([productsData, categoriesData, branchesData]) => {
+            .then(([productsData, categoriesData, branchesData, modifiersData]) => {
                 setProducts(productsData || [])
                 setCategories(categoriesData || [])
                 setBranches(branchesData || [])
+                setModifierGroups(modifiersData || [])
                 const openBranch = branchesData?.find((b: Branch) => b.isOpen)
                 if (openBranch) setSelectedBranch(openBranch.id)
             })
@@ -63,26 +70,66 @@ export default function POSPage() {
         return products.filter((p) => p.categoryId === activeCategory && p.active)
     }, [products, activeCategory])
 
-    const addToCart = (product: Product) => {
-        const existingItem = cart.find((item) => item.productId === product.id)
+    const getModifiersKey = (modifiers: CartItemModifier[]) =>
+        modifiers
+            .map((modifier) => `${modifier.groupId}:${modifier.optionId}`)
+            .sort()
+            .join("|")
+
+    const productHasAvailableModifiers = (product: Product) =>
+        modifierGroups.some(
+            (group) =>
+                product.modifierGroups.includes(group.id) &&
+                group.options.length > 0
+        )
+
+    const addToCart = (
+        product: Product,
+        modifiers: CartItemModifier[] = [],
+        quantity = 1
+    ) => {
+        const modifiersKey = getModifiersKey(modifiers)
+        const existingItem = cart.find(
+            (item) =>
+                item.productId === product.id &&
+                getModifiersKey(item.modifiers) === modifiersKey
+        )
 
         if (existingItem) {
             setCart(cart.map((item) =>
                 item.tempId === existingItem.tempId
-                    ? { ...item, quantity: item.quantity + 1 }
+                    ? { ...item, quantity: item.quantity + quantity }
                     : item
             ))
         } else {
-            const newItem: CartItem = {
+            const newItem: PosCartItem = {
                 tempId: `${product.id}-${Date.now()}`,
                 productId: product.id,
                 name: product.name,
                 image: product.image,
                 price: product.price,
-                quantity: 1,
+                quantity,
+                modifiers,
             }
             setCart([...cart, newItem])
         }
+    }
+
+    const handleProductClick = (product: Product) => {
+        if (productHasAvailableModifiers(product)) {
+            setSelectedProduct(product)
+            setProductModalOpen(true)
+            return
+        }
+
+        addToCart(product)
+    }
+
+    const handleAddConfiguredProduct = (item: Omit<OrderCartItem, "id">) => {
+        const product = products.find((p) => p.id === item.productId)
+        if (!product) return
+
+        addToCart(product, item.modifiers, item.quantity)
     }
 
     const updateQuantity = (tempId: string, delta: number) => {
@@ -104,7 +151,10 @@ export default function POSPage() {
         setCustomerName("")
     }
 
-    const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+    const subtotal = cart.reduce((sum, item) => {
+        const modifiersPrice = item.modifiers.reduce((modSum, modifier) => modSum + modifier.price, 0)
+        return sum + (item.price + modifiersPrice) * item.quantity
+    }, 0)
 
     const handleCheckout = async () => {
         if (cart.length === 0) {
@@ -137,7 +187,7 @@ export default function POSPage() {
                     image: item.image,
                     price: item.price,
                     quantity: item.quantity,
-                    modifiers: [],
+                    modifiers: item.modifiers,
                 })),
                 subtotal,
                 deliveryFee: 0,
@@ -187,7 +237,7 @@ export default function POSPage() {
                         {filteredProducts.map((product) => (
                             <button
                                 key={product.id}
-                                onClick={() => addToCart(product)}
+                                onClick={() => handleProductClick(product)}
                                 className="group relative bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 transition-colors text-left"
                             >
                                 <div className="relative aspect-square">
@@ -204,7 +254,7 @@ export default function POSPage() {
                                             {product.name}
                                         </p>
                                         <p className="text-white/90 text-sm font-bold">
-                                            ${product.price.toFixed(2)}
+                                            {formatPrice(product.price)}
                                         </p>
                                     </div>
                                 </div>
@@ -254,59 +304,72 @@ export default function POSPage() {
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {cart.map((item) => (
-                                <div
-                                    key={item.tempId}
-                                    className="flex items-center gap-3 p-2 rounded-xl bg-secondary/50"
-                                >
-                                    <div className="relative h-12 w-12 rounded-lg overflow-hidden shrink-0">
-                                        <Image
-                                            src={item.image}
-                                            alt={item.name}
-                                            fill
-                                            className="object-cover"
-                                            sizes="48px"
-                                        />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-sm text-card-foreground truncate">
-                                            {item.name}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            ${item.price.toFixed(2)}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 rounded-full"
-                                            onClick={() => updateQuantity(item.tempId, -1)}
-                                        >
-                                            <Minus className="h-3 w-3" />
-                                        </Button>
-                                        <span className="w-6 text-center font-medium text-sm">
-                                            {item.quantity}
-                                        </span>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 rounded-full"
-                                            onClick={() => updateQuantity(item.tempId, 1)}
-                                        >
-                                            <Plus className="h-3 w-3" />
-                                        </Button>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                        onClick={() => removeFromCart(item.tempId)}
+                            {cart.map((item) => {
+                                const modifiersPrice = item.modifiers.reduce(
+                                    (sum, modifier) => sum + modifier.price,
+                                    0
+                                )
+                                const unitPrice = item.price + modifiersPrice
+
+                                return (
+                                    <div
+                                        key={item.tempId}
+                                        className="flex items-center gap-3 p-2 rounded-xl bg-secondary/50"
                                     >
-                                        <X className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                            ))}
+                                        <div className="relative h-12 w-12 rounded-lg overflow-hidden shrink-0">
+                                            <Image
+                                                src={item.image}
+                                                alt={item.name}
+                                                fill
+                                                className="object-cover"
+                                                sizes="48px"
+                                            />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-sm text-card-foreground truncate">
+                                                {item.name}
+                                            </p>
+                                            {item.modifiers.length > 0 && (
+                                                <p className="text-xs text-muted-foreground truncate">
+                                                    {item.modifiers.map((modifier) => modifier.optionName).join(", ")}
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-muted-foreground">
+                                                {formatPrice(unitPrice)}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 rounded-full"
+                                                onClick={() => updateQuantity(item.tempId, -1)}
+                                            >
+                                                <Minus className="h-3 w-3" />
+                                            </Button>
+                                            <span className="w-6 text-center font-medium text-sm">
+                                                {item.quantity}
+                                            </span>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 rounded-full"
+                                                onClick={() => updateQuantity(item.tempId, 1)}
+                                            >
+                                                <Plus className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                            onClick={() => removeFromCart(item.tempId)}
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                )
+                            })}
                         </div>
                     )}
                 </ScrollArea>
@@ -314,12 +377,12 @@ export default function POSPage() {
                 <div className="p-4 border-t border-border space-y-4">
                     <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-medium">${subtotal.toFixed(2)}</span>
+                        <span className="font-medium">{formatPrice(subtotal)}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between items-center text-lg font-bold">
                         <span>Total</span>
-                        <span className="text-primary">${subtotal.toFixed(2)}</span>
+                        <span className="text-primary">{formatPrice(subtotal)}</span>
                     </div>
                     <Button
                         className="w-full h-14 rounded-xl text-lg font-semibold"
@@ -417,7 +480,7 @@ export default function POSPage() {
 
                         <div className="flex justify-between items-center text-xl font-bold">
                             <span>Total</span>
-                            <span className="text-primary">${subtotal.toFixed(2)}</span>
+                            <span className="text-primary">{formatPrice(subtotal)}</span>
                         </div>
 
                         <div className="flex gap-3">
@@ -444,6 +507,19 @@ export default function POSPage() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <ProductModal
+                product={selectedProduct}
+                allModifierGroups={modifierGroups}
+                open={productModalOpen}
+                onAddItem={handleAddConfiguredProduct}
+                addButtonLabel="Agregar al pedido"
+                successMessage={(product) => `${product.name} agregado al pedido`}
+                onClose={() => {
+                    setProductModalOpen(false)
+                    setSelectedProduct(null)
+                }}
+            />
         </div>
     )
 }

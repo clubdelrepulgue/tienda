@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/sheet"
 import { createClient } from "@/lib/supabase/client"
 import type { Order, OrderStatus, Driver, DeliveryZone } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
 
@@ -246,7 +246,7 @@ function OrderCard({
               <span className="uppercase tracking-[0.14em]">{fulfillmentLabel}</span>
             </div>
             <span className="mt-0.5 text-base font-extrabold leading-none text-white">
-              ${order.total.toFixed(2)}
+              {formatPrice(order.total)}
             </span>
           </div>
 

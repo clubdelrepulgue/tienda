@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useCartStore } from "@/lib/store"
+import { formatPrice } from "@/lib/utils"
 
 interface CartSheetProps {
   open: boolean
@@ -73,7 +74,7 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
                             {item.name}
                           </h4>
                           <span className="text-sm font-semibold text-primary shrink-0">
-                            ${lineTotal.toFixed(2)}
+                            {formatPrice(lineTotal)}
                           </span>
                         </div>
                         {item.modifiers.length > 0 && (
@@ -130,7 +131,7 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground text-sm">Subtotal</span>
                 <span className="text-lg font-bold text-card-foreground">
-                  ${totalPrice.toFixed(2)}
+                  {formatPrice(totalPrice)}
                 </span>
               </div>
               <Separator />

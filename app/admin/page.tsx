@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Order, OrderStatus } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -81,7 +81,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 function formatCurrency(value: number) {
-  return `$${value.toFixed(2)}`
+  return formatPrice(value)
 }
 
 function getTodayRange() {

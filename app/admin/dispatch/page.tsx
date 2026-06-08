@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/sheet"
 import { createClient } from "@/lib/supabase/client"
 import type { Order, Driver, DeliveryZone } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
 import { formatZoneMeta } from "@/lib/delivery-zones"
@@ -375,7 +375,7 @@ export default function DispatchPage() {
                                   </div>
                                   <div className="flex items-center justify-between mt-2">
                                     <span className="font-semibold text-sm">
-                                      ${order.total.toFixed(2)}
+                                      {formatPrice(order.total)}
                                     </span>
                                     {driver ? (
                                       <div className="flex items-center gap-2">
@@ -477,7 +477,7 @@ export default function DispatchPage() {
                               {order.customerName}
                             </p>
                             <span className="font-semibold text-sm">
-                              ${order.total.toFixed(2)}
+                              {formatPrice(order.total)}
                             </span>
                           </div>
                           <Button

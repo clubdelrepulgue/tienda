@@ -37,6 +37,7 @@ import type { Product, Category, ModifierGroup } from "@/lib/types"
 import { toast } from "sonner"
 import { createProduct, updateProduct, toggleProductActive } from "@/app/actions"
 import { createClient } from "@/lib/supabase/client"
+import { formatPrice } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -316,7 +317,7 @@ export default function ProductsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium text-foreground">
-                      ${product.price.toFixed(2)}
+                      {formatPrice(product.price)}
                     </TableCell>
                     <TableCell>
                       <Switch

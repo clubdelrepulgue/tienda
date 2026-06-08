@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
 import type { CartItem } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 
 // ─── Orders ────────────────────────────────────────────────────
 
@@ -576,7 +577,7 @@ export async function validateCoupon(code: string, cartTotal: number) {
 
     // Check minimum order
     if (cartTotal < (coupon.min_order_amount || 0)) {
-        return { error: `Mínimo de compra: $${coupon.min_order_amount}` }
+        return { error: `Mínimo de compra: ${formatPrice(Number(coupon.min_order_amount))}` }
     }
 
     // Check usage limit

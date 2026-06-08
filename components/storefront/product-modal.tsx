@@ -13,7 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { useCartStore } from "@/lib/store"
-import type { Product, CartItemModifier, ModifierGroup } from "@/lib/types"
+import type { Product, CartItem, CartItemModifier, ModifierGroup } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface ProductModalProps {
@@ -21,9 +22,20 @@ interface ProductModalProps {
   allModifierGroups: ModifierGroup[]
   open: boolean
   onClose: () => void
+  onAddItem?: (item: Omit<CartItem, "id">) => void
+  addButtonLabel?: string
+  successMessage?: (product: Product) => string
 }
 
-export function ProductModal({ product, allModifierGroups, open, onClose }: ProductModalProps) {
+export function ProductModal({
+  product,
+  allModifierGroups,
+  open,
+  onClose,
+  onAddItem,
+  addButtonLabel = "Agregar al carrito",
+  successMessage = (item) => `${item.name} agregado al carrito`,
+}: ProductModalProps) {
   const [quantity, setQuantity] = useState(1)
   const [selectedModifiers, setSelectedModifiers] = useState<CartItemModifier[]>([])
   const addItem = useCartStore((s) => s.addItem)
@@ -31,11 +43,15 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
   if (!product) return null
 
   const productModifierGroups = allModifierGroups.filter((g) =>
-    product.modifierGroups.includes(g.id)
+    product.modifierGroups.includes(g.id) && g.options.length > 0
   )
 
   const modifiersTotal = selectedModifiers.reduce((sum, m) => sum + m.price, 0)
   const itemTotal = (product.price + modifiersTotal) * quantity
+  const missingRequiredGroup = productModifierGroups.find(
+    (group) =>
+      group.required && !selectedModifiers.some((m) => m.groupId === group.id)
+  )
 
   const handleToggleModifier = (
     groupId: string,
@@ -70,15 +86,27 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
   }
 
   const handleAddToCart = () => {
-    addItem({
+    if (missingRequiredGroup) {
+      toast.error(`Selecciona una opcion de ${missingRequiredGroup.name}`)
+      return
+    }
+
+    const cartItem = {
       productId: product.id,
       name: product.name,
       image: product.image,
       price: product.price,
       quantity,
       modifiers: selectedModifiers,
-    })
-    toast.success(`${product.name} agregado al carrito`)
+    }
+
+    if (onAddItem) {
+      onAddItem(cartItem)
+    } else {
+      addItem(cartItem)
+    }
+
+    toast.success(successMessage(product))
     setQuantity(1)
     setSelectedModifiers([])
     onClose()
@@ -92,8 +120,11 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="grid max-h-[90vh] max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl border-border bg-card p-0">
-        <div className="relative aspect-video overflow-hidden">
+      <DialogContent
+        showCloseButton={false}
+        className="grid gap-0 overflow-hidden border-border bg-card p-0 max-sm:fixed max-sm:inset-0 max-sm:!top-0 max-sm:!left-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-screen max-sm:!max-w-none max-sm:!translate-x-0 max-sm:!translate-y-0 max-sm:grid-rows-[auto_minmax(0,1fr)_auto] max-sm:rounded-none max-sm:border-0 sm:max-h-[90vh] sm:max-w-lg sm:grid-rows-[auto_minmax(0,1fr)_auto] sm:rounded-2xl"
+      >
+        <div className="relative aspect-video overflow-hidden max-sm:h-[30dvh] max-sm:min-h-[160px] max-sm:max-h-[230px] max-sm:aspect-auto">
           <Image
             src={product.image}
             alt={product.name}
@@ -102,18 +133,18 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
             sizes="(max-width: 640px) 100vw, 512px"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 via-28% to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 p-5">
+          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 p-4 sm:gap-2 sm:p-5">
             <DialogTitle
-              className="text-3xl font-bold tracking-tight text-white sm:text-4xl"
+              className="text-2xl font-bold tracking-tight text-white sm:text-4xl"
               style={{ fontFamily: "var(--font-heading)" }}
             >
               {product.name}
             </DialogTitle>
-            <p className="max-w-[85%] text-sm leading-relaxed text-white/70 sm:text-base">
+            <p className="max-w-[85%] text-xs leading-relaxed text-white/70 sm:text-base">
               {product.description}
             </p>
-            <p className="text-2xl font-bold text-primary sm:text-3xl">
-              ${product.price.toFixed(2)}
+            <p className="text-xl font-bold text-primary sm:text-3xl">
+              {formatPrice(product.price)}
             </p>
           </div>
           <Button
@@ -128,10 +159,10 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
         </div>
 
         <div className="product-modal-scroll min-h-0 overflow-y-auto">
-          <div className="flex flex-col gap-5 p-5 pr-6">
+          <div className="flex flex-col gap-4 px-4 py-4 pb-6 sm:gap-5 sm:p-5 sm:pr-6">
             {productModifierGroups.map((group) => (
               <div key={group.id}>
-                <div className="flex items-center justify-between mb-3">
+                <div className="mb-2 flex items-center justify-between sm:mb-3">
                   <h4 className="font-semibold text-card-foreground text-sm">
                     {group.name}
                   </h4>
@@ -162,12 +193,12 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                       }
                     }}
                   >
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1.5 sm:gap-2">
                       {group.options.map((option) => (
                         <Label
                           key={option.id}
                           htmlFor={option.id}
-                          className="flex items-center justify-between rounded-xl bg-secondary/50 px-4 py-3 cursor-pointer hover:bg-secondary transition-colors"
+                          className="flex min-h-11 cursor-pointer items-center justify-between rounded-lg bg-secondary/50 px-3 py-2.5 transition-colors hover:bg-secondary sm:rounded-xl sm:px-4 sm:py-3"
                         >
                           <div className="flex items-center gap-3">
                             <RadioGroupItem value={option.id} id={option.id} />
@@ -177,7 +208,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                           </div>
                           {option.price > 0 && (
                             <span className="text-sm text-muted-foreground">
-                              +${option.price.toFixed(2)}
+                              +{formatPrice(option.price)}
                             </span>
                           )}
                         </Label>
@@ -185,7 +216,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                     </div>
                   </RadioGroup>
                 ) : (
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
                     {group.options.map((option) => {
                       const isChecked = selectedModifiers.some(
                         (m) =>
@@ -195,7 +226,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                         <Label
                           key={option.id}
                           htmlFor={`check-${option.id}`}
-                          className="flex items-center justify-between rounded-xl bg-secondary/50 px-4 py-3 cursor-pointer hover:bg-secondary transition-colors"
+                          className="flex min-h-11 cursor-pointer items-center justify-between rounded-lg bg-secondary/50 px-3 py-2.5 transition-colors hover:bg-secondary sm:rounded-xl sm:px-4 sm:py-3"
                         >
                           <div className="flex items-center gap-3">
                             <Checkbox
@@ -218,7 +249,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
                           </div>
                           {option.price > 0 && (
                             <span className="text-sm text-muted-foreground">
-                              +${option.price.toFixed(2)}
+                              +{formatPrice(option.price)}
                             </span>
                           )}
                         </Label>
@@ -231,8 +262,8 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
           </div>
         </div>
 
-        <div className="p-5 border-t border-border flex items-center gap-4">
-          <div className="flex items-center gap-3 bg-secondary rounded-xl px-1">
+        <div className="sticky bottom-0 flex items-center gap-3 border-t border-border bg-card/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:gap-4 sm:p-5">
+          <div className="flex items-center gap-2 rounded-xl bg-secondary px-1 sm:gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -256,10 +287,10 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
             </Button>
           </div>
           <Button
-            className="flex-1 h-11 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+            className="h-11 flex-1 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:text-base"
             onClick={handleAddToCart}
           >
-            Agregar al carrito - ${itemTotal.toFixed(2)}
+            {addButtonLabel} - {formatPrice(itemTotal)}
           </Button>
         </div>
       </DialogContent>

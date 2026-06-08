@@ -35,7 +35,19 @@ export function StorefrontShell({
         setProductModalOpen(true)
     }
 
+    const productHasAvailableModifiers = (product: Product) =>
+        modifierGroups.some(
+            (group) =>
+                product.modifierGroups.includes(group.id) &&
+                group.options.length > 0
+        )
+
     const handleQuickAdd = (product: Product) => {
+        if (productHasAvailableModifiers(product)) {
+            handleSelectProduct(product)
+            return
+        }
+
         addItem({
             productId: product.id,
             name: product.name,

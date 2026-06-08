@@ -11,6 +11,7 @@ import { Polygon } from "./polygon"
 interface AddressSelectorProps {
     value?: { lat: number; lng: number; address: string }
     onChange: (location: { lat: number; lng: number; address: string }) => void
+    onAddressChange?: (address: string) => void
     zones?: {
         id: string
         coordinates: { lat: number; lng: number }[]
@@ -68,6 +69,7 @@ function isPointInPolygon(
 export function AddressSelector({
     value,
     onChange,
+    onAddressChange,
     zones = [],
     height = "300px",
     placeholder = "Buscar dirección...",
@@ -136,6 +138,7 @@ export function AddressSelector({
             const resolvedAddress = address || "Ubicación seleccionada"
 
             setSearchQuery(resolvedAddress)
+            onAddressChange?.(resolvedAddress)
 
             onChange({
                 lat,
@@ -285,7 +288,10 @@ export function AddressSelector({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value)
+                            onAddressChange?.(e.target.value)
+                        }}
                         placeholder={placeholder}
                         className="pl-10 rounded-xl"
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
