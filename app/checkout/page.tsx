@@ -267,7 +267,7 @@ export default function CheckoutPage() {
   return (
     <GoogleMapsProvider>
       <div className="min-h-screen bg-secondary">
-        <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
+        <header className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
           <div className="mx-auto max-w-3xl flex items-center gap-3 px-4 py-3">
             <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" asChild>
               <Link href="/" aria-label="Volver al menú">
@@ -365,7 +365,7 @@ export default function CheckoutPage() {
                     placeholder="Tu nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="rounded-xl bg-white border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
+                    className="rounded-xl bg-secondary border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                   />
                 </div>
                 <div>
@@ -377,7 +377,7 @@ export default function CheckoutPage() {
                     placeholder="+54 11 5555-0000"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="rounded-xl bg-white border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
+                    className="rounded-xl bg-secondary border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                   />
                 </div>
                 {deliveryMethod === "delivery" && (
@@ -406,7 +406,7 @@ export default function CheckoutPage() {
                         simpleMap
                         lazyMap
                       />
-                      <div className="mt-3 rounded-xl border border-border bg-white p-3">
+                      <div className="mt-3 rounded-xl border border-border bg-secondary p-3">
                         {selectedZoneInfo ? (
                           <div className="flex items-start gap-3">
                             <span
