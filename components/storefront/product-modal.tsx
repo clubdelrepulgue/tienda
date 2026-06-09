@@ -1,6 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+  type TouchEvent,
+  type WheelEvent,
+} from "react"
 import Image from "next/image"
 import { Minus, Plus, X } from "lucide-react"
 import {
@@ -38,7 +45,18 @@ export function ProductModal({
 }: ProductModalProps) {
   const [quantity, setQuantity] = useState(1)
   const [selectedModifiers, setSelectedModifiers] = useState<CartItemModifier[]>([])
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const pointerStartYRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
   const addItem = useCartStore((s) => s.addItem)
+
+  useEffect(() => {
+    if (!open) return
+
+    setHeaderCollapsed(false)
+    scrollContainerRef.current?.scrollTo({ top: 0 })
+  }, [open, product?.id])
 
   if (!product) return null
 
@@ -115,50 +133,209 @@ export function ProductModal({
   const handleClose = () => {
     setQuantity(1)
     setSelectedModifiers([])
+    setHeaderCollapsed(false)
     onClose()
+  }
+
+  const isMobileViewport = () =>
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 639px)").matches
+
+  const handleScrollIntent = (deltaY: number) => {
+    if (!isMobileViewport() || Math.abs(deltaY) < 4) return
+
+    const scrollTop = scrollContainerRef.current?.scrollTop ?? 0
+
+    if (deltaY > 0) {
+      setHeaderCollapsed(true)
+    } else if (scrollTop <= 0) {
+      setHeaderCollapsed(false)
+    }
+  }
+
+  const handleContentScroll = () => {
+    if (!isMobileViewport()) {
+      setHeaderCollapsed(false)
+      return
+    }
+
+    if ((scrollContainerRef.current?.scrollTop ?? 0) > 12) {
+      setHeaderCollapsed(true)
+    }
+  }
+
+  const handleModalWheel = (event: WheelEvent<HTMLDivElement>) => {
+    handleScrollIntent(event.deltaY)
+  }
+
+  const handleModalPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse") return
+
+    pointerStartYRef.current = event.clientY
+  }
+
+  const handleModalPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const startY = pointerStartYRef.current
+    if (startY === null || event.pointerType === "mouse") return
+
+    handleScrollIntent(startY - event.clientY)
+  }
+
+  const handleModalTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    touchStartYRef.current = event.touches[0]?.clientY ?? null
+  }
+
+  const handleModalTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    const startY = touchStartYRef.current
+    const currentY = event.touches[0]?.clientY
+    if (startY === null || currentY === undefined) return
+
+    handleScrollIntent(startY - currentY)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
         showCloseButton={false}
+        onWheel={handleModalWheel}
+        onPointerDown={handleModalPointerDown}
+        onPointerMove={handleModalPointerMove}
+        onTouchStart={handleModalTouchStart}
+        onTouchMove={handleModalTouchMove}
         className="grid gap-0 overflow-hidden border-border bg-card p-0 max-sm:fixed max-sm:inset-0 max-sm:!top-0 max-sm:!left-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-screen max-sm:!max-w-none max-sm:!translate-x-0 max-sm:!translate-y-0 max-sm:grid-rows-[auto_minmax(0,1fr)_auto] max-sm:rounded-none max-sm:border-0 sm:max-h-[90vh] sm:max-w-lg sm:grid-rows-[auto_minmax(0,1fr)_auto] sm:rounded-2xl"
       >
-        <div className="relative aspect-video overflow-hidden max-sm:h-[30dvh] max-sm:min-h-[160px] max-sm:max-h-[230px] max-sm:aspect-auto">
-          <Image
-            src={product.image}
-            alt={product.name}
-            fill
-            className="object-cover"
-            sizes="(max-width: 640px) 100vw, 512px"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 via-28% to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 p-4 sm:gap-2 sm:p-5">
+        <div
+          className="overflow-hidden sm:hidden"
+          onWheel={handleModalWheel}
+          onPointerDown={handleModalPointerDown}
+          onPointerMove={handleModalPointerMove}
+          onTouchStart={handleModalTouchStart}
+          onTouchMove={handleModalTouchMove}
+        >
+          <div
+            className={`overflow-hidden transition-all duration-300 ease-out ${
+              headerCollapsed
+                ? "max-h-0 -translate-y-2 opacity-0"
+                : "max-h-[calc(100vw+160px)] translate-y-0 opacity-100"
+            }`}
+          >
+            <div className="relative mx-auto mt-[10px] aspect-square w-[min(calc(100vw-20px),calc(100dvh-260px))] overflow-hidden rounded-xl bg-secondary">
+              <Image
+                src={product.image}
+                alt={product.name}
+                fill
+                className="object-cover object-center"
+                sizes="100vw"
+              />
+              <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/35 to-transparent" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-3 right-3 z-20 h-9 w-9 rounded-full border border-white/15 bg-black/45 text-white shadow-lg shadow-black/25 backdrop-blur-md hover:bg-black/60 hover:text-white"
+                onClick={handleClose}
+                aria-label="Cerrar detalles del producto"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex flex-col gap-1 border-b border-border bg-card px-4 py-3">
+              <DialogTitle
+                className="line-clamp-2 text-[25px] font-extrabold leading-[1.08] tracking-normal text-card-foreground"
+                style={{ fontFamily: "var(--font-heading)" }}
+              >
+                {product.name}
+              </DialogTitle>
+              <p className="text-lg font-extrabold leading-tight text-primary">
+                {formatPrice(product.price)}
+              </p>
+              <p className="line-clamp-2 text-[13px] leading-snug text-muted-foreground">
+                {product.description}
+              </p>
+            </div>
+          </div>
+
+          <div
+            className={`relative overflow-hidden border-b border-white/10 bg-card/95 backdrop-blur-xl transition-all duration-300 ease-out ${
+              headerCollapsed
+                ? "max-h-24 translate-y-0 opacity-100"
+                : "max-h-0 -translate-y-3 opacity-0"
+            }`}
+          >
+            <div className="flex min-h-[76px] items-center gap-3 px-3 py-2.5 pr-12">
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-secondary shadow-md shadow-black/25">
+                <Image
+                  src={product.image}
+                  alt={product.name}
+                  fill
+                  className="object-cover object-center"
+                  sizes="56px"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3
+                  className="line-clamp-1 text-base font-extrabold leading-tight text-card-foreground"
+                  style={{ fontFamily: "var(--font-heading)" }}
+                >
+                  {product.name}
+                </h3>
+                <p className="line-clamp-1 text-xs leading-snug text-muted-foreground">
+                  {product.description}
+                </p>
+                <p className="mt-0.5 text-sm font-bold leading-none text-primary">
+                  {formatPrice(product.price)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-4 right-3 z-20 h-8 w-8 rounded-full border border-white/10 bg-black/35 text-white backdrop-blur-md hover:bg-black/55 hover:text-white"
+                onClick={handleClose}
+                aria-label="Cerrar detalles del producto"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden overflow-hidden sm:block">
+          <div className="relative h-[220px] overflow-hidden">
+            <Image
+              src={product.image}
+              alt={product.name}
+              fill
+              className="object-cover object-center"
+              sizes="512px"
+            />
+            <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/35 to-transparent" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-3 right-3 z-20 h-9 w-9 rounded-full border border-white/15 bg-black/45 text-white shadow-lg shadow-black/25 backdrop-blur-md hover:bg-black/60 hover:text-white"
+              onClick={handleClose}
+              aria-label="Cerrar detalles del producto"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex flex-col gap-1 border-b border-border bg-card px-5 py-4">
             <DialogTitle
-              className="text-2xl font-bold tracking-tight text-white sm:text-4xl"
+              className="line-clamp-2 text-[28px] font-extrabold leading-[1.08] tracking-normal text-card-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
               {product.name}
             </DialogTitle>
-            <p className="max-w-[85%] text-xs leading-relaxed text-white/70 sm:text-base">
+            <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
               {product.description}
             </p>
-            <p className="text-xl font-bold text-primary sm:text-3xl">
-              {formatPrice(product.price)}
-            </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-3 right-3 z-20 h-8 w-8 rounded-full bg-background/80 text-foreground backdrop-blur-sm hover:bg-background"
-            onClick={handleClose}
-            aria-label="Cerrar detalles del producto"
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </div>
 
-        <div className="product-modal-scroll min-h-0 overflow-y-auto">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleContentScroll}
+          className="product-modal-scroll min-h-0 overflow-y-auto"
+        >
           <div className="flex flex-col gap-4 px-4 py-4 pb-6 sm:gap-5 sm:p-5 sm:pr-6">
             {productModifierGroups.map((group) => (
               <div key={group.id}>

@@ -102,7 +102,7 @@ function CoverVideo() {
                 preload="metadata"
                 aria-hidden="true"
             >
-                <source src="/VIDEO%20PORTADA%20BLZR.mp4" type="video/mp4" />
+                <source src="/VIDEO%20PORTADA%20BLZR%20-%202.mp4" type="video/mp4" />
             </video>
         </section>
     )

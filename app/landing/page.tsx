@@ -16,7 +16,7 @@ export default function LandingPage() {
         preload="metadata"
         aria-hidden="true"
       >
-        <source src="/VIDEO%20PORTADA%20BLZR.mp4" type="video/mp4" />
+        <source src="/VIDEO%20PORTADA%20BLZR%20-%202.mp4" type="video/mp4" />
       </video>
       <div className="absolute inset-0 -z-10 bg-black/55" />
 

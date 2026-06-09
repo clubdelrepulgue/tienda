@@ -7,6 +7,7 @@ import { Plus, Pencil, Search, Loader2, Upload, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -61,6 +62,7 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false)
 
   const [formName, setFormName] = useState("")
+  const [formDescription, setFormDescription] = useState("")
   const [formPrice, setFormPrice] = useState("")
   const [formCategory, setFormCategory] = useState("")
   const [formActive, setFormActive] = useState(true)
@@ -78,6 +80,7 @@ export default function ProductsPage() {
   const openCreate = () => {
     setEditProduct(null)
     setFormName("")
+    setFormDescription("")
     setFormPrice("")
     const safeCategories = Array.isArray(categories) ? categories : []
     setFormCategory(safeCategories?.[0]?.id || "")
@@ -91,6 +94,7 @@ export default function ProductsPage() {
   const openEdit = (product: Product) => {
     setEditProduct(product)
     setFormName(product.name)
+    setFormDescription(product.description || "")
     setFormPrice(product.price.toString())
     setFormCategory(product.categoryId)
     setFormActive(product.active)
@@ -157,6 +161,7 @@ export default function ProductsPage() {
       if (editProduct) {
         const result = await updateProduct(editProduct.id, {
           nombre: formName,
+          descripcion: formDescription,
           precio: parseFloat(formPrice),
           images: allImages,
           categoriaId: formCategory,
@@ -172,6 +177,7 @@ export default function ProductsPage() {
       } else {
         const result = await createProduct({
           nombre: formName,
+          descripcion: formDescription,
           precio: parseFloat(formPrice),
           images: allImages,
           categoriaId: formCategory,
@@ -413,6 +419,17 @@ export default function ProductsPage() {
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="Nombre del producto"
                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            <div>
+              <Label className="text-sm text-muted-foreground mb-1.5 block">
+                Ingredientes base
+              </Label>
+              <Textarea
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                placeholder="Ej: Brie, cebolla caramelizada, rúcula y salsa truffle"
+                className="min-h-20 resize-none rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
               />
             </div>
             <div>

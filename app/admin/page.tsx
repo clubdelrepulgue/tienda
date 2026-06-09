@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import useSWR from "swr"
 import {
   Area,
@@ -12,6 +13,7 @@ import {
 } from "recharts"
 import {
   Activity,
+  CalendarDays,
   Clock,
   DollarSign,
   RefreshCw,
@@ -21,6 +23,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   ChartContainer,
   ChartTooltip,
@@ -84,44 +94,319 @@ function formatCurrency(value: number) {
   return formatPrice(value)
 }
 
-function getTodayRange() {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
+type PeriodOption =
+  | "today"
+  | "yesterday"
+  | "this-week"
+  | "last-week"
+  | "last-7-days"
+  | "last-30-days"
+  | "this-month"
+  | "last-month"
+  | "this-year"
+  | "custom"
 
-  const end = new Date(start)
-  end.setDate(end.getDate() + 1)
+type CustomPeriodMode = "date" | "range" | "week" | "month" | "year"
 
-  return { start, end }
+type DateRange = {
+  startDate: Date
+  endDate: Date
+  label: string
 }
 
-function isOrderCreatedToday(order: Order) {
-  const createdAt = new Date(order.createdAt)
-  const { start, end } = getTodayRange()
-
-  return createdAt >= start && createdAt < end
+type ChartBucket = {
+  label: string
+  revenue: number
+  orders: number
 }
 
-function getHourlyChartData(orders: Order[]) {
-  const buckets = Array.from({ length: 24 }, (_, hour) => {
-    return {
-      hour,
+const periodOptions: { value: PeriodOption; label: string }[] = [
+  { value: "today", label: "Hoy" },
+  { value: "yesterday", label: "Ayer" },
+  { value: "this-week", label: "Esta semana" },
+  { value: "last-week", label: "Semana pasada" },
+  { value: "last-7-days", label: "Ultimos 7 dias" },
+  { value: "last-30-days", label: "Ultimos 30 dias" },
+  { value: "this-month", label: "Este mes" },
+  { value: "last-month", label: "Mes pasado" },
+  { value: "this-year", label: "Este ano" },
+  { value: "custom", label: "Personalizado" },
+]
+
+function toInputDate(value: Date) {
+  const year = value.getFullYear()
+  const month = `${value.getMonth() + 1}`.padStart(2, "0")
+  const day = `${value.getDate()}`.padStart(2, "0")
+
+  return `${year}-${month}-${day}`
+}
+
+function startOfDay(value: Date) {
+  const date = new Date(value)
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+function addDays(value: Date, days: number) {
+  const date = new Date(value)
+  date.setDate(date.getDate() + days)
+  return date
+}
+
+function addMonths(value: Date, months: number) {
+  const date = new Date(value)
+  date.setMonth(date.getMonth() + months)
+  return date
+}
+
+function addYears(value: Date, years: number) {
+  const date = new Date(value)
+  date.setFullYear(date.getFullYear() + years)
+  return date
+}
+
+function startOfWeek(value: Date) {
+  const date = startOfDay(value)
+  const day = date.getDay()
+  const offset = day === 0 ? -6 : 1 - day
+  return addDays(date, offset)
+}
+
+function startOfMonth(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), 1)
+}
+
+function startOfYear(value: Date) {
+  return new Date(value.getFullYear(), 0, 1)
+}
+
+function parseDateInput(value: string) {
+  const [year, month, day] = value.split("-").map(Number)
+
+  if (!year || !month || !day) return startOfDay(new Date())
+
+  return new Date(year, month - 1, day)
+}
+
+function parseMonthInput(value: string) {
+  const [year, month] = value.split("-").map(Number)
+
+  if (!year || !month) return startOfMonth(new Date())
+
+  return new Date(year, month - 1, 1)
+}
+
+function parseWeekInput(value: string) {
+  const match = value.match(/^(\d{4})-W(\d{2})$/)
+  if (!match) return startOfWeek(new Date())
+
+  const year = Number(match[1])
+  const week = Number(match[2])
+  const fourthOfJanuary = new Date(year, 0, 4)
+  const firstWeekStart = startOfWeek(fourthOfJanuary)
+
+  return addDays(firstWeekStart, (week - 1) * 7)
+}
+
+function formatShortDate(value: Date) {
+  return value.toLocaleDateString("es-UY", {
+    day: "numeric",
+    month: "short",
+  })
+}
+
+function formatMonthYear(value: Date) {
+  return value.toLocaleDateString("es-UY", {
+    month: "long",
+    year: "numeric",
+  })
+}
+
+function formatRangeLabel(startDate: Date, endDate: Date) {
+  const inclusiveEnd = addDays(endDate, -1)
+
+  if (toInputDate(startDate) === toInputDate(inclusiveEnd)) {
+    return formatShortDate(startDate)
+  }
+
+  return `${formatShortDate(startDate)} - ${formatShortDate(inclusiveEnd)}`
+}
+
+function getDateRangeFromPeriod(
+  period: PeriodOption,
+  custom: {
+    mode: CustomPeriodMode
+    date: string
+    from: string
+    to: string
+    week: string
+    month: string
+    year: string
+  }
+): DateRange {
+  const today = startOfDay(new Date())
+  const tomorrow = addDays(today, 1)
+
+  if (period === "today") {
+    return { startDate: today, endDate: tomorrow, label: "Hoy" }
+  }
+
+  if (period === "yesterday") {
+    const yesterday = addDays(today, -1)
+    return { startDate: yesterday, endDate: today, label: "Ayer" }
+  }
+
+  if (period === "this-week") {
+    const startDate = startOfWeek(today)
+    return { startDate, endDate: tomorrow, label: "Esta semana" }
+  }
+
+  if (period === "last-week") {
+    const thisWeek = startOfWeek(today)
+    const startDate = addDays(thisWeek, -7)
+    return { startDate, endDate: thisWeek, label: "Semana pasada" }
+  }
+
+  if (period === "last-7-days") {
+    const startDate = addDays(today, -6)
+    return { startDate, endDate: tomorrow, label: "Ultimos 7 dias" }
+  }
+
+  if (period === "last-30-days") {
+    const startDate = addDays(today, -29)
+    return { startDate, endDate: tomorrow, label: "Ultimos 30 dias" }
+  }
+
+  if (period === "this-month") {
+    const startDate = startOfMonth(today)
+    return { startDate, endDate: tomorrow, label: "Este mes" }
+  }
+
+  if (period === "last-month") {
+    const thisMonth = startOfMonth(today)
+    const startDate = addMonths(thisMonth, -1)
+    return { startDate, endDate: thisMonth, label: formatMonthYear(startDate) }
+  }
+
+  if (period === "this-year") {
+    const startDate = startOfYear(today)
+    return { startDate, endDate: tomorrow, label: `${today.getFullYear()}` }
+  }
+
+  if (custom.mode === "range") {
+    const startDate = parseDateInput(custom.from)
+    const rawEnd = parseDateInput(custom.to)
+    const endDate = addDays(rawEnd < startDate ? startDate : rawEnd, 1)
+
+    return { startDate, endDate, label: formatRangeLabel(startDate, endDate) }
+  }
+
+  if (custom.mode === "week") {
+    const startDate = parseWeekInput(custom.week)
+    const endDate = addDays(startDate, 7)
+
+    return { startDate, endDate, label: formatRangeLabel(startDate, endDate) }
+  }
+
+  if (custom.mode === "month") {
+    const startDate = parseMonthInput(custom.month)
+    const endDate = addMonths(startDate, 1)
+
+    return { startDate, endDate, label: formatMonthYear(startDate) }
+  }
+
+  if (custom.mode === "year") {
+    const year = Number(custom.year) || today.getFullYear()
+    const startDate = new Date(year, 0, 1)
+    const endDate = addYears(startDate, 1)
+
+    return { startDate, endDate, label: `${year}` }
+  }
+
+  const startDate = parseDateInput(custom.date)
+  return { startDate, endDate: addDays(startDate, 1), label: formatShortDate(startDate) }
+}
+
+function getChartData(orders: Order[], range: DateRange): ChartBucket[] {
+  const rangeDays = Math.max(
+    1,
+    Math.ceil((range.endDate.getTime() - range.startDate.getTime()) / 86400000)
+  )
+
+  if (rangeDays <= 1) {
+    const buckets = Array.from({ length: 24 }, (_, hour) => ({
       label: `${hour.toString().padStart(2, "0")}:00`,
       revenue: 0,
       orders: 0,
+    }))
+
+    orders.forEach((order) => {
+      const hour = new Date(order.createdAt).getHours()
+      buckets[hour].revenue += order.total
+      buckets[hour].orders += 1
+    })
+
+    return buckets
+  }
+
+  if (rangeDays <= 62) {
+    const buckets: ChartBucket[] = []
+    const indexByDate = new Map<string, number>()
+    let cursor = startOfDay(range.startDate)
+
+    while (cursor < range.endDate) {
+      indexByDate.set(toInputDate(cursor), buckets.length)
+      buckets.push({
+        label: formatShortDate(cursor),
+        revenue: 0,
+        orders: 0,
+      })
+      cursor = addDays(cursor, 1)
     }
-  })
+
+    orders.forEach((order) => {
+      const key = toInputDate(new Date(order.createdAt))
+      const index = indexByDate.get(key)
+      if (index === undefined) return
+
+      buckets[index].revenue += order.total
+      buckets[index].orders += 1
+    })
+
+    return buckets
+  }
+
+  const buckets: ChartBucket[] = []
+  const indexByMonth = new Map<string, number>()
+  let cursor = startOfMonth(range.startDate)
+
+  while (cursor < range.endDate) {
+    const key = `${cursor.getFullYear()}-${cursor.getMonth()}`
+    indexByMonth.set(key, buckets.length)
+    buckets.push({
+      label: cursor.toLocaleDateString("es-UY", { month: "short", year: "2-digit" }),
+      revenue: 0,
+      orders: 0,
+    })
+    cursor = addMonths(cursor, 1)
+  }
 
   orders.forEach((order) => {
-    const hour = new Date(order.createdAt).getHours()
-    const bucket = buckets.find((item) => item.hour === hour)
+    const createdAt = new Date(order.createdAt)
+    const key = `${createdAt.getFullYear()}-${createdAt.getMonth()}`
+    const index = indexByMonth.get(key)
+    if (index === undefined) return
 
-    if (bucket) {
-      bucket.revenue += order.total
-      bucket.orders += 1
-    }
+    buckets[index].revenue += order.total
+    buckets[index].orders += 1
   })
 
   return buckets
+}
+
+function isOrderInsideRange(order: Order, range: DateRange) {
+  const createdAt = new Date(order.createdAt)
+  return createdAt >= range.startDate && createdAt < range.endDate
 }
 
 function MetricCard({
@@ -175,6 +460,17 @@ function MetricCard({
 }
 
 export default function AdminDashboard() {
+  const todayInput = toInputDate(new Date())
+  const currentMonthInput = todayInput.slice(0, 7)
+  const currentYearInput = todayInput.slice(0, 4)
+  const [period, setPeriod] = useState<PeriodOption>("today")
+  const [customMode, setCustomMode] = useState<CustomPeriodMode>("date")
+  const [customDate, setCustomDate] = useState(todayInput)
+  const [customFrom, setCustomFrom] = useState(todayInput)
+  const [customTo, setCustomTo] = useState(todayInput)
+  const [customWeek, setCustomWeek] = useState("")
+  const [customMonth, setCustomMonth] = useState(currentMonthInput)
+  const [customYear, setCustomYear] = useState(currentYearInput)
   const {
     data: orders,
     isLoading,
@@ -183,21 +479,33 @@ export default function AdminDashboard() {
     refreshInterval: 30000,
   })
 
+  const selectedRange = getDateRangeFromPeriod(period, {
+    mode: customMode,
+    date: customDate,
+    from: customFrom,
+    to: customTo,
+    week: customWeek,
+    month: customMonth,
+    year: customYear,
+  })
   const allOrders = Array.isArray(orders) ? orders : []
-  const todayOrders = allOrders.filter(isOrderCreatedToday)
-  const revenue = todayOrders.reduce((sum, order) => sum + order.total, 0)
-  const activeOrders = allOrders.filter(
+  const selectedOrders = allOrders.filter((order) =>
+    isOrderInsideRange(order, selectedRange)
+  )
+  const revenue = selectedOrders.reduce((sum, order) => sum + order.total, 0)
+  const activeOrders = selectedOrders.filter(
     (order) => order.status !== "delivered" && order.status !== "cancelled"
   ).length
-  const avgOrder = todayOrders.length > 0 ? revenue / todayOrders.length : 0
-  const chartData = getHourlyChartData(todayOrders)
+  const avgOrder = selectedOrders.length > 0 ? revenue / selectedOrders.length : 0
+  const chartData = getChartData(selectedOrders, selectedRange)
   const busiestHour = chartData.reduce(
     (top, item) => (item.orders > top.orders ? item : top),
     chartData[0]
   )
-  const deliveredOrders = todayOrders.filter(
+  const deliveredOrders = selectedOrders.filter(
     (order) => order.status === "delivered"
   ).length
+  const periodLabel = selectedRange.label
 
   if (isLoading) {
     return (
@@ -238,11 +546,140 @@ export default function AdminDashboard() {
             Panel
           </h1>
           <p className="mt-2 text-sm text-white/45">
-            Resumen general de hoy, ventas y actividad reciente.
+            Resumen de ventas y actividad para {periodLabel.toLowerCase()}.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 lg:items-end">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex min-w-[220px] items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-white/70">
+              <CalendarDays className="h-4 w-4 text-primary" />
+              <Select
+                value={period}
+                onValueChange={(value) => setPeriod(value as PeriodOption)}
+              >
+                <SelectTrigger className="h-8 border-0 bg-transparent px-0 text-sm font-semibold text-white shadow-none focus:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-white/[0.08] bg-[#151619] text-white">
+                  {periodOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-full border border-primary/15 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
+              {periodLabel}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 rounded-full border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+              onClick={() => mutate()}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Actualizar
+            </Button>
+          </div>
+
+          {period === "custom" && (
+            <div className="grid w-full gap-2 rounded-[22px] border border-white/[0.08] bg-white/[0.04] p-3 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-end">
+              <div className="min-w-[150px]">
+                <p className="mb-1.5 text-xs font-medium text-white/45">Tipo</p>
+                <Select
+                  value={customMode}
+                  onValueChange={(value) => setCustomMode(value as CustomPeriodMode)}
+                >
+                  <SelectTrigger className="h-10 rounded-full border-white/[0.08] bg-[#111214] text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-white/[0.08] bg-[#151619] text-white">
+                    <SelectItem value="date">Fecha puntual</SelectItem>
+                    <SelectItem value="range">Rango</SelectItem>
+                    <SelectItem value="week">Semana</SelectItem>
+                    <SelectItem value="month">Mes</SelectItem>
+                    <SelectItem value="year">Ano</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {customMode === "date" && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-white/45">Dia</p>
+                  <Input
+                    type="date"
+                    value={customDate}
+                    onChange={(event) => setCustomDate(event.target.value)}
+                    className="h-10 rounded-full border-white/[0.08] bg-[#111214] text-white"
+                  />
+                </div>
+              )}
+
+              {customMode === "range" && (
+                <>
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-white/45">Desde</p>
+                    <Input
+                      type="date"
+                      value={customFrom}
+                      onChange={(event) => setCustomFrom(event.target.value)}
+                      className="h-10 rounded-full border-white/[0.08] bg-[#111214] text-white"
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-white/45">Hasta</p>
+                    <Input
+                      type="date"
+                      value={customTo}
+                      onChange={(event) => setCustomTo(event.target.value)}
+                      className="h-10 rounded-full border-white/[0.08] bg-[#111214] text-white"
+                    />
+                  </div>
+                </>
+              )}
+
+              {customMode === "week" && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-white/45">Semana</p>
+                  <Input
+                    type="week"
+                    value={customWeek}
+                    onChange={(event) => setCustomWeek(event.target.value)}
+                    className="h-10 rounded-full border-white/[0.08] bg-[#111214] text-white"
+                  />
+                </div>
+              )}
+
+              {customMode === "month" && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-white/45">Mes</p>
+                  <Input
+                    type="month"
+                    value={customMonth}
+                    onChange={(event) => setCustomMonth(event.target.value)}
+                    className="h-10 rounded-full border-white/[0.08] bg-[#111214] text-white"
+                  />
+                </div>
+              )}
+
+              {customMode === "year" && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-white/45">Ano</p>
+                  <Input
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    value={customYear}
+                    onChange={(event) => setCustomYear(event.target.value)}
+                    className="h-10 rounded-full border-white/[0.08] bg-[#111214] text-white"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm text-white/55">
             {new Date().toLocaleDateString("es-UY", {
               weekday: "long",
@@ -250,15 +687,6 @@ export default function AdminDashboard() {
               month: "long",
             })}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-10 rounded-full border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
-            onClick={() => mutate()}
-          >
-            <RefreshCw className="h-4 w-4" />
-            Actualizar
-          </Button>
         </div>
       </header>
 
@@ -266,27 +694,27 @@ export default function AdminDashboard() {
         <MetricCard
           title="Ingresos"
           value={formatCurrency(revenue)}
-          helper={`${todayOrders.length} órdenes hoy`}
+          helper={`${selectedOrders.length} pedidos en el periodo`}
           icon={DollarSign}
         />
         <MetricCard
           title="Pedidos totales"
-          value={`${todayOrders.length}`}
-          helper="Pedidos registrados hoy"
+          value={`${selectedOrders.length}`}
+          helper="Pedidos registrados en el periodo"
           icon={ShoppingBag}
           accent="muted"
         />
         <MetricCard
           title="Pedidos activos"
           value={`${activeOrders}`}
-          helper={`${activeOrders} en progreso ahora`}
+          helper={`${activeOrders} en progreso en el periodo`}
           icon={Clock}
           accent="accent"
         />
         <MetricCard
           title="Ticket promedio"
           value={formatCurrency(avgOrder)}
-          helper="Ticket promedio"
+          helper="Promedio del periodo"
           icon={Activity}
         />
       </section>
@@ -302,11 +730,11 @@ export default function AdminDashboard() {
                 Ritmo de ventas
               </CardTitle>
               <p className="mt-1 text-sm text-white/45">
-                Ingresos y pedidos por franja horaria.
+                Ingresos y pedidos del periodo seleccionado.
               </p>
             </div>
             <Badge className="rounded-full border-primary/20 bg-primary/10 px-3 py-1 text-primary">
-              Hoy
+              {periodLabel}
             </Badge>
           </CardHeader>
           <CardContent className="px-3 pb-4 pt-2 sm:px-6">
@@ -371,7 +799,7 @@ export default function AdminDashboard() {
               Flujo de pedidos
             </CardTitle>
             <p className="mt-1 text-sm text-white/45">
-              Distribución rápida del día.
+              Distribucion rapida del periodo.
             </p>
           </CardHeader>
           <CardContent className="flex flex-col gap-6 px-6 pb-6 pt-5">
@@ -401,11 +829,11 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4">
                 <span className="text-sm text-white/50">Entregados</span>
                 <span className="text-sm font-semibold text-white">
-                  {deliveredOrders}/{todayOrders.length}
+                  {deliveredOrders}/{selectedOrders.length}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4">
-                <span className="text-sm text-white/50">Activos ahora</span>
+                <span className="text-sm text-white/50">Activos</span>
                 <span className="text-sm font-semibold text-primary">
                   {activeOrders}
                 </span>
@@ -425,24 +853,24 @@ export default function AdminDashboard() {
               Pedidos recientes
             </CardTitle>
             <p className="mt-1 text-sm text-white/45">
-              Últimos pedidos recibidos por el local.
+              Ultimos pedidos recibidos en el periodo.
             </p>
           </div>
           <Badge variant="outline" className="w-fit rounded-full border-white/[0.08] bg-white/[0.04] px-3 py-1 text-white/55">
-            {todayOrders.length} hoy
+            {selectedOrders.length} en {periodLabel.toLowerCase()}
           </Badge>
         </CardHeader>
         <CardContent className="p-4 sm:p-5">
-          {todayOrders.length === 0 ? (
+          {selectedOrders.length === 0 ? (
             <div className="flex min-h-[220px] flex-col items-center justify-center rounded-[20px] border border-dashed border-white/[0.08] bg-white/[0.025] text-center">
-              <p className="text-sm font-medium text-white/70">Todavia no hay pedidos</p>
+              <p className="text-sm font-medium text-white/70">Sin datos para este periodo</p>
               <p className="mt-1 text-xs text-white/40">
-                Los pedidos nuevos van a aparecer acá.
+                Cambia el filtro o actualiza para consultar otro rango.
               </p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {todayOrders.slice(0, 10).map((order) => {
+              {selectedOrders.slice(0, 10).map((order) => {
                 const config = statusConfig[order.status]
                 return (
                   <div
