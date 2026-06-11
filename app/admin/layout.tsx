@@ -260,7 +260,7 @@ export default function AdminLayout({
             <SheetContent side="left" className="flex h-dvh max-h-dvh w-64 flex-col border-sidebar-border bg-[#0b0c0e] p-0">
               <SheetTitle className="sr-only">Navegacion</SheetTitle>
               <div className="flex shrink-0 items-center gap-2 border-b border-sidebar-border/80 p-4">
-                <Image src={blzrLogo} alt="BLZR" priority className="h-7 w-auto" />
+                <Image src="/assets/brand/logo.jpeg" alt="El Club del Repulgue" priority className="h-7 w-auto" />
                 <span className="rounded-full border border-white/[0.07] bg-white/[0.05] px-2 py-0.5 text-xs font-semibold text-sidebar-accent-foreground">
                   Admin
                 </span>
