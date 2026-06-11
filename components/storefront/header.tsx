@@ -23,6 +23,8 @@ export function Header({ onCartOpen }: HeaderProps) {
             <Image
               src="/assets/brand/logo.jpeg"
               alt="El Club del Repulgue"
+              width={160}
+              height={32}
               priority
               className="h-7 w-auto sm:h-8"
             />
