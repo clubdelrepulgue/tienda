@@ -7,6 +7,7 @@ import { Plus, Pencil, Search, Loader2, Upload, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -37,6 +38,7 @@ import type { Product, Category, ModifierGroup } from "@/lib/types"
 import { toast } from "sonner"
 import { createProduct, updateProduct, toggleProductActive } from "@/app/actions"
 import { createClient } from "@/lib/supabase/client"
+import { formatPrice } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -60,6 +62,7 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false)
 
   const [formName, setFormName] = useState("")
+  const [formDescription, setFormDescription] = useState("")
   const [formPrice, setFormPrice] = useState("")
   const [formCategory, setFormCategory] = useState("")
   const [formActive, setFormActive] = useState(true)
@@ -77,6 +80,7 @@ export default function ProductsPage() {
   const openCreate = () => {
     setEditProduct(null)
     setFormName("")
+    setFormDescription("")
     setFormPrice("")
     const safeCategories = Array.isArray(categories) ? categories : []
     setFormCategory(safeCategories?.[0]?.id || "")
@@ -90,6 +94,7 @@ export default function ProductsPage() {
   const openEdit = (product: Product) => {
     setEditProduct(product)
     setFormName(product.name)
+    setFormDescription(product.description || "")
     setFormPrice(product.price.toString())
     setFormCategory(product.categoryId)
     setFormActive(product.active)
@@ -120,7 +125,7 @@ export default function ProductsPage() {
 
   const handleSave = async () => {
     if (!formName || !formPrice || !formCategory) {
-      toast.error("Por favor completá todos los campos requeridos")
+      toast.error("Completa todos los campos obligatorios")
       return
     }
 
@@ -139,7 +144,7 @@ export default function ProductsPage() {
           .upload(fileName, item.file)
 
         if (uploadError) {
-          toast.error("Error al subir imagen: " + uploadError.message)
+          toast.error("Error al subir la imagen: " + uploadError.message)
           setSaving(false)
           return
         }
@@ -156,6 +161,7 @@ export default function ProductsPage() {
       if (editProduct) {
         const result = await updateProduct(editProduct.id, {
           nombre: formName,
+          descripcion: formDescription,
           precio: parseFloat(formPrice),
           images: allImages,
           categoriaId: formCategory,
@@ -171,6 +177,7 @@ export default function ProductsPage() {
       } else {
         const result = await createProduct({
           nombre: formName,
+          descripcion: formDescription,
           precio: parseFloat(formPrice),
           images: allImages,
           categoriaId: formCategory,
@@ -188,7 +195,7 @@ export default function ProductsPage() {
       mutateProducts()
     } catch (error) {
       console.error(error)
-      toast.error("Ocurrió un error inesperado")
+      toast.error("Algo salio mal")
     } finally {
       setSaving(false)
     }
@@ -212,7 +219,7 @@ export default function ProductsPage() {
 
   const getCategoryName = (id: string) => {
     const safeCategories = Array.isArray(categories) ? categories : []
-    return safeCategories.find((c) => c.id === id)?.name || "Sin categoría"
+    return safeCategories.find((c) => c.id === id)?.name || "Sin categoria"
   }
 
   if (productsLoading) {
@@ -244,7 +251,7 @@ export default function ProductsPage() {
             Productos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Administrá los ítems de tu menú
+            Administra los productos del menu
           </p>
         </div>
         <Button
@@ -276,7 +283,7 @@ export default function ProductsPage() {
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="text-muted-foreground">Producto</TableHead>
-                  <TableHead className="text-muted-foreground">Categoría</TableHead>
+                  <TableHead className="text-muted-foreground">Categoria</TableHead>
                   <TableHead className="text-muted-foreground">Precio</TableHead>
                   <TableHead className="text-muted-foreground">Estado</TableHead>
                   <TableHead className="text-muted-foreground text-right">Acciones</TableHead>
@@ -316,13 +323,13 @@ export default function ProductsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium text-foreground">
-                      ${product.price.toFixed(2)}
+                      {formatPrice(product.price)}
                     </TableCell>
                     <TableCell>
                       <Switch
                         checked={product.active}
                         onCheckedChange={() => handleToggleActive(product.id)}
-                        aria-label={`Toggle ${product.name} active status`}
+                        aria-label={`Cambiar estado activo de ${product.name}`}
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -331,7 +338,7 @@ export default function ProductsPage() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => openEdit(product)}
-                        aria-label={`Edit ${product.name}`}
+                        aria-label={`Editar ${product.name}`}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -359,12 +366,12 @@ export default function ProductsPage() {
 
             {/* Images Grid */}
             <div>
-              <Label className="text-sm text-muted-foreground mb-2 block">Imágenes</Label>
+              <Label className="text-sm text-muted-foreground mb-2 block">Imagenes</Label>
               <div className="grid grid-cols-3 gap-3">
                 {/* Existing Images */}
                 {existingImages.map((url, i) => (
                   <div key={`existing-${i}`} className="relative aspect-square rounded-xl overflow-hidden bg-secondary group border border-border">
-                    <Image src={url} alt={`Image ${i}`} fill className="object-cover" />
+                    <Image src={url} alt={`Imagen ${i}`} fill className="object-cover" />
                     <button
                       onClick={() => handleRemoveExisting(url)}
                       className="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
@@ -377,14 +384,14 @@ export default function ProductsPage() {
                 {/* New Image Previews */}
                 {newImageFiles.map((item, i) => (
                   <div key={`new-${i}`} className="relative aspect-square rounded-xl overflow-hidden bg-secondary group border border-border">
-                    <Image src={item.preview} alt={`New Image ${i}`} fill className="object-cover" />
+                    <Image src={item.preview} alt={`Nueva imagen ${i}`} fill className="object-cover" />
                     <button
                       onClick={() => handleRemoveNew(i)}
                       className="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                     >
                       <X className="h-3 w-3" />
                     </button>
-                    <div className="absolute bottom-1 right-1 bg-primary text-[10px] px-1 rounded text-primary-foreground font-bold">NEW</div>
+                    <div className="absolute bottom-1 right-1 bg-primary text-[10px] px-1 rounded text-primary-foreground font-bold">NUEVA</div>
                   </div>
                 ))}
 
@@ -416,6 +423,17 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
+                Ingredientes base
+              </Label>
+              <Textarea
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                placeholder="Ej: Brie, cebolla caramelizada, rúcula y salsa truffle"
+                className="min-h-20 resize-none rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            <div>
+              <Label className="text-sm text-muted-foreground mb-1.5 block">
                 Precio
               </Label>
               <Input
@@ -429,11 +447,11 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Categoría
+                Categoria
               </Label>
               <Select value={formCategory} onValueChange={setFormCategory}>
                 <SelectTrigger className="rounded-xl bg-secondary border-0 text-foreground">
-                  <SelectValue placeholder="Seleccionar categoría" />
+                  <SelectValue placeholder="Selecciona una categoria" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
                   {(Array.isArray(categories) ? categories : []).map((cat) => (
@@ -465,7 +483,7 @@ export default function ProductsPage() {
                   </div>
                 ))}
                 {(!modifiers || modifiers.length === 0) && (
-                  <span className="text-xs text-muted-foreground text-center py-2">Sin modificadores disponibles</span>
+                  <span className="text-xs text-muted-foreground text-center py-2">No hay modificadores disponibles</span>
                 )}
               </div>
             </div>

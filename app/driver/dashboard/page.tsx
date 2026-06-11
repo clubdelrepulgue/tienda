@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import { useDriverLocation } from "@/hooks/use-driver-location"
 import { GoogleMapsProvider, LiveTrackingMap } from "@/components/maps"
 import { formatZoneMeta } from "@/lib/delivery-zones"
+import { formatPrice } from "@/lib/utils"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -31,9 +32,6 @@ export default function DriverDashboardPage() {
         driverId,
         enabled: true,
         interval: 10000,
-        // Red de seguridad: si el GPS falla 3 veces seguidas (interior, sin señal),
-        // usa Google Geolocation API por WiFi/red. Crítico para no perder al repartidor.
-        useGoogleFallback: true,
         onError: (err) => {
             if (err.code === err.PERMISSION_DENIED) {
                 toast.error("Por favor habilita la ubicación GPS para continuar")
@@ -371,7 +369,7 @@ export default function DriverDashboardPage() {
                                                     </Badge>
                                                 </div>
                                                 <span className="text-sm text-muted-foreground">
-                                                    ${order.total.toFixed(2)}
+                                                    {formatPrice(order.total)}
                                                 </span>
                                             </div>
 
@@ -465,7 +463,7 @@ export default function DriverDashboardPage() {
                                                 </div>
                                             </div>
                                             <span className="text-sm font-medium shrink-0">
-                                                ${order.total.toFixed(2)}
+                                                {formatPrice(order.total)}
                                             </span>
                                         </div>
                                     ))}

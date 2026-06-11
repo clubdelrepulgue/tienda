@@ -27,7 +27,6 @@ function scheduleBeep(
   osc.stop(startTime + duration + 0.05)
 }
 
-// 3 sharp square-wave beeps — loud & urgent
 export async function playNewOrderSound() {
   try {
     const ctx = getCtx()
@@ -39,7 +38,6 @@ export async function playNewOrderSound() {
   } catch { /* autoplay blocked */ }
 }
 
-// Ascending 4-note chime — pleasant but clearly different
 export async function playOrderReadySound() {
   try {
     const ctx = getCtx()
@@ -52,7 +50,6 @@ export async function playOrderReadySound() {
   } catch { /* autoplay blocked */ }
 }
 
-// Call on any user interaction to unlock AudioContext on iOS/Chrome
 export function unlockAudio() {
   try {
     getCtx().resume().catch(() => {})

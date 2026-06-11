@@ -5,7 +5,7 @@
 
 Este es un sistema de pedidos online para UN comercio de comida (single-tenant). Stack: Next.js 16, React 19, Tailwind CSS v4, Zustand, Supabase (auth + DB + realtime), shadcn/ui, Sonner para toasts. El proyecto tiene todo el UI ya construido con datos mock (lib/mock-data.ts), y el esquema SQL listo en scripts/001_schema.sql y scripts/002_harden.sql. Tu trabajo es conectar el frontend existente al backend Supabase sin romper el diseno visual actual.
 
----asdasd
+---
 
 ## ARQUITECTURA ACTUAL
 

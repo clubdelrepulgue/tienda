@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { useCartStore } from "@/lib/store"
 import type { PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { createOrder } from "@/app/actions"
 import { CouponInput } from "@/components/storefront/coupon-input"
@@ -255,7 +255,7 @@ export default function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-6">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-secondary p-6">
         <p className="text-muted-foreground">Tu carrito está vacío</p>
         <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
           <Link href="/">Ver menú</Link>
@@ -266,8 +266,8 @@ export default function CheckoutPage() {
 
   return (
     <GoogleMapsProvider>
-      <div className="min-h-screen bg-secondary">
-        <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
+      <div className="flex min-h-dvh flex-col bg-secondary">
+        <header className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
           <div className="mx-auto max-w-3xl flex items-center gap-3 px-4 py-3">
             <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" asChild>
               <Link href="/" aria-label="Volver al menú">
@@ -283,7 +283,7 @@ export default function CheckoutPage() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-3xl px-4 py-6 flex flex-col lg:flex-row gap-6">
+        <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 bg-secondary px-4 py-6 lg:flex-row">
           <div className="flex-1 flex flex-col gap-6">
             {/* Delivery Method */}
             <section className="rounded-2xl bg-card border border-border p-5">
@@ -365,7 +365,7 @@ export default function CheckoutPage() {
                     placeholder="Tu nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="rounded-xl bg-white border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
+                    className="rounded-xl bg-secondary border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                   />
                 </div>
                 <div>
@@ -374,10 +374,10 @@ export default function CheckoutPage() {
                   </Label>
                   <Input
                     id="phone"
-                    placeholder="+54 11 5555-0000"
+                    placeholder="099 123 456"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="rounded-xl bg-white border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
+                    className="rounded-xl bg-secondary border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                   />
                 </div>
                 {deliveryMethod === "delivery" && (
@@ -390,6 +390,7 @@ export default function CheckoutPage() {
                       <AddressSelector
                         value={selectedLocation || undefined}
                         onChange={setSelectedLocation}
+                        onAddressChange={setAddress}
                         defaultCenter={selectedBranchLocation}
                         searchCenter={branchesSearchCenter}
                         searchRadiusKm={80}
@@ -405,9 +406,8 @@ export default function CheckoutPage() {
                         showInstructions={false}
                         simpleMap
                         lazyMap
-                        reverseGeocodeOnSelect
                       />
-                      <div className="mt-3 rounded-xl border border-border bg-white p-3">
+                      <div className="mt-3 rounded-xl border border-border bg-secondary p-3">
                         {selectedZoneInfo ? (
                           <div className="flex items-start gap-3">
                             <span
@@ -560,7 +560,7 @@ export default function CheckoutPage() {
                         )}
                       </div>
                       <span className="text-sm font-medium text-card-foreground shrink-0">
-                        ${((item.price + modPrice) * item.quantity).toFixed(2)}
+                        {formatPrice((item.price + modPrice) * item.quantity)}
                       </span>
                     </div>
                   )
@@ -581,13 +581,13 @@ export default function CheckoutPage() {
               <div className="flex flex-col gap-2 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
-                  <span>${totalPrice.toFixed(2)}</span>
+                  <span>{formatPrice(totalPrice)}</span>
                 </div>
                 
                 {appliedCoupon && appliedCoupon.discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Descuento ({appliedCoupon.code})</span>
-                    <span>-${appliedCoupon.discount.toFixed(2)}</span>
+                    <span>-{formatPrice(appliedCoupon.discount)}</span>
                   </div>
                 )}
                 
@@ -600,7 +600,7 @@ export default function CheckoutPage() {
                     {shouldCalculateDelivery
                       ? "A calcular"
                       : deliveryFee > 0
-                        ? `$${deliveryFee.toFixed(2)}`
+                        ? formatPrice(deliveryFee)
                         : "Gratis"}
                   </span>
                 </div>
@@ -609,7 +609,7 @@ export default function CheckoutPage() {
                 
                 <div className="flex justify-between font-bold text-lg text-card-foreground">
                   <span>Total</span>
-                  <span className="text-primary">${grandTotal.toFixed(2)}</span>
+                  <span className="text-primary">{formatPrice(grandTotal)}</span>
                 </div>
               </div>
 

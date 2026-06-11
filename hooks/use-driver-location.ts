@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useCallback, useState } from "react"
 import { updateDriverLocation } from "@/app/actions"
-import { getCurrentPositionWithFallback } from "@/lib/geolocation"
 
 interface UseDriverLocationOptions {
     driverId: string | null
@@ -161,10 +160,14 @@ export function useDriverLocation({
         setIsTracking(true)
         setLocationStatus("requesting")
 
-        // Get initial position (con fallback a baja precisión si el GPS no responde)
-        getCurrentPositionWithFallback({ maximumAge: 0 })
-            .then(sendLocation)
-            .catch(handleError)
+        const geoOptions: PositionOptions = {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+        }
+
+        // Get initial position
+        navigator.geolocation.getCurrentPosition(sendLocation, handleError, geoOptions)
 
         // Watch for continuous updates
         watchIdRef.current = navigator.geolocation.watchPosition(

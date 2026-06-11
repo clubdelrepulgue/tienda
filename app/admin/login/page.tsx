@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { LogIn, Loader2, AlertCircle } from "lucide-react"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,7 +36,7 @@ export default function AdminLoginPage() {
             }
 
             if (!data.user) {
-                setError("Inicio de sesión fallido")
+                setError("No se pudo iniciar sesion")
                 return
             }
 
@@ -54,39 +53,36 @@ export default function AdminLoginPage() {
                 return
             }
 
-            toast.success("¡Bienvenido de vuelta!")
+            toast.success("Bienvenido de nuevo")
             router.push("/admin")
             router.refresh()
         } catch {
-            setError("Ocurrió un error inesperado")
+            setError("Algo salio mal")
         } finally {
             setLoading(false)
         }
     }
 
     return (
-        <div className="flex-1 bg-background flex items-center justify-center p-4">
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
             <Card className="w-full max-w-sm rounded-2xl bg-card border-border">
                 <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-4">
-                        <div className="relative w-20 h-20 rounded-full overflow-hidden shadow-md mx-auto">
-                            <Image
-                                src="/assets/brand/logo.jpeg"
-                                alt="El Club del Repulge"
-                                fill
-                                className="object-cover"
-                                priority
-                            />
-                        </div>
+                    <div className="mx-auto mb-2">
+                        <span
+                            className="text-2xl font-bold text-primary"
+                            style={{ fontFamily: "var(--font-heading)" }}
+                        >
+                            BLZR
+                        </span>
                     </div>
                     <CardTitle
                         className="text-xl text-card-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
-                        Acceso Admin
+                        Acceso admin
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Ingresá para gestionar tu restaurante
+                        Inicia sesion para administrar tu restaurante
                     </p>
                 </CardHeader>
                 <CardContent>
@@ -99,7 +95,7 @@ export default function AdminLoginPage() {
                         )}
                         <div>
                             <Label htmlFor="email" className="text-sm text-muted-foreground mb-1.5 block">
-                                Correo electrónico
+                                Email
                             </Label>
                             <Input
                                 id="email"
@@ -113,7 +109,7 @@ export default function AdminLoginPage() {
                         </div>
                         <div>
                             <Label htmlFor="password" className="text-sm text-muted-foreground mb-1.5 block">
-                                Contraseña
+                                Contrasena
                             </Label>
                             <Input
                                 id="password"
@@ -133,12 +129,12 @@ export default function AdminLoginPage() {
                             {loading ? (
                                 <>
                                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    Ingresando...
+                                    Iniciando sesion...
                                 </>
                             ) : (
                                 <>
                                     <LogIn className="h-4 w-4 mr-2" />
-                                    Ingresar
+                                    Iniciar sesion
                                 </>
                             )}
                         </Button>

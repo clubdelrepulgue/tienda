@@ -10,35 +10,19 @@ import { FloatingCart } from "@/components/storefront/floating-cart"
 import { useCartStore } from "@/lib/store"
 import type { Product, Category, ModifierGroup } from "@/lib/types"
 import { toast } from "sonner"
-import Image from "next/image"
 
 interface StorefrontShellProps {
     categories: Category[]
     products: Product[]
     modifierGroups: ModifierGroup[]
-}
-
-function HeroBanner() {
-    return (
-        <div className="mx-auto max-w-5xl px-4 pt-5 pb-3">
-            <div className="relative aspect-[1270/352] overflow-hidden rounded-3xl border-2 border-primary/20 shadow-sm shadow-primary/10">
-                <Image
-                    src="/assets/BANNER 1  BLZR - 1.webp"
-                    alt="Hechas a mano. Horneadas con amor."
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 1024px) calc(100vw - 32px), 1024px"
-                    priority
-                />
-            </div>
-        </div>
-    )
+    showCover?: boolean
 }
 
 export function StorefrontShell({
     categories,
     products,
     modifierGroups,
+    showCover = false,
 }: StorefrontShellProps) {
     const [activeCategory, setActiveCategory] = useState("all")
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -51,7 +35,19 @@ export function StorefrontShell({
         setProductModalOpen(true)
     }
 
+    const productHasAvailableModifiers = (product: Product) =>
+        modifierGroups.some(
+            (group) =>
+                product.modifierGroups.includes(group.id) &&
+                group.options.length > 0
+        )
+
     const handleQuickAdd = (product: Product) => {
+        if (productHasAvailableModifiers(product)) {
+            handleSelectProduct(product)
+            return
+        }
+
         addItem({
             productId: product.id,
             name: product.name,
@@ -60,13 +56,13 @@ export function StorefrontShell({
             quantity: 1,
             modifiers: [],
         })
-        toast.success(`${product.name} agregado al carrito`)
+        toast.success(`${product.name} added to cart`)
     }
 
     return (
-        <div className="min-h-screen bg-[#F7F7F7]">
+        <div className="min-h-screen bg-background">
             <Header onCartOpen={() => setCartOpen(true)} />
-            <HeroBanner />
+            {showCover && <CoverVideo />}
             <CategoryTabs
                 categories={categories}
                 activeCategory={activeCategory}
@@ -91,5 +87,23 @@ export function StorefrontShell({
             <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} />
             <FloatingCart onCartOpen={() => setCartOpen(true)} />
         </div>
+    )
+}
+
+function CoverVideo() {
+    return (
+        <section className="border-b border-white/[0.07] px-4 py-[5px] sm:px-6">
+            <video
+                className="mx-auto block h-auto w-full max-w-6xl"
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="metadata"
+                aria-hidden="true"
+            >
+                <source src="/VIDEO%20PORTADA%20BLZR%20-%202.mp4" type="video/mp4" />
+            </video>
+        </section>
     )
 }

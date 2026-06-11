@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
 import type { CartItem } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 
 // ─── Orders ────────────────────────────────────────────────────
 
@@ -97,6 +98,23 @@ export async function updateOrderStatus(
     driverId?: string
 ) {
     const supabase = await createClient()
+    const adminSupabase = createAdminClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        return { error: "Sesion requerida" }
+    }
+
+    const { data: adminUser, error: adminError } = await adminSupabase
+        .from("admin_users")
+        .select("id")
+        .eq("user_id", user.id)
+        .single()
+
+    if (adminError || !adminUser) {
+        return { error: "No tienes acceso para actualizar pedidos" }
+    }
 
     const updateData: Record<string, any> = { status: newStatus }
     
@@ -105,7 +123,27 @@ export async function updateOrderStatus(
         updateData.driver_assigned_at = new Date().toISOString()
     }
 
-    const { error } = await supabase
+    if (newStatus === "accepted") {
+        updateData.accepted_at = new Date().toISOString()
+    }
+
+    if (newStatus === "preparing") {
+        updateData.preparing_at = new Date().toISOString()
+    }
+
+    if (newStatus === "ready") {
+        updateData.ready_at = new Date().toISOString()
+    }
+
+    if (newStatus === "delivered") {
+        updateData.delivered_at = new Date().toISOString()
+    }
+
+    if (newStatus === "cancelled") {
+        updateData.cancelled_at = new Date().toISOString()
+    }
+
+    const { error } = await adminSupabase
         .from("orders")
         .update(updateData)
         .eq("id", orderId)
@@ -260,7 +298,7 @@ export async function toggleProductActive(id: string) {
         .eq("id", id)
         .single()
 
-    if (!product) return { error: "Product not found" }
+    if (!product) return { error: "Producto no encontrado" }
 
     const { error } = await supabase
         .from("productos")
@@ -496,7 +534,7 @@ export async function toggleBranchOpen(id: string) {
         .eq("id", id)
         .single()
 
-    if (!branch) return { error: "Branch not found" }
+    if (!branch) return { error: "Sucursal no encontrada" }
 
     const { error } = await supabase
         .from("sucursales")
@@ -539,7 +577,7 @@ export async function validateCoupon(code: string, cartTotal: number) {
 
     // Check minimum order
     if (cartTotal < (coupon.min_order_amount || 0)) {
-        return { error: `Mínimo de compra: $${coupon.min_order_amount}` }
+        return { error: `Mínimo de compra: ${formatPrice(Number(coupon.min_order_amount))}` }
     }
 
     // Check usage limit
@@ -885,7 +923,7 @@ export async function updateDriverLocation(
         .select("id")
 
     if (error) return { error: error.message }
-    if (!data || data.length === 0) return { error: "Driver not found" }
+    if (!data || data.length === 0) return { error: "Repartidor no encontrado" }
 
     // Insert into location history for tracking analytics
     // Fire-and-forget — don't block the response

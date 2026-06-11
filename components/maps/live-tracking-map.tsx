@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
-import { Map, AdvancedMarker, Marker, useMap } from "@vis.gl/react-google-maps"
-import { BranchLogoMarker } from "./branch-logo-marker"
+import { Map, AdvancedMarker, Marker, Pin, useMap } from "@vis.gl/react-google-maps"
 import { Card, CardContent } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { Navigation, Clock, Bike, MapPin, Gauge } from "lucide-react"
@@ -433,13 +432,22 @@ export function LiveTrackingMap({
                         />
                     )}
 
-                    {/* Branch marker con el logo del local */}
-                    {branchLocation && (
-                        <BranchLogoMarker
+                    {/* Branch marker */}
+                    {branchLocation && hasMapId && (
+                        <AdvancedMarker
                             position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
                             title="Restaurante"
-                            accentColor="#1f2937"
-                        />
+                        >
+                            <Pin
+                                background="#1f2937"
+                                borderColor="#000000"
+                                glyphColor="#ffffff"
+                                scale={1.2}
+                            />
+                        </AdvancedMarker>
+                    )}
+                    {branchLocation && !hasMapId && (
+                        <Marker position={{ lat: branchLocation.lat, lng: branchLocation.lng }} title="Restaurante" />
                     )}
                 </Map>
             </div>

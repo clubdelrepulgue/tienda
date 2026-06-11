@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { Map, useMap, AdvancedMarker, Pin, MapControl, ControlPosition } from "@vis.gl/react-google-maps"
 import { Polygon } from "./polygon"
-import { getCurrentPositionWithFallback } from "@/lib/geolocation"
 
 export interface MapMarker {
     id: string
@@ -40,14 +39,18 @@ const defaultCenter = { lat: -34.6037, lng: -58.3816 } // Buenos Aires
 function CurrentLocationButton() {
     const map = useMap()
 
-    const handleClick = useCallback(async () => {
-        try {
-            const position = await getCurrentPositionWithFallback()
-            const { latitude, longitude } = position.coords
-            map?.panTo({ lat: latitude, lng: longitude })
-            map?.setZoom(16)
-        } catch (error) {
-            console.error("Error getting location:", error)
+    const handleClick = useCallback(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords
+                    map?.panTo({ lat: latitude, lng: longitude })
+                    map?.setZoom(16)
+                },
+                (error) => {
+                    console.error("Error getting location:", error)
+                }
+            )
         }
     }, [map])
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import useSWR from "swr"
 import {
   Clock,
@@ -13,55 +13,72 @@ import {
   UtensilsCrossed,
   MapPin,
   Bike,
-  UserCheck,
-  X,
-  Check,
+  User,
 } from "lucide-react"
-import { PrintReceiptButton } from "@/components/receipt/order-receipt"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetClose,
 } from "@/components/ui/sheet"
 import { createClient } from "@/lib/supabase/client"
 import type { Order, OrderStatus, Driver, DeliveryZone } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
-import { playNewOrderSound, playOrderReadySound, unlockAudio } from "@/lib/sounds"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
+function getElapsedMs(createdAt: string, now: number, readyAt?: string): number {
+  const started = new Date(createdAt).getTime()
+  const ended = readyAt ? new Date(readyAt).getTime() : now
+  return Math.max(0, ended - started)
+}
+
+function formatElapsedTime(createdAt: string, now: number, readyAt?: string): string {
+  const elapsed = getElapsedMs(createdAt, now, readyAt)
+  const minutes = Math.floor(elapsed / 60000)
+  const seconds = Math.floor((elapsed % 60000) / 1000)
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`
+}
 
 // ─── Order Card ────────────────────────────────────────────────
 
 function OrderCard({
   order,
   nextStatus,
+  now,
   updating,
   onNext,
   showAssign,
-  selectable,
-  selected,
-  onSelect,
   driver,
+  deliveryDrivers = [],
+  onDeliveryDepart,
+  departing = false,
 }: {
   order: Order
   nextStatus?: OrderStatus
+  now: number
   updating: boolean
   onNext?: () => void
   showAssign?: boolean
-  selectable?: boolean
-  selected?: boolean
-  onSelect?: (checked: boolean) => void
   driver?: Driver | null
+  deliveryDrivers?: Driver[]
+  onDeliveryDepart?: (orderId: string, driverId: string) => void
+  departing?: boolean
 }) {
+  const [selectedDriverId, setSelectedDriverId] = useState(order.driverId || "")
   const fulfillmentIcon = {
     delivery: Truck,
     pickup: Store,
@@ -71,67 +88,83 @@ function OrderCard({
   const fulfillmentLabel = {
     delivery: "Delivery",
     pickup: "Retiro",
-    dine_in: "En el local",
-  }[order.deliveryMethod] || "Pickup"
+    dine_in: "En local",
+  }[order.deliveryMethod] || "Retiro"
 
   const FulfillmentIcon = fulfillmentIcon
+  const isDeliveryDispatch = order.deliveryMethod === "delivery" && Boolean(onDeliveryDepart)
+  const activeDrivers = deliveryDrivers.filter((d) => d.isActive)
+  const availableDrivers = activeDrivers.filter((d) => d.isAvailable)
+  const unavailableDrivers = activeDrivers.filter((d) => !d.isAvailable)
+  const isReady = order.status === "ready"
+  const elapsedTime = formatElapsedTime(order.createdAt, now, isReady ? order.readyAt : undefined)
+
+  useEffect(() => {
+    setSelectedDriverId(order.driverId || "")
+  }, [order.driverId])
 
   return (
     <Card
       className={cn(
-        "rounded-xl bg-card border-border shadow-sm transition-all",
+        "group w-full min-w-0 overflow-hidden rounded-[22px] border-white/[0.075] bg-[#15161a] py-0 shadow-[0_14px_38px_rgba(0,0,0,0.2)] transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:bg-[#18191d] hover:shadow-[0_18px_48px_rgba(0,0,0,0.28)]",
         updating && "opacity-50 pointer-events-none",
-        selected && "ring-2 ring-primary border-primary"
+        departing && "scale-[0.98] opacity-0 blur-[1px]",
       )}
     >
-      <CardHeader className="p-4 pb-2">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            {selectable && (
-              <Checkbox
-                checked={selected}
-                onCheckedChange={onSelect}
-                className="mr-1"
-              />
-            )}
-            <span className="text-xs font-mono font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-md">
+      <CardHeader className="p-3.5 pb-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+          <div className="min-w-0">
+            <span
+              className="block text-3xl font-black leading-none text-white"
+              style={{ fontFamily: "var(--font-heading)" }}
+            >
               #{order.orderNumber}
             </span>
           </div>
-          <span className="text-xs font-medium text-muted-foreground">
-            {new Date(order.createdAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-        </div>
-        <CardTitle className="text-base text-card-foreground">
-          {order.customerName}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 pt-0">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-          <Phone className="h-3.5 w-3.5" />
-          {order.customerPhone}
-        </div>
-
-        {order.deliveryMethod === "delivery" && order.address && (
-          <div className="flex items-start gap-2 text-sm text-muted-foreground mb-2">
-            <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span className="line-clamp-2">{order.address}</span>
+          <div
+            className={cn(
+              "flex max-w-[112px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-base font-black leading-none",
+              isReady
+                ? "border-emerald-300/25 bg-emerald-400/12 text-emerald-100"
+                : "border-white/[0.08] bg-white/[0.045] text-white/86"
+            )}
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            <Clock className="h-4 w-4" />
+            <span>{elapsedTime}</span>
           </div>
-        )}
+        </div>
+      </CardHeader>
+      <CardContent className="p-3.5 pt-0">
+        <div className="mb-2 flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-sm font-medium text-white/56">
+          <User className="h-3.5 w-3.5 shrink-0 text-white/42" />
+          <span className="min-w-0 truncate font-bold text-white/88">{order.customerName}</span>
+          {order.customerPhone && (
+            <>
+              <span className="shrink-0 text-white/28">·</span>
+              <Phone className="h-3.5 w-3.5 shrink-0 text-white/38" />
+              <span className="max-w-[90px] shrink truncate text-white/58">{order.customerPhone}</span>
+            </>
+          )}
+          {order.deliveryMethod === "delivery" && order.address && (
+            <>
+              <span className="shrink-0 text-white/28">·</span>
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-white/38" />
+              <span className="min-w-0 truncate text-white/58">{order.address}</span>
+            </>
+          )}
+        </div>
 
-        <div className="space-y-1.5 mb-3">
+        <div className="mb-2 min-w-0 space-y-1 overflow-hidden rounded-2xl bg-black/10 p-2.5">
           {order.items.map((item) => (
-            <div key={item.id} className="text-sm flex justify-between">
-              <div>
-                <span className="font-medium text-foreground">
+            <div key={item.id} className="flex min-w-0 justify-between text-sm leading-snug">
+              <div className="min-w-0 max-w-full overflow-hidden">
+                <span className="font-bold text-white">
                   {item.quantity}x
                 </span>{" "}
-                <span className="text-muted-foreground">{item.name}</span>
+                <span className="font-semibold text-white/78">{item.name}</span>
                 {item.modifiers?.length > 0 && (
-                  <p className="text-xs text-muted-foreground/70 pl-5">
+                  <p className="ml-5 mt-0.5 line-clamp-2 max-w-[calc(100%-1.25rem)] break-words text-xs leading-snug text-white/42">
                     {item.modifiers.map((m) => m.optionName).join(", ")}
                   </p>
                 )}
@@ -140,48 +173,102 @@ function OrderCard({
           ))}
         </div>
 
+        {isDeliveryDispatch && (
+          <div className="mb-2 rounded-2xl border border-white/[0.07] bg-white/[0.035] p-2.5">
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/45">
+              <Bike className="h-3.5 w-3.5" />
+              Delivery
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <Select
+                value={selectedDriverId}
+                onValueChange={setSelectedDriverId}
+                disabled={updating || activeDrivers.length === 0}
+              >
+                <SelectTrigger className="h-9 w-full rounded-full border-white/[0.08] bg-black/15 text-white/75 hover:bg-black/25">
+                  <SelectValue placeholder="Seleccionar delivery" />
+                </SelectTrigger>
+                <SelectContent className="border-border bg-card">
+                  {availableDrivers.length > 0 && (
+                    <>
+                      {availableDrivers.map((availableDriver) => (
+                        <SelectItem key={availableDriver.id} value={availableDriver.id}>
+                          {availableDriver.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {unavailableDrivers.length > 0 && (
+                    <>
+                      {unavailableDrivers.map((unavailableDriver) => (
+                        <SelectItem key={unavailableDriver.id} value={unavailableDriver.id}>
+                          {unavailableDriver.name} - no disponible
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                className="h-9 rounded-full bg-primary px-4 font-bold text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.24)] transition-transform hover:scale-[1.03] hover:bg-primary/90 active:scale-95"
+                disabled={!selectedDriverId || updating}
+                onClick={() => onDeliveryDepart?.(order.id, selectedDriverId)}
+              >
+                Salio!
+              </Button>
+            </div>
+            {driver && (
+              <p className="mt-2 text-xs font-medium text-chart-3">
+                Asignado a {driver.name}
+              </p>
+            )}
+            {activeDrivers.length === 0 && (
+              <p className="mt-2 text-xs text-white/40">
+                No hay repartidores activos.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Driver badge if assigned */}
-        {driver && (
-          <div className="flex items-center gap-1.5 mb-3 text-xs bg-chart-2/10 text-chart-2 rounded-lg px-2.5 py-1.5 border border-chart-2/20">
+        {driver && !isDeliveryDispatch && (
+          <div className="mb-2 flex items-center gap-1.5 rounded-full border border-chart-2/20 bg-chart-2/10 px-2.5 py-1.5 text-xs text-chart-2">
             <Bike className="h-3.5 w-3.5" />
             <span className="font-medium">{driver.name}</span>
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-3 border-t border-border mt-auto">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="mt-auto flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
+          <div className="min-w-0 flex-1 basis-[132px]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-white/42">
               <FulfillmentIcon className="h-3 w-3" />
-              <span className="uppercase tracking-wider">{fulfillmentLabel}</span>
+              <span className="uppercase tracking-[0.14em]">{fulfillmentLabel}</span>
             </div>
-            <span className="font-semibold text-foreground text-sm">
-              ${order.total.toFixed(2)}
+            <span className="mt-0.5 text-base font-extrabold leading-none text-white">
+              {formatPrice(order.total)}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <PrintReceiptButton order={order} variant="ghost" />
+          {onNext && nextStatus && (
+            <Button
+              size="sm"
+              className="ml-auto h-9 max-w-full shrink-0 rounded-full bg-primary px-3 text-sm font-bold text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.24)] hover:bg-primary/90 active:scale-95 max-[420px]:basis-full"
+              onClick={onNext}
+            >
+              <span className="truncate">Siguiente</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
 
-            {onNext && nextStatus && (
-              <Button
-                size="sm"
-                className="h-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 gap-1"
-                onClick={onNext}
-              >
-                Next
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            )}
-
-            {showAssign && !nextStatus && !driver && (
-              <Badge
-                variant="outline"
-                className="text-xs text-muted-foreground border-dashed"
-              >
-                Sin asignar
-              </Badge>
-            )}
-          </div>
+          {showAssign && !isDeliveryDispatch && !nextStatus && !driver && (
+            <Badge
+              variant="outline"
+              className="rounded-full border-dashed border-white/[0.1] bg-white/[0.035] text-xs text-white/45"
+            >
+              Sin asignar
+            </Badge>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -194,20 +281,20 @@ function ReadyColumn({
   orders,
   zones,
   drivers,
+  now,
   updatingId,
   onMarkDelivered,
-  onOpenAssign,
-  selectedOrders,
-  onToggleSelect,
+  onDeliveryDepart,
+  departingOrderIds,
 }: {
   orders: Order[]
   zones: DeliveryZone[]
   drivers: Driver[]
+  now: number
   updatingId: string | null
   onMarkDelivered: (orderId: string) => void
-  onOpenAssign: (orderIds: string[]) => void
-  selectedOrders: Set<string>
-  onToggleSelect: (orderId: string, checked: boolean) => void
+  onDeliveryDepart: (orderId: string, driverId: string) => void
+  departingOrderIds: Set<string>
 }) {
   const zoneMap = useMemo(() => {
     const map = new Map<string, DeliveryZone>()
@@ -239,44 +326,39 @@ function ReadyColumn({
     return groups
   }, [deliveryOrders])
 
-  const selectedDeliveryInZone = (zoneId: string) => {
-    const zoneOrders = ordersByZone.get(zoneId) || []
-    return zoneOrders.filter((o) => selectedOrders.has(o.id))
-  }
-
   if (orders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-full border-2 border-dashed border-border/50 rounded-xl">
-        <Package className="h-8 w-8 mb-2 opacity-20" />
-        <p className="text-sm font-medium">No orders</p>
+      <div className="flex min-h-[112px] flex-col items-center justify-center rounded-[20px] border border-dashed border-white/[0.08] bg-white/[0.025] p-8 text-center text-white/42">
+        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white/[0.035]">
+          <Package className="h-5 w-5 opacity-45" />
+        </div>
+        <p className="text-sm font-medium">Sin pedidos</p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4 overflow-hidden">
       {/* ── Delivery orders grouped by zone ── */}
       {deliveryOrders.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="min-w-0 space-y-3 overflow-hidden">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+            <Truck className="h-3.5 w-3.5 text-white/45" />
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/52">
               Delivery
             </span>
-            <Badge variant="outline" className="text-xs ml-auto">
+            <Badge variant="outline" className="ml-auto rounded-full border-white/[0.08] bg-white/[0.035] text-xs text-white/60">
               {deliveryOrders.length}
             </Badge>
           </div>
 
           {Array.from(ordersByZone.entries()).map(([zoneId, zoneOrders]) => {
             const zone = zoneMap.get(zoneId)
-            const selected = selectedDeliveryInZone(zoneId)
-
             return (
-              <div key={zoneId} className="space-y-2">
+              <div key={zoneId} className="min-w-0 space-y-2 overflow-hidden">
                 {/* Zone header */}
                 <div
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                  className="flex items-center gap-2 rounded-2xl border border-white/[0.06] px-3 py-2"
                   style={{
                     backgroundColor: zone
                       ? `${zone.color}15`
@@ -288,25 +370,12 @@ function ReadyColumn({
                     className="h-3.5 w-3.5"
                     style={{ color: zone?.color }}
                   />
-                  <span className="text-xs font-semibold flex-1">
+                  <span className="flex-1 text-xs font-bold text-white/78">
                     {zone?.name || "Sin zona"}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-white/45">
                     {zoneOrders.length} orden{zoneOrders.length !== 1 ? "es" : ""}
                   </span>
-                  {selected.length > 0 && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 text-xs gap-1 rounded-md"
-                      onClick={() =>
-                        onOpenAssign(selected.map((o) => o.id))
-                      }
-                    >
-                      <UserCheck className="h-3 w-3" />
-                      Asignar ({selected.length})
-                    </Button>
-                  )}
                 </div>
 
                 {/* Orders in this zone */}
@@ -314,24 +383,16 @@ function ReadyColumn({
                   <OrderCard
                     key={order.id}
                     order={order}
+                    now={now}
                     updating={updatingId === order.id}
-                    selectable
-                    selected={selectedOrders.has(order.id)}
-                    onSelect={(checked) =>
-                      onToggleSelect(order.id, checked as boolean)
-                    }
-                    showAssign
+                    departing={departingOrderIds.has(order.id)}
                     driver={
                       order.driverId
                         ? driverMap.get(order.driverId) || null
                         : null
                     }
-                    onNext={
-                      order.driverId
-                        ? () => onMarkDelivered(order.id)
-                        : undefined
-                    }
-                    nextStatus={order.driverId ? "delivered" : undefined}
+                    deliveryDrivers={drivers}
+                    onDeliveryDepart={onDeliveryDepart}
                   />
                 ))}
               </div>
@@ -342,13 +403,13 @@ function ReadyColumn({
 
       {/* ── Pickup / Dine-in orders ── */}
       {pickupOrders.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <Store className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Pickup / Dine-in
+        <div className="min-w-0 space-y-3 overflow-hidden">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+            <Store className="h-3.5 w-3.5 text-white/45" />
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/52">
+              Retiro / En local
             </span>
-            <Badge variant="outline" className="text-xs ml-auto">
+            <Badge variant="outline" className="ml-auto rounded-full border-white/[0.08] bg-white/[0.035] text-xs text-white/60">
               {pickupOrders.length}
             </Badge>
           </div>
@@ -357,7 +418,9 @@ function ReadyColumn({
             <OrderCard
               key={order.id}
               order={order}
+              now={now}
               updating={updatingId === order.id}
+              departing={departingOrderIds.has(order.id)}
               nextStatus="delivered"
               onNext={() => onMarkDelivered(order.id)}
             />
@@ -397,7 +460,7 @@ function DriverAssignSheet({
       <SheetContent side="right" className="w-80 sm:w-96">
         <SheetHeader>
           <SheetTitle>
-            Asignar Driver
+            Asignar repartidor
           </SheetTitle>
           <p className="text-sm text-muted-foreground">
             {orderIds.length} orden{orderIds.length !== 1 ? "es" : ""}{" "}
@@ -490,7 +553,7 @@ type Column = {
 const COLUMNS: Column[] = [
   {
     id: "pending",
-    label: "Pending",
+    label: "Pendientes",
     icon: Clock,
     color: "bg-chart-1/15 text-chart-1 border-chart-1/20",
     statuses: ["new", "accepted"],
@@ -498,7 +561,7 @@ const COLUMNS: Column[] = [
   },
   {
     id: "preparing",
-    label: "Preparing",
+    label: "Preparando",
     icon: ChefHat,
     color: "bg-accent/15 text-accent border-accent/20",
     statuses: ["preparing"],
@@ -506,7 +569,7 @@ const COLUMNS: Column[] = [
   },
   {
     id: "ready",
-    label: "Ready",
+    label: "Listos",
     icon: Package,
     color: "bg-chart-3/15 text-chart-3 border-chart-3/20",
     statuses: ["ready"],
@@ -524,9 +587,23 @@ export default function OrdersPage() {
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [departingOrderIds, setDepartingOrderIds] = useState<Set<string>>(new Set())
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set())
   const [assignSheetOpen, setAssignSheetOpen] = useState(false)
   const [assignOrderIds, setAssignOrderIds] = useState<string[]>([])
+  const [now, setNow] = useState(Date.now())
+
+  // Audio ref for notification
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  useEffect(() => {
+    audioRef.current = new Audio("/notification.mp3")
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     if (dispatchData) {
@@ -546,20 +623,16 @@ export default function OrdersPage() {
         { event: "*", schema: "public", table: "orders" },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            playNewOrderSound()
-            toast.info("¡Nuevo pedido!", { duration: 6000 })
+            toast.info("Nuevo pedido recibido")
+            audioRef.current?.play().catch(() => {})
             mutate()
           } else if (payload.eventType === "UPDATE") {
-            const updated = payload.new
             setOrders((current) =>
-              current.map((order) => {
-                if (order.id !== updated.id) return order
-                if (order.status !== "ready" && updated.status === "ready") {
-                  playOrderReadySound()
-                  toast.success(`Pedido #${order.orderNumber} listo en cocina`, { duration: 6000 })
-                }
-                return { ...order, ...updated, status: updated.status, driverId: updated.driver_id }
-              })
+              current.map((order) =>
+                order.id === payload.new.id
+                  ? { ...order, ...payload.new, status: payload.new.status, driverId: payload.new.driver_id }
+                  : order
+              )
             )
           }
         }
@@ -585,10 +658,20 @@ export default function OrdersPage() {
   }, [mutate])
 
   const handleNextStatus = async (orderId: string, nextStatus: OrderStatus) => {
+    const changedAt = new Date().toISOString()
+
     setUpdatingId(orderId)
     setOrders((current) =>
       current.map((order) =>
-        order.id === orderId ? { ...order, status: nextStatus } : order
+        order.id === orderId
+          ? {
+              ...order,
+              status: nextStatus,
+              preparingAt: nextStatus === "preparing" ? changedAt : order.preparingAt,
+              readyAt: nextStatus === "ready" ? changedAt : order.readyAt,
+              deliveredAt: nextStatus === "delivered" ? changedAt : order.deliveredAt,
+            }
+          : order
       )
     )
 
@@ -604,6 +687,46 @@ export default function OrdersPage() {
 
   const handleMarkDelivered = async (orderId: string) => {
     await handleNextStatus(orderId, "delivered")
+  }
+
+  const handleDeliveryDepart = async (orderId: string, driverId: string) => {
+    setUpdatingId(orderId)
+    setDepartingOrderIds((current) => {
+      const next = new Set(current)
+      next.add(orderId)
+      return next
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 320))
+
+    setOrders((current) =>
+      current.map((order) =>
+        order.id === orderId ? { ...order, driverId } : order
+      )
+    )
+
+    const result = await assignDriver(orderId, driverId)
+
+    if (result.error) {
+      toast.error(result.error)
+      setDepartingOrderIds((current) => {
+        const next = new Set(current)
+        next.delete(orderId)
+        return next
+      })
+      mutate()
+    } else {
+      const driverName =
+        drivers.find((driver) => driver.id === driverId)?.name || "Repartidor"
+      toast.success(`Salio! ${driverName} se llevo el pedido`)
+    }
+
+    setDepartingOrderIds((current) => {
+      const next = new Set(current)
+      next.delete(orderId)
+      return next
+    })
+    setUpdatingId(null)
   }
 
   const handleToggleSelect = (orderId: string, checked: boolean) => {
@@ -646,7 +769,7 @@ export default function OrdersPage() {
       mutate()
     } else {
       const driverName =
-        drivers.find((d) => d.id === driverId)?.name || "Driver"
+        drivers.find((d) => d.id === driverId)?.name || "Repartidor"
       toast.success(
         `${driverName} asignado a ${ids.length} orden${ids.length !== 1 ? "es" : ""}`
       )
@@ -660,47 +783,62 @@ export default function OrdersPage() {
   const activeOrders = useMemo(
     () =>
       (Array.isArray(orders) ? orders : []).filter(
-        (o) => o.status !== "delivered" && o.status !== "cancelled"
+        (o) =>
+          o.status !== "delivered" &&
+          o.status !== "cancelled" &&
+          !(o.status === "ready" && o.deliveryMethod === "delivery" && o.driverId)
       ),
     [orders]
   )
 
   return (
-    <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]" onClick={unlockAudio}>
-      <div>
+    <div className="flex h-[calc(100vh-8rem)] flex-col gap-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
         <h1
-          className="text-2xl font-bold text-foreground"
+          className="text-3xl font-bold tracking-tight text-foreground"
           style={{ fontFamily: "var(--font-heading)" }}
         >
-          Orders
+          Pedidos
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage active operations in real-time
+        <p className="mt-1 text-sm text-muted-foreground">
+          Gestiona la operacion activa en tiempo real
         </p>
+        </div>
+        <div className="flex w-fit items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.035] px-3 py-2 text-xs font-medium text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-chart-3 shadow-[0_0_18px_rgba(34,197,94,0.7)]" />
+          Actualizacion en vivo
+        </div>
       </div>
 
-      <div className="flex-1 flex gap-4 overflow-x-auto pb-4 snap-x">
+      <div className="grid min-h-0 flex-1 grid-cols-[repeat(3,minmax(300px,1fr))] gap-4 overflow-x-auto pb-4 snap-x xl:gap-5">
         {COLUMNS.map((col) => {
           const colOrders = activeOrders.filter((o) =>
             col.statuses.includes(o.status)
           )
           const ColIcon = col.icon
           const isReadyCol = col.id === "ready"
+          const columnTint =
+            col.id === "pending"
+              ? "from-primary/[0.08]"
+              : col.id === "preparing"
+                ? "from-accent/[0.08]"
+                : "from-chart-3/[0.08]"
 
           return (
             <div
               key={col.id}
-              className={cn(
-                "flex-shrink-0 flex flex-col gap-4 snap-center",
-                isReadyCol ? "w-96" : "w-80"
-              )}
+              className="flex min-w-[300px] max-w-full snap-center flex-col overflow-hidden rounded-[26px] border border-white/[0.075] bg-[#101114] shadow-[0_18px_52px_rgba(0,0,0,0.22)]"
             >
               {/* Column header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ColIcon className="h-4 w-4 text-muted-foreground" />
+              <div className={cn("border-b border-white/[0.06] bg-gradient-to-b to-transparent px-4 py-4", columnTint)}>
+                <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/[0.07] bg-white/[0.045] text-muted-foreground">
+                    <ColIcon className="h-4 w-4" />
+                  </span>
                   <h2
-                    className="font-semibold text-foreground uppercase tracking-wide text-sm"
+                    className="truncate text-sm font-bold uppercase tracking-[0.12em] text-foreground"
                     style={{ fontFamily: "var(--font-heading)" }}
                   >
                     {col.label}
@@ -708,31 +846,34 @@ export default function OrdersPage() {
                 </div>
                 <Badge
                   variant="outline"
-                  className={cn("px-2 text-xs", col.color)}
+                  className={cn("h-7 rounded-full px-2.5 text-xs font-bold tabular-nums", col.color)}
                 >
                   {colOrders.length}
                 </Badge>
+                </div>
               </div>
 
               {/* Column body */}
-              <ScrollArea className="flex-1 rounded-2xl bg-secondary/30 border border-border/50 p-2">
+              <ScrollArea className="min-h-0 flex-1 p-2.5 [scrollbar-gutter:stable]">
                 {isReadyCol ? (
                   <ReadyColumn
                     orders={colOrders}
                     zones={zones}
                     drivers={drivers}
+                    now={now}
                     updatingId={updatingId}
                     onMarkDelivered={handleMarkDelivered}
-                    onOpenAssign={handleOpenAssign}
-                    selectedOrders={selectedOrders}
-                    onToggleSelect={handleToggleSelect}
+                    onDeliveryDepart={handleDeliveryDepart}
+                    departingOrderIds={departingOrderIds}
                   />
                 ) : (
-                  <div className="flex flex-col gap-3">
+                  <div className="flex min-w-0 flex-col gap-3 overflow-hidden">
                     {colOrders.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-full border-2 border-dashed border-border/50 rounded-xl">
-                        <ColIcon className="h-8 w-8 mb-2 opacity-20" />
-                        <p className="text-sm font-medium">No orders</p>
+                      <div className="flex min-h-[112px] flex-col items-center justify-center rounded-[20px] border border-dashed border-white/[0.08] bg-white/[0.025] p-8 text-center text-white/42">
+                        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white/[0.035]">
+                          <ColIcon className="h-5 w-5 opacity-45" />
+                        </div>
+                        <p className="text-sm font-medium">Sin pedidos</p>
                       </div>
                     ) : (
                       colOrders.map((order) => (
@@ -740,7 +881,9 @@ export default function OrdersPage() {
                           key={order.id}
                           order={order}
                           nextStatus={col.nextStatus}
+                          now={now}
                           updating={updatingId === order.id}
+                          departing={departingOrderIds.has(order.id)}
                           onNext={
                             col.nextStatus
                               ? () =>

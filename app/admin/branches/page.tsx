@@ -40,7 +40,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import type { Branch, DeliveryZone } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import {
     createBranch,
@@ -565,7 +565,7 @@ export default function BranchesPage() {
                                                         <div className="flex items-center gap-1.5">
                                                             <DollarSign className="h-4 w-4 text-muted-foreground" />
                                                             <span className="font-bold text-lg">
-                                                                ${zone.deliveryFee.toFixed(2)}
+                                                                {formatPrice(zone.deliveryFee)}
                                                             </span>
                                                         </div>
                                                         {zone.estimatedTimeMin && (
@@ -1067,7 +1067,7 @@ export default function BranchesPage() {
                                     <Card className="rounded-xl">
                                         <CardContent className="p-4 text-center">
                                             <p className="text-2xl font-bold">
-                                                ${viewZone.deliveryFee.toFixed(2)}
+                                                {formatPrice(viewZone.deliveryFee)}
                                             </p>
                                             <p className="text-xs text-muted-foreground">Costo de envío</p>
                                         </CardContent>
@@ -1075,7 +1075,7 @@ export default function BranchesPage() {
                                     <Card className="rounded-xl">
                                         <CardContent className="p-4 text-center">
                                             <p className="text-2xl font-bold">
-                                                ${viewZone.minOrderAmount || 0}
+                                                {formatPrice(viewZone.minOrderAmount || 0)}
                                             </p>
                                             <p className="text-xs text-muted-foreground">Mínimo gratis</p>
                                         </CardContent>

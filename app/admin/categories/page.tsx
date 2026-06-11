@@ -82,7 +82,7 @@ export default function CategoriesPage() {
 
     const handleSave = async () => {
         if (!formName || !formSlug) {
-            toast.error("Por favor completá todos los campos requeridos")
+            toast.error("Completa todos los campos obligatorios")
             return
         }
 
@@ -98,7 +98,7 @@ export default function CategoriesPage() {
                     toast.error(result.error)
                     return
                 }
-                toast.success("Categoría actualizada")
+                toast.success("Categoria actualizada")
             } else {
                 const result = await createCategory({
                     nombre: formName,
@@ -109,19 +109,19 @@ export default function CategoriesPage() {
                     toast.error(result.error)
                     return
                 }
-                toast.success("Categoría creada")
+                toast.success("Categoria creada")
             }
             setDialogOpen(false)
             mutateCategories()
         } catch {
-            toast.error("Ocurrió un error inesperado")
+            toast.error("Algo salio mal")
         } finally {
             setSaving(false)
         }
     }
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm("¿Estás seguro de que querés eliminar esta categoría? Los productos vinculados podrían verse afectados.")) return
+        if (!window.confirm("Seguro que quieres eliminar esta categoria? Los productos vinculados podrian verse afectados.")) return
 
         try {
             const result = await deleteCategory(id)
@@ -129,10 +129,10 @@ export default function CategoriesPage() {
                 toast.error(result.error)
                 return
             }
-            toast.success("Categoría eliminada")
+            toast.success("Categoria eliminada")
             mutateCategories()
         } catch {
-            toast.error("Error al eliminar la categoría")
+            toast.error("No se pudo eliminar la categoria")
         }
     }
 
@@ -162,10 +162,10 @@ export default function CategoriesPage() {
                         className="text-2xl font-bold text-foreground"
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
-                        Categorías
+                        Categorias
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Organizá tus productos en categorías
+                        Organiza tus productos por categorias
                     </p>
                 </div>
                 <Button
@@ -173,7 +173,7 @@ export default function CategoriesPage() {
                     onClick={openCreate}
                 >
                     <Plus className="h-4 w-4" />
-                    Agregar categoría
+                    Agregar categoria
                 </Button>
             </div>
 
@@ -183,7 +183,7 @@ export default function CategoriesPage() {
                         <div className="relative flex-1 max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Buscar categorías..."
+                                placeholder="Buscar categorias..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 className="pl-9 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
@@ -243,7 +243,7 @@ export default function CategoriesPage() {
                                 {filtered.length === 0 && (
                                     <TableRow>
                                         <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                            No se encontraron categorías.
+                                            No se encontraron categorias.
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -261,7 +261,7 @@ export default function CategoriesPage() {
                             className="text-card-foreground"
                             style={{ fontFamily: "var(--font-heading)" }}
                         >
-                            {editCategory ? "Editar categoría" : "Crear categoría"}
+                            {editCategory ? "Editar categoria" : "Crear categoria"}
                         </DialogTitle>
                     </DialogHeader>
                     <div className="flex flex-col gap-4 py-4">
@@ -272,7 +272,7 @@ export default function CategoriesPage() {
                             <Input
                                 value={formName}
                                 onChange={handleNameChange}
-                                placeholder="ej. Empanadas"
+                                placeholder="e.g. Burgers"
                                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
                             />
                         </div>
@@ -283,13 +283,13 @@ export default function CategoriesPage() {
                             <Input
                                 value={formSlug}
                                 onChange={(e) => setFormSlug(e.target.value)}
-                                placeholder="ej. empanadas"
+                                placeholder="e.g. burgers"
                                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
                             />
                         </div>
                         <div>
                             <Label className="text-sm text-muted-foreground mb-1.5 block">
-                                Orden (prioridad de visualización)
+                                Orden (prioridad de visualizacion)
                             </Label>
                             <Input
                                 type="number"
@@ -318,7 +318,7 @@ export default function CategoriesPage() {
                             ) : editCategory ? (
                                 "Guardar cambios"
                             ) : (
-                                "Crear categoría"
+                                "Crear categoria"
                             )}
                         </Button>
                     </DialogFooter>

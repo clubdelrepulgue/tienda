@@ -4,17 +4,15 @@ import { useRef } from "react"
 import { Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Order } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 
-// ─── Config ────────────────────────────────────────────────────
 const RECEIPT_CONFIG = {
-  businessName: "El Club del Repulge",
-  instagram: "@elclubdelrepulge",
+  businessName: "BLZR",
+  instagram: "",
   phone: "",
   thankYouMessage: "¡Gracias por tu pedido!",
   footer: "Volvé pronto",
 }
-
-// ─── Receipt Content ────────────────────────────────────────────
 
 function ReceiptContent({ order }: { order: Order }) {
   const deliveryMethodLabel = {
@@ -52,19 +50,6 @@ function ReceiptContent({ order }: { order: Order }) {
     >
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: "6px" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/assets/brand/logo.jpeg"
-          alt="Logo"
-          style={{
-            width: "48px",
-            height: "48px",
-            objectFit: "cover",
-            borderRadius: "50%",
-            filter: "grayscale(100%)",
-            marginBottom: "4px",
-          }}
-        />
         <div style={{ fontWeight: "bold", fontSize: "14px", letterSpacing: "1px", textTransform: "uppercase" }}>
           {RECEIPT_CONFIG.businessName}
         </div>
@@ -105,12 +90,12 @@ function ReceiptContent({ order }: { order: Order }) {
                 {item.quantity}x {item.name}
               </span>
               <span style={{ whiteSpace: "nowrap", marginLeft: "4px" }}>
-                ${itemTotal.toFixed(2)}
+                {formatPrice(itemTotal)}
               </span>
             </div>
             {item.modifiers.length > 0 && (
               <div style={{ fontSize: "10px", color: "#555", paddingLeft: "12px" }}>
-                {item.modifiers.map((m) => `+ ${m.optionName} ($${m.price.toFixed(2)})`).join(", ")}
+                {item.modifiers.map((m) => `+ ${m.optionName} (${formatPrice(m.price)})`).join(", ")}
               </div>
             )}
           </div>
@@ -121,14 +106,14 @@ function ReceiptContent({ order }: { order: Order }) {
 
       {/* Totals */}
       {order.subtotal !== order.total && (
-        <Row label="Subtotal" value={`$${order.subtotal.toFixed(2)}`} />
+        <Row label="Subtotal" value={formatPrice(order.subtotal)} />
       )}
       {order.deliveryFee > 0 && (
-        <Row label="Envío" value={`$${order.deliveryFee.toFixed(2)}`} />
+        <Row label="Envío" value={formatPrice(order.deliveryFee)} />
       )}
       <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "14px", marginTop: "4px" }}>
         <span>TOTAL</span>
-        <span>${order.total.toFixed(2)}</span>
+        <span>{formatPrice(order.total)}</span>
       </div>
 
       <Divider />
@@ -169,8 +154,6 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-
-// ─── Print Button ───────────────────────────────────────────────
 
 export function PrintReceiptButton({ order, variant = "outline" }: { order: Order; variant?: "outline" | "ghost" | "default" }) {
   const receiptRef = useRef<HTMLDivElement>(null)
@@ -229,8 +212,6 @@ export function PrintReceiptButton({ order, variant = "outline" }: { order: Orde
     </>
   )
 }
-
-// ─── Preview Modal (optional, for screen preview) ──────────────
 
 export function ReceiptPreview({ order }: { order: Order }) {
   return (

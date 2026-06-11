@@ -20,6 +20,7 @@ import {
 import type { ModifierGroup, ModifierOption } from "@/lib/types"
 import { toast } from "sonner"
 import { createModifierGroup, updateModifierGroup } from "@/app/actions"
+import { formatPrice } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -80,12 +81,12 @@ export default function ModifiersPage() {
 
   const handleSave = async () => {
     if (!formName) {
-      toast.error("Por favor ingresá un nombre para el grupo")
+      toast.error("Ingresa un nombre para el grupo")
       return
     }
     const validOptions = formOptions.filter((o) => o.name.trim())
     if (validOptions.length === 0) {
-      toast.error("Agregá al menos una opción")
+      toast.error("Agrega al menos una opcion")
       return
     }
 
@@ -127,7 +128,7 @@ export default function ModifiersPage() {
       setDialogOpen(false)
       mutate()
     } catch {
-      toast.error("Ocurrió un error inesperado")
+      toast.error("Algo salio mal")
     } finally {
       setSaving(false)
     }
@@ -160,7 +161,7 @@ export default function ModifiersPage() {
             Modificadores
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Configurá extras, salsas, tamaños y más
+            Configura extras, salsas, tamanos y mas
           </p>
         </div>
         <Button
@@ -195,14 +196,14 @@ export default function ModifiersPage() {
                       variant="outline"
                       className="text-xs bg-primary/15 text-primary border-primary/20"
                     >
-                      Requerido
+                      Obligatorio
                     </Badge>
                   )}
                   <Badge
                     variant="outline"
                     className="text-xs text-muted-foreground border-border"
                   >
-                    Máx. {group.maxSelections}
+                    Maximo {group.maxSelections}
                   </Badge>
                 </div>
               </div>
@@ -222,7 +223,7 @@ export default function ModifiersPage() {
                     </div>
                     <span className="text-sm text-muted-foreground">
                       {option.price > 0
-                        ? `+$${option.price.toFixed(2)}`
+                        ? `+${formatPrice(option.price)}`
                         : "Gratis"}
                     </span>
                   </div>
@@ -252,7 +253,7 @@ export default function ModifiersPage() {
               <Input
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="ej. Extras, Salsas, Tamaño"
+                placeholder="Ej: Extras, Salsas, Tamano"
                 className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
               />
             </div>
@@ -264,12 +265,12 @@ export default function ModifiersPage() {
                   id="required"
                 />
                 <Label htmlFor="required" className="text-sm text-muted-foreground">
-                  Requerido
+                  Obligatorio
                 </Label>
               </div>
               <div className="flex-1">
                 <Label className="text-sm text-muted-foreground mb-1.5 block">
-                  Máx. selecciones
+                  Selecciones maximas
                 </Label>
                 <Input
                   type="number"
@@ -304,7 +305,7 @@ export default function ModifiersPage() {
                       onChange={(e) =>
                         updateOption(i, "name", e.target.value)
                       }
-                      placeholder="Nombre de opción"
+                      placeholder="Nombre de la opcion"
                       className="flex-1 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground text-sm"
                     />
                     <div className="relative w-24">
@@ -326,7 +327,7 @@ export default function ModifiersPage() {
                       size="icon"
                       className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => removeOption(i)}
-                      aria-label="Eliminar opción"
+                      aria-label="Quitar opcion"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

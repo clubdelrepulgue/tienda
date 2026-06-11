@@ -3,6 +3,7 @@
 import { ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/lib/store"
+import { formatPrice } from "@/lib/utils"
 
 interface FloatingCartProps {
   onCartOpen: () => void
@@ -22,12 +23,12 @@ export function FloatingCart({ onCartOpen }: FloatingCartProps) {
       >
         <div className="flex items-center gap-2">
           <ShoppingBag className="h-5 w-5" />
-          <span className="bg-primary-foreground/20 rounded-full px-2 py-0.5 text-sm font-bold">
+          <span className="bg-primary-foreground/20 rounded-full px-2 py-0.5 text-sm">
             {totalItems}
           </span>
         </div>
-        <span className="flex-1 text-center md:text-left font-bold">Ver carrito</span>
-        <span className="font-bold">${totalPrice.toFixed(2)}</span>
+        <span className="flex-1 text-center md:text-left">Ver carrito</span>
+        <span>{formatPrice(totalPrice)}</span>
       </Button>
     </div>
   )

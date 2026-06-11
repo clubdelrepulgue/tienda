@@ -7,12 +7,11 @@ import { Button } from "@/components/ui/button"
 import { MapPin, Search, Navigation } from "lucide-react"
 import { toast } from "sonner"
 import { Polygon } from "./polygon"
-import { BranchLogoMarker } from "./branch-logo-marker"
-import { getCurrentPositionWithFallback, geolocationErrorMessage } from "@/lib/geolocation"
 
 interface AddressSelectorProps {
     value?: { lat: number; lng: number; address: string }
     onChange: (location: { lat: number; lng: number; address: string }) => void
+    onAddressChange?: (address: string) => void
     zones?: {
         id: string
         coordinates: { lat: number; lng: number }[]
@@ -70,6 +69,7 @@ function isPointInPolygon(
 export function AddressSelector({
     value,
     onChange,
+    onAddressChange,
     zones = [],
     height = "300px",
     placeholder = "Buscar dirección...",
@@ -138,6 +138,7 @@ export function AddressSelector({
             const resolvedAddress = address || "Ubicación seleccionada"
 
             setSearchQuery(resolvedAddress)
+            onAddressChange?.(resolvedAddress)
 
             onChange({
                 lat,
@@ -225,8 +226,8 @@ export function AddressSelector({
     }, [searchQuery, geocodeCenter, mapInstance, mapVisible, searchRadiusKm, selectPoint])
 
     // Usar ubicación actual
-    const handleUseCurrentLocation = useCallback(async () => {
-        if (typeof navigator === "undefined" || !navigator.geolocation) {
+    const handleUseCurrentLocation = useCallback(() => {
+        if (!navigator.geolocation) {
             toast.error("Tu navegador no soporta geolocalización")
             return
         }
@@ -236,27 +237,32 @@ export function AddressSelector({
             return
         }
 
-        try {
-            const position = await getCurrentPositionWithFallback()
-            const { latitude, longitude } = position.coords
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords
 
-            // Geocodificamos las coordenadas reales del GPS para mostrar calle y número.
-            const address = await reverseGeocode(latitude, longitude)
-            await selectPoint(latitude, longitude, address || "Mi ubicación actual")
+                await selectPoint(latitude, longitude, "Mi ubicación actual")
 
-            // Auto-open map so user sees their pin
-            if (!mapVisible) {
-                pendingPanRef.current = { lat: latitude, lng: longitude, zoom: 16 }
-                setMapVisible(true)
-            } else {
-                mapInstance?.panTo({ lat: latitude, lng: longitude })
-                mapInstance?.setZoom(16)
-            }
-        } catch (error) {
-            console.error("Geolocation error:", error)
-            toast.error(geolocationErrorMessage(error as GeolocationPositionError))
-        }
-    }, [mapInstance, mapVisible, selectPoint, reverseGeocode])
+                // Auto-open map so user sees their pin
+                if (!mapVisible) {
+                    pendingPanRef.current = { lat: latitude, lng: longitude, zoom: 16 }
+                    setMapVisible(true)
+                } else {
+                    mapInstance?.panTo({ lat: latitude, lng: longitude })
+                    mapInstance?.setZoom(16)
+                }
+            },
+            (error) => {
+                console.error("Geolocation error:", error)
+                const message =
+                    error.code === error.PERMISSION_DENIED
+                        ? "El navegador no tiene permiso para usar tu ubicación. Habilitalo en la barra de dirección."
+                        : "No se pudo obtener tu ubicación. Probá buscar la dirección o mover el pin."
+                toast.error(message)
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+        )
+    }, [mapInstance, mapVisible, selectPoint])
 
     const handleMapReady = useCallback((map: google.maps.Map) => {
         setMapInstance(map)
@@ -282,7 +288,10 @@ export function AddressSelector({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value)
+                            onAddressChange?.(e.target.value)
+                        }}
                         placeholder={placeholder}
                         className="pl-10 rounded-xl"
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -338,11 +347,12 @@ export function AddressSelector({
                                 />
                             ))}
 
-                            {/* Branch marker con el logo del local */}
+                            {/* Branch marker */}
                             {branchMarker && (
-                                <BranchLogoMarker
+                                <Marker
                                     position={{ lat: branchMarker.lat, lng: branchMarker.lng }}
                                     title={branchMarker.title || "Sucursal"}
+                                    zIndex={20}
                                 />
                             )}
 
