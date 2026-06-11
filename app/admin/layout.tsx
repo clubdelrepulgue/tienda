@@ -176,7 +176,7 @@ export default function AdminLayout({
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          "sticky top-0 hidden h-dvh max-h-dvh min-h-dvh shrink-0 flex-col border-r border-sidebar-border/80 bg-[#0b0c0e] transition-[width] duration-300 ease-in-out md:flex",
+          "sticky top-0 hidden h-dvh max-h-dvh min-h-dvh shrink-0 flex-col border-r border-sidebar-border/80 bg-sidebar transition-[width] duration-300 ease-in-out md:flex",
           sidebarCollapsed ? "w-[76px]" : "w-64"
         )}
       >
@@ -259,7 +259,7 @@ export default function AdminLayout({
                 <span className="sr-only">Abrir navegacion</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="flex h-dvh max-h-dvh w-64 flex-col border-sidebar-border bg-[#0b0c0e] p-0">
+            <SheetContent side="left" className="flex h-dvh max-h-dvh w-64 flex-col border-sidebar-border bg-sidebar p-0">
               <SheetTitle className="sr-only">Navegacion</SheetTitle>
               <div className="flex shrink-0 items-center gap-2 border-b border-sidebar-border/80 p-4">
                 <Image src="/assets/brand/logo.jpeg" alt="El Club del Repulgue" width={160} height={32} priority className="h-7 w-auto" />

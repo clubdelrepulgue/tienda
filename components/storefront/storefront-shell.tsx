@@ -91,19 +91,5 @@ export function StorefrontShell({
 }
 
 function CoverVideo() {
-    return (
-        <section className="border-b border-white/[0.07] px-4 py-[5px] sm:px-6">
-            <video
-                className="mx-auto block h-auto w-full max-w-6xl"
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
-                aria-hidden="true"
-            >
-                <source src="/VIDEO%20PORTADA%20BLZR%20-%202.mp4" type="video/mp4" />
-            </video>
-        </section>
-    )
+    return null
 }
