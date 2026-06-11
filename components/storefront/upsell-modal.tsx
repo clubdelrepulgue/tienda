@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { Product, UpsellRule } from "@/lib/types"
 import { useCartStore } from "@/lib/store"
-import { formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface UpsellModalProps {
@@ -99,7 +98,7 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
 
     const handleAddToCart = (product: Product, discountedPrice: number, rule: UpsellRule) => {
         addItem(product, [], discountedPrice)
-        toast.success(`${product.name} agregado con ${rule.discountPercentage}% de descuento`)
+        toast.success(`Added ${product.name} with ${rule.discountPercentage}% off!`)
     }
 
     if (suggestions.length === 0) return null
@@ -114,11 +113,11 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
                             className="text-lg font-bold text-card-foreground"
                             style={{ fontFamily: "var(--font-heading)" }}
                         >
-                            Completa tu pedido
+                            Complete your order
                         </DialogTitle>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                        Otros clientes tambien sumaron estos productos
+                        Customers also added these items
                     </p>
                 </DialogHeader>
 
@@ -149,10 +148,10 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
                                         {rule.discountPercentage > 0 ? (
                                             <>
                                                 <span className="text-sm font-bold text-primary">
-                                                    {formatPrice(discountedPrice)}
+                                                    ${discountedPrice.toFixed(2)}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground line-through">
-                                                    {formatPrice(product.price)}
+                                                    ${product.price.toFixed(2)}
                                                 </span>
                                                 <span className="text-xs bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded">
                                                     -{rule.discountPercentage}%
@@ -160,7 +159,7 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
                                             </>
                                         ) : (
                                             <span className="text-sm font-bold text-card-foreground">
-                                                {formatPrice(product.price)}
+                                                ${product.price.toFixed(2)}
                                             </span>
                                         )}
                                     </div>
@@ -183,7 +182,7 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
                         className="w-full rounded-xl"
                         onClick={onClose}
                     >
-                        Continuar al pago
+                        Continue to checkout
                     </Button>
                 </div>
             </DialogContent>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { validateCoupon } from "@/app/actions"
 import { toast } from "sonner"
-import { cn, formatPrice } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 
 interface CouponInputProps {
     cartTotal: number
@@ -36,7 +36,7 @@ export function CouponInput({ cartTotal, onCouponApplied, appliedCoupon }: Coupo
                 discountType: result.discountType,
                 discountValue: result.discountValue,
             })
-            toast.success(`Cupón aplicado: -${formatPrice(result.discount)}`)
+            toast.success(`Cupón aplicado: -$${result.discount.toFixed(2)}`)
             setCode("")
         } catch {
             toast.error("Error al validar el cupón")
@@ -63,7 +63,7 @@ export function CouponInput({ cartTotal, onCouponApplied, appliedCoupon }: Coupo
                                 Cupón aplicado
                             </p>
                             <p className="text-xs text-muted-foreground">
-                                {appliedCoupon.code} (-{formatPrice(appliedCoupon.discount)})
+                                {appliedCoupon.code} (-${appliedCoupon.discount.toFixed(2)})
                             </p>
                         </div>
                     </div>

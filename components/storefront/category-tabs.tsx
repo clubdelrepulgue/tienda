@@ -16,36 +16,36 @@ export function CategoryTabs({
   onCategoryChange,
 }: CategoryTabsProps) {
   return (
-    <div className="sticky top-[57px] z-40 border-b border-white/[0.07] bg-background/85 backdrop-blur-xl">
-      <ScrollArea className="mx-auto max-w-6xl">
-        <div className="flex items-center gap-2.5 px-4 py-2 sm:px-5 lg:px-6">
+    <div className="sticky top-[84px] z-40 bg-white border-b border-border">
+      <ScrollArea className="mx-auto max-w-5xl">
+        <div className="flex items-center gap-2 px-4 py-3">
           <button
             onClick={() => onCategoryChange("all")}
             className={cn(
-              "shrink-0 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
+              "shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all whitespace-nowrap",
               activeCategory === "all"
-                ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.22)]"
-                : "border-white/[0.06] bg-[#18191d] text-white/75 hover:border-white/[0.12] hover:bg-[#202126] hover:text-white"
+                ? "bg-primary text-white"
+                : "bg-white text-foreground border border-border hover:border-primary/40 hover:text-primary"
             )}
           >
-            All
+            Todas
           </button>
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => onCategoryChange(cat.id)}
               className={cn(
-                "shrink-0 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
+                "shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all whitespace-nowrap",
                 activeCategory === cat.id
-                  ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.22)]"
-                  : "border-white/[0.06] bg-[#18191d] text-white/75 hover:border-white/[0.12] hover:bg-[#202126] hover:text-white"
+                  ? "bg-primary text-white"
+                  : "bg-white text-foreground border border-border hover:border-primary/40 hover:text-primary"
               )}
             >
               {cat.name}
             </button>
           ))}
         </div>
-        <ScrollBar orientation="horizontal" />
+        <ScrollBar orientation="horizontal" className="h-1" />
       </ScrollArea>
     </div>
   )

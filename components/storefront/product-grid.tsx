@@ -31,16 +31,24 @@ export function ProductGrid({
     .filter((g) => g.items.length > 0)
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-7 px-4 pb-28 pt-2 sm:px-5 md:gap-8 md:pb-10 lg:px-6">
-      {groupedByCategory.map(({ category, items }) => (
+    <div className="mx-auto max-w-5xl px-4 py-6 pb-32 flex flex-col gap-10">
+      {groupedByCategory.map(({ category, items }, idx) => (
         <section key={category.id} id={`category-${category.slug}`}>
-          <h2
-            className="mb-3 text-lg font-bold text-foreground"
-            style={{ fontFamily: "var(--font-heading)" }}
-          >
-            {category.name}
-          </h2>
-          <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-[18px] lg:grid-cols-4">
+          <div className="flex items-center gap-2 mb-5">
+            {idx === 0 && (
+              <span className="text-2xl" role="img" aria-label="empanada">🥟</span>
+            )}
+            <h2
+              className="text-xl font-extrabold text-foreground"
+              style={{ fontFamily: "var(--font-heading)" }}
+            >
+              {idx === 0 ? "Nuestras Empanadas" : category.name}
+            </h2>
+            {idx === 0 && (
+              <div className="flex-1 border-b-2 border-primary ml-1 mb-0.5" style={{ maxWidth: "48px" }} />
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {items.map((product) => (
               <ProductCard
                 key={product.id}

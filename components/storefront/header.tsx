@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { ShoppingBag, MapPin } from "lucide-react"
+import { ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/lib/store"
 
@@ -11,44 +11,51 @@ interface HeaderProps {
 
 export function Header({ onCartOpen }: HeaderProps) {
   const totalItems = useCartStore((s) => s.totalItems())
+  const totalPrice = useCartStore((s) => s.totalPrice())
 
   return (
-    <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <h1
-            className="flex items-center"
-            style={{ fontFamily: "var(--font-heading)" }}
-          >
-            <Image
-              src="/assets/brand/logo.jpeg"
-              alt="El Club del Repulgue"
-              width={160}
-              height={32}
-              priority
-              className="h-7 w-auto sm:h-8"
-            />
-          </h1>
-          <div className="hidden sm:flex items-center gap-1.5 text-muted-foreground text-sm">
-            <MapPin className="h-3.5 w-3.5" />
-            <span>Downtown</span>
-          </div>
+    <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
+      <div className="mx-auto max-w-5xl flex items-center justify-between px-4 py-2 gap-4">
+        {/* Logo */}
+        <div className="flex items-center">
+          <Image
+            src="/assets/brand/logo.jpeg"
+            alt="El Club del Repulgue — Empanadas"
+            width={68}
+            height={68}
+            className="rounded-2xl shadow-md"
+            priority
+          />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="relative h-9 w-9 shrink-0 rounded-xl p-0 sm:w-auto sm:gap-2 sm:px-3"
-          onClick={onCartOpen}
-          aria-label={`Abrir carrito con ${totalItems} productos`}
-        >
-          <ShoppingBag className="h-4 w-4" />
-          <span className="hidden sm:inline">Carrito</span>
-          {totalItems > 0 && (
-            <span className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-semibold">
-              {totalItems}
+
+        {/* Cart button — right */}
+        <div className="flex justify-end ml-auto">
+          <Button
+            className="relative gap-2 rounded-full bg-primary text-white hover:bg-primary/90 shadow-sm px-4 h-10"
+            onClick={onCartOpen}
+            aria-label={`Abrir carrito con ${totalItems} productos`}
+          >
+            <div className="relative">
+              <ShoppingBag className="h-5 w-5" />
+              {totalItems > 0 && (
+                <span className="absolute -top-2 -right-2 h-4 w-4 rounded-full bg-white text-primary text-[10px] flex items-center justify-center font-bold">
+                  {totalItems}
+                </span>
+              )}
+            </div>
+            <span className="hidden sm:inline font-semibold text-sm">
+              Mi pedido
             </span>
-          )}
-        </Button>
+            {totalItems > 0 && (
+              <>
+                <span className="hidden sm:inline text-white/60">|</span>
+                <span className="hidden sm:inline font-bold text-sm">
+                  ${totalPrice.toFixed(0)}
+                </span>
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </header>
   )
