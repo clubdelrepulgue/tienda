@@ -20,16 +20,16 @@ interface StorefrontShellProps {
 
 function Banner() {
     return (
-        <div className="w-full">
+        <section className="border-b border-border px-4 py-[5px] sm:px-6">
             <Image
                 src="/assets/BANNER 1  BLZR - 1.webp"
                 alt="El Club del Repulgue — Banner"
                 width={1920}
                 height={400}
-                className="w-full h-auto"
+                className="mx-auto block h-auto w-full max-w-6xl rounded-2xl"
                 priority
             />
-        </div>
+        </section>
     )
 }
 
