@@ -34,20 +34,12 @@ export function ProductGrid({
     <div className="mx-auto max-w-5xl px-4 py-6 pb-32 flex flex-col gap-10">
       {groupedByCategory.map(({ category, items }, idx) => (
         <section key={category.id} id={`category-${category.slug}`}>
-          <div className="flex items-center gap-2 mb-5">
-            {idx === 0 && (
-              <span className="text-2xl" role="img" aria-label="empanada">🥟</span>
-            )}
-            <h2
-              className="text-xl font-extrabold text-foreground"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              {idx === 0 ? "Nuestras Empanadas" : category.name}
-            </h2>
-            {idx === 0 && (
-              <div className="flex-1 border-b-2 border-primary ml-1 mb-0.5" style={{ maxWidth: "48px" }} />
-            )}
-          </div>
+          <h2
+            className="text-xl font-extrabold text-foreground mb-5"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            {category.name}
+          </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {items.map((product) => (
               <ProductCard
