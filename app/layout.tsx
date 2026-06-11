@@ -53,7 +53,7 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
-        <div className="blazr-app-shell">
+        <div className="app-shell">
           {children}
         </div>
         <Toaster position="top-center" richColors />

@@ -30,7 +30,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import blzrLogo from "@/img/LOGO BLZR.webp"
 
 type AdminNavItem = {
   href: string
@@ -189,11 +188,11 @@ export default function AdminLayout({
                 "min-w-0 items-center justify-center gap-2 overflow-hidden transition-[opacity,width] duration-200",
                 sidebarCollapsed ? "flex w-full opacity-100" : "flex opacity-100"
               )}
-              aria-label="BLZR Admin"
+              aria-label="El Club del Repulgue Admin"
             >
               <Image
-                src={blzrLogo}
-                alt="BLZR"
+                src="/assets/brand/logo.jpeg"
+                alt="El Club del Repulgue"
                 priority
                 className={cn("h-7 w-auto shrink-0", sidebarCollapsed && "max-w-12")}
               />

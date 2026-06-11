@@ -4,7 +4,6 @@ import Image from "next/image"
 import { ShoppingBag, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/lib/store"
-import blzrLogo from "@/img/LOGO BLZR.webp"
 
 interface HeaderProps {
   onCartOpen: () => void
@@ -22,8 +21,8 @@ export function Header({ onCartOpen }: HeaderProps) {
             style={{ fontFamily: "var(--font-heading)" }}
           >
             <Image
-              src={blzrLogo}
-              alt="BLZR"
+              src="/assets/brand/logo.jpeg"
+              alt="El Club del Repulgue"
               priority
               className="h-7 w-auto sm:h-8"
             />
