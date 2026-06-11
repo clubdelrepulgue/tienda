@@ -81,6 +81,7 @@ export interface Order {
   addressLng?: number | null
   driverId?: string | null
   deliveryZoneId?: string | null
+  orderType?: OrderType
 }
 
 export interface Branch {
