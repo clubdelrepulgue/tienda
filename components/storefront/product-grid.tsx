@@ -31,7 +31,7 @@ export function ProductGrid({
     .filter((g) => g.items.length > 0)
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 pb-32 flex flex-col gap-10">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-6 pb-32">
       {groupedByCategory.map(({ category, items }, idx) => (
         <section key={category.id} id={`category-${category.slug}`}>
           <h2

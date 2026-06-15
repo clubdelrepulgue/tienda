@@ -94,14 +94,17 @@
   }
 }
 
+.app-shell,
 .blazr-app-shell {
   transition: opacity 240ms ease;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  background: #F7F7F7;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-shell,
   .blazr-app-shell {
     transition: none;
   }

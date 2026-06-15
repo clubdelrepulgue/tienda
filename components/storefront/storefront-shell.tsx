@@ -62,7 +62,7 @@ export function StorefrontShell({
     }
 
     return (
-        <div className="min-h-screen bg-[#F7F7F7]">
+        <div className="flex min-h-dvh flex-col bg-[#F7F7F7]">
             <Header onCartOpen={() => setCartOpen(true)} />
             <Banner />
             <CategoryTabs
