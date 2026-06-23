@@ -106,7 +106,7 @@ function OrderCard({
   return (
     <Card
       className={cn(
-        "group w-full min-w-0 overflow-hidden rounded-[22px] border-white/[0.075] bg-[#15161a] py-0 shadow-[0_14px_38px_rgba(0,0,0,0.2)] transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:bg-[#18191d] hover:shadow-[0_18px_48px_rgba(0,0,0,0.28)]",
+        "group w-full min-w-0 overflow-hidden rounded-2xl border-border bg-card py-0 shadow-sm transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-background hover:shadow-md",
         updating && "opacity-50 pointer-events-none",
         departing && "scale-[0.98] opacity-0 blur-[1px]",
       )}
@@ -115,7 +115,7 @@ function OrderCard({
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
           <div className="min-w-0">
             <span
-              className="block text-3xl font-black leading-none text-white"
+              className="block text-3xl font-black leading-none text-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
               #{order.orderNumber}
@@ -125,8 +125,8 @@ function OrderCard({
             className={cn(
               "flex max-w-[112px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-base font-black leading-none",
               isReady
-                ? "border-emerald-300/25 bg-emerald-400/12 text-emerald-100"
-                : "border-white/[0.08] bg-white/[0.045] text-white/86"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-border bg-muted text-foreground"
             )}
             style={{ fontFamily: "var(--font-heading)" }}
           >
@@ -136,35 +136,35 @@ function OrderCard({
         </div>
       </CardHeader>
       <CardContent className="p-3.5 pt-0">
-        <div className="mb-2 flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-sm font-medium text-white/56">
-          <User className="h-3.5 w-3.5 shrink-0 text-white/42" />
-          <span className="min-w-0 truncate font-bold text-white/88">{order.customerName}</span>
+        <div className="mb-2 flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-sm font-medium text-muted-foreground">
+          <User className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 truncate font-bold text-foreground">{order.customerName}</span>
           {order.customerPhone && (
             <>
-              <span className="shrink-0 text-white/28">·</span>
-              <Phone className="h-3.5 w-3.5 shrink-0 text-white/38" />
-              <span className="max-w-[90px] shrink truncate text-white/58">{order.customerPhone}</span>
+              <span className="shrink-0 text-muted-foreground/45">·</span>
+              <Phone className="h-3.5 w-3.5 shrink-0" />
+              <span className="max-w-[90px] shrink truncate">{order.customerPhone}</span>
             </>
           )}
           {order.deliveryMethod === "delivery" && order.address && (
             <>
-              <span className="shrink-0 text-white/28">·</span>
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-white/38" />
-              <span className="min-w-0 truncate text-white/58">{order.address}</span>
+              <span className="shrink-0 text-muted-foreground/45">·</span>
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{order.address}</span>
             </>
           )}
         </div>
 
-        <div className="mb-2 min-w-0 space-y-1 overflow-hidden rounded-2xl bg-black/10 p-2.5">
+        <div className="mb-2 min-w-0 space-y-1 overflow-hidden rounded-xl border border-border/70 bg-muted/45 p-2.5">
           {order.items.map((item) => (
             <div key={item.id} className="flex min-w-0 justify-between text-sm leading-snug">
               <div className="min-w-0 max-w-full overflow-hidden">
-                <span className="font-bold text-white">
+                <span className="font-bold text-foreground">
                   {item.quantity}x
                 </span>{" "}
-                <span className="font-semibold text-white/78">{item.name}</span>
+                <span className="font-semibold text-foreground/80">{item.name}</span>
                 {item.modifiers?.length > 0 && (
-                  <p className="ml-5 mt-0.5 line-clamp-2 max-w-[calc(100%-1.25rem)] break-words text-xs leading-snug text-white/42">
+                  <p className="ml-5 mt-0.5 line-clamp-2 max-w-[calc(100%-1.25rem)] break-words text-xs leading-snug text-muted-foreground">
                     {item.modifiers.map((m) => m.optionName).join(", ")}
                   </p>
                 )}
@@ -174,8 +174,8 @@ function OrderCard({
         </div>
 
         {isDeliveryDispatch && (
-          <div className="mb-2 rounded-2xl border border-white/[0.07] bg-white/[0.035] p-2.5">
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/45">
+          <div className="mb-2 rounded-2xl border border-border bg-muted/35 p-2.5">
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
               <Bike className="h-3.5 w-3.5" />
               Delivery
             </div>
@@ -185,7 +185,7 @@ function OrderCard({
                 onValueChange={setSelectedDriverId}
                 disabled={updating || activeDrivers.length === 0}
               >
-                <SelectTrigger className="h-9 w-full rounded-full border-white/[0.08] bg-black/15 text-white/75 hover:bg-black/25">
+                <SelectTrigger className="h-9 w-full rounded-full border-border bg-background text-foreground hover:bg-muted/50">
                   <SelectValue placeholder="Seleccionar delivery" />
                 </SelectTrigger>
                 <SelectContent className="border-border bg-card">
@@ -224,7 +224,7 @@ function OrderCard({
               </p>
             )}
             {activeDrivers.length === 0 && (
-              <p className="mt-2 text-xs text-white/40">
+              <p className="mt-2 text-xs text-muted-foreground">
                 No hay repartidores activos.
               </p>
             )}
@@ -239,13 +239,13 @@ function OrderCard({
           </div>
         )}
 
-        <div className="mt-auto flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
+        <div className="mt-auto flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
           <div className="min-w-0 flex-1 basis-[132px]">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-white/42">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
               <FulfillmentIcon className="h-3 w-3" />
               <span className="uppercase tracking-[0.14em]">{fulfillmentLabel}</span>
             </div>
-            <span className="mt-0.5 text-base font-extrabold leading-none text-white">
+            <span className="mt-0.5 text-base font-extrabold leading-none text-foreground">
               {formatPrice(order.total)}
             </span>
           </div>
@@ -264,7 +264,7 @@ function OrderCard({
           {showAssign && !isDeliveryDispatch && !nextStatus && !driver && (
             <Badge
               variant="outline"
-              className="rounded-full border-dashed border-white/[0.1] bg-white/[0.035] text-xs text-white/45"
+              className="rounded-full border-dashed border-border bg-muted text-xs text-muted-foreground"
             >
               Sin asignar
             </Badge>
@@ -328,8 +328,8 @@ function ReadyColumn({
 
   if (orders.length === 0) {
     return (
-      <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.11] bg-black/10 p-6 text-center text-white/58">
-        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white/[0.06]">
+      <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/35 p-6 text-center text-muted-foreground">
+        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full border border-border bg-card">
           <Package className="h-5 w-5 opacity-60" />
         </div>
         <p className="text-sm font-semibold">Sin pedidos</p>
@@ -342,12 +342,12 @@ function ReadyColumn({
       {/* ── Delivery orders grouped by zone ── */}
       {deliveryOrders.length > 0 && (
         <div className="min-w-0 space-y-3 overflow-hidden">
-          <div className="flex items-center gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
-            <Truck className="h-3.5 w-3.5 text-white/45" />
-            <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/52">
+          <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-2">
+            <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
               Delivery
             </span>
-            <Badge variant="outline" className="ml-auto rounded-full border-white/[0.08] bg-white/[0.035] text-xs text-white/60">
+            <Badge variant="outline" className="ml-auto rounded-full border-border bg-card text-xs text-muted-foreground">
               {deliveryOrders.length}
             </Badge>
           </div>
@@ -358,7 +358,7 @@ function ReadyColumn({
               <div key={zoneId} className="min-w-0 space-y-2 overflow-hidden">
                 {/* Zone header */}
                 <div
-                  className="flex items-center gap-2 rounded-2xl border border-white/[0.06] px-3 py-2"
+                  className="flex items-center gap-2 rounded-2xl border border-border px-3 py-2"
                   style={{
                     backgroundColor: zone
                       ? `${zone.color}15`
@@ -370,10 +370,10 @@ function ReadyColumn({
                     className="h-3.5 w-3.5"
                     style={{ color: zone?.color }}
                   />
-                  <span className="flex-1 text-xs font-bold text-white/78">
+                  <span className="flex-1 text-xs font-bold text-foreground">
                     {zone?.name || "Sin zona"}
                   </span>
-                  <span className="text-xs text-white/45">
+                  <span className="text-xs text-muted-foreground">
                     {zoneOrders.length} orden{zoneOrders.length !== 1 ? "es" : ""}
                   </span>
                 </div>
@@ -404,12 +404,12 @@ function ReadyColumn({
       {/* ── Pickup / Dine-in orders ── */}
       {pickupOrders.length > 0 && (
         <div className="min-w-0 space-y-3 overflow-hidden">
-          <div className="flex items-center gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
-            <Store className="h-3.5 w-3.5 text-white/45" />
-            <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/52">
+          <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-2">
+            <Store className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
               Retiro / En local
             </span>
-            <Badge variant="outline" className="ml-auto rounded-full border-white/[0.08] bg-white/[0.035] text-xs text-white/60">
+            <Badge variant="outline" className="ml-auto rounded-full border-border bg-card text-xs text-muted-foreground">
               {pickupOrders.length}
             </Badge>
           </div>
@@ -557,9 +557,9 @@ const COLUMNS: Column[] = [
     id: "pending",
     label: "Pendientes",
     icon: Clock,
-    color: "border-orange-300/25 bg-orange-500/15 text-orange-100",
-    headerTint: "from-orange-500/[0.13]",
-    iconClassName: "border-orange-300/20 bg-orange-500/12 text-orange-100",
+    color: "border-orange-200 bg-orange-50 text-orange-700",
+    headerTint: "from-orange-50",
+    iconClassName: "border-orange-200 bg-orange-50 text-orange-700",
     statuses: ["new", "accepted"],
     nextStatus: "preparing",
   },
@@ -567,9 +567,9 @@ const COLUMNS: Column[] = [
     id: "preparing",
     label: "Preparando",
     icon: ChefHat,
-    color: "border-amber-300/25 bg-amber-400/15 text-amber-100",
-    headerTint: "from-amber-400/[0.13]",
-    iconClassName: "border-amber-300/20 bg-amber-400/12 text-amber-100",
+    color: "border-amber-200 bg-amber-50 text-amber-700",
+    headerTint: "from-amber-50",
+    iconClassName: "border-amber-200 bg-amber-50 text-amber-700",
     statuses: ["preparing"],
     nextStatus: "ready",
   },
@@ -577,9 +577,9 @@ const COLUMNS: Column[] = [
     id: "ready",
     label: "Listos",
     icon: Package,
-    color: "border-emerald-300/25 bg-emerald-400/15 text-emerald-100",
-    headerTint: "from-emerald-400/[0.13]",
-    iconClassName: "border-emerald-300/20 bg-emerald-400/12 text-emerald-100",
+    color: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    headerTint: "from-emerald-50",
+    iconClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
     statuses: ["ready"],
   },
 ]
@@ -853,12 +853,12 @@ export default function OrdersPage() {
           return (
             <div
               key={col.id}
-              className="flex h-[calc(100dvh-14rem)] min-h-[420px] min-w-[280px] max-h-[680px] max-w-full snap-center flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111216] shadow-[0_14px_40px_rgba(0,0,0,0.16)]"
+              className="flex h-[calc(100dvh-14rem)] min-h-[420px] min-w-[280px] max-h-[680px] max-w-full snap-center flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
             >
               {/* Column header */}
               <div
                 className={cn(
-                  "border-b border-white/[0.07] bg-gradient-to-b to-transparent px-4 py-3.5",
+                  "border-b border-border bg-gradient-to-b to-card px-4 py-3.5",
                   col.headerTint
                 )}
               >
@@ -873,7 +873,7 @@ export default function OrdersPage() {
                       <ColIcon className="h-4 w-4" />
                     </span>
                     <h2
-                      className="truncate text-sm font-bold uppercase tracking-[0.1em] text-white/90"
+                      className="truncate text-sm font-bold uppercase tracking-[0.1em] text-foreground"
                       style={{ fontFamily: "var(--font-heading)" }}
                     >
                       {col.label}
@@ -907,8 +907,8 @@ export default function OrdersPage() {
                 ) : (
                   <div className="flex min-w-0 flex-col gap-3 overflow-hidden">
                     {colOrders.length === 0 ? (
-                      <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.11] bg-black/10 p-6 text-center text-white/58">
-                        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white/[0.06]">
+                      <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/35 p-6 text-center text-muted-foreground">
+                        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full border border-border bg-card">
                           <ColIcon className="h-5 w-5 opacity-60" />
                         </div>
                         <p className="text-sm font-semibold">Sin pedidos</p>

@@ -64,8 +64,8 @@ const COLUMNS: KitchenColumn[] = [
         statuses: ["new"],
         icon: Clock,
         accent: "bg-red-500",
-        headerTint: "from-red-500/14",
-        badgeClassName: "border-red-400/25 bg-red-500/12 text-red-200",
+        headerTint: "from-red-50",
+        badgeClassName: "border-red-200 bg-red-50 text-red-700",
         buttonClassName: "bg-red-500 text-white hover:bg-red-400 active:bg-red-600",
         nextStatus: "preparing",
         buttonText: "Aceptar",
@@ -76,8 +76,8 @@ const COLUMNS: KitchenColumn[] = [
         statuses: ["accepted", "preparing"],
         icon: ChefHat,
         accent: "bg-amber-400",
-        headerTint: "from-amber-400/14",
-        badgeClassName: "border-amber-300/25 bg-amber-400/12 text-amber-100",
+        headerTint: "from-amber-50",
+        badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
         buttonClassName: "bg-amber-400 text-black hover:bg-amber-300 active:bg-amber-500",
         nextStatus: "ready",
         buttonText: "Marcar como listo",
@@ -88,8 +88,8 @@ const COLUMNS: KitchenColumn[] = [
         statuses: ["ready"],
         icon: PackageCheck,
         accent: "bg-emerald-400",
-        headerTint: "from-emerald-400/14",
-        badgeClassName: "border-emerald-300/25 bg-emerald-400/12 text-emerald-100",
+        headerTint: "from-emerald-50",
+        badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
     },
 ]
 
@@ -302,7 +302,7 @@ export default function KitchenDisplayPage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                        <SelectTrigger className="h-10 w-48 rounded-full border-white/10 bg-white/[0.035]">
+                        <SelectTrigger className="h-10 w-48 rounded-full border-border bg-card shadow-sm">
                             <SelectValue placeholder="Sucursal" />
                         </SelectTrigger>
                         <SelectContent>
@@ -317,7 +317,7 @@ export default function KitchenDisplayPage() {
                         variant="outline"
                         size="icon"
                         onClick={() => setSoundEnabled(!soundEnabled)}
-                        className="h-10 w-10 rounded-full border-white/10 bg-white/[0.035] hover:bg-white/[0.07]"
+                        className="h-10 w-10 rounded-full border-border bg-card shadow-sm hover:bg-muted"
                         aria-label={soundEnabled ? "Silenciar sonidos" : "Activar sonidos"}
                     >
                         {soundEnabled ? (
@@ -329,7 +329,7 @@ export default function KitchenDisplayPage() {
                     <Button
                         variant="outline"
                         onClick={toggleFullscreen}
-                        className="h-10 rounded-full border-white/10 bg-white/[0.035] px-4 hover:bg-white/[0.07]"
+                        className="h-10 rounded-full border-border bg-card px-4 shadow-sm hover:bg-muted"
                     >
                         <Maximize2 className="h-4 w-4" />
                         {fullscreen ? "Salir" : "Pantalla completa"}
@@ -347,16 +347,16 @@ export default function KitchenDisplayPage() {
                     return (
                         <section
                             key={col.id}
-                            className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-white/[0.075] bg-[#101114] shadow-[0_18px_52px_rgba(0,0,0,0.22)] lg:min-h-0"
+                            className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm lg:min-h-0"
                         >
-                            <div className={cn("border-b border-white/[0.06] bg-gradient-to-b to-transparent p-4", col.headerTint)}>
+                            <div className={cn("border-b border-border bg-gradient-to-b to-card p-4", col.headerTint)}>
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-3">
                                         <span className={cn("h-2.5 w-2.5 rounded-full", col.accent)} />
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <Icon className="h-4 w-4 text-white/55" />
-                                                <h2 className="text-sm font-bold uppercase tracking-wide text-white">
+                                                <Icon className="h-4 w-4 text-muted-foreground" />
+                                                <h2 className="text-sm font-bold uppercase tracking-wide text-foreground">
                                                     {col.label}
                                                 </h2>
                                             </div>
@@ -371,7 +371,7 @@ export default function KitchenDisplayPage() {
                                         variant="outline"
                                         size="sm"
                                         onClick={() => setHistoryOpen(true)}
-                                        className="mt-3 h-9 w-full rounded-full border-emerald-300/20 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15 hover:text-emerald-50"
+                                        className="mt-3 h-9 w-full rounded-full border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
                                     >
                                         <ClipboardList className="h-4 w-4" />
                                         Ver historial
@@ -414,9 +414,9 @@ export default function KitchenDisplayPage() {
 
 function EmptyColumnState() {
     return (
-        <div className="flex min-h-[132px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.11] bg-white/[0.025] p-6 text-center">
-            <PackageCheck className="mb-2 h-5 w-5 text-white/28" />
-            <p className="text-sm font-semibold text-white/58">Sin pedidos por ahora</p>
+        <div className="flex min-h-[132px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/35 p-6 text-center">
+            <PackageCheck className="mb-2 h-5 w-5 text-muted-foreground/60" />
+            <p className="text-sm font-semibold text-muted-foreground">Sin pedidos por ahora</p>
         </div>
     )
 }
@@ -436,22 +436,22 @@ function KitchenOrderCard({ order, column, onNextStatus, now, updating }: Kitche
 
     return (
         <Card className={cn(
-            "overflow-hidden rounded-2xl border-white/[0.075] bg-[#17181c] py-0 shadow-[0_14px_38px_rgba(0,0,0,0.2)] transition-[opacity,transform,border-color,background-color] duration-200 hover:border-white/[0.13] hover:bg-[#1b1c20]",
+            "overflow-hidden rounded-2xl border-border bg-card py-0 shadow-sm transition-[opacity,transform,border-color,background-color,box-shadow] duration-200 hover:border-primary/25 hover:bg-background hover:shadow-md",
             updating && "pointer-events-none scale-[0.98] opacity-60",
-            isDelayed && "border-red-400/45 ring-1 ring-red-500/20"
+            isDelayed && "border-red-300 ring-1 ring-red-200"
         )}>
             <CardContent className="space-y-4 p-4">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                            <span className="text-3xl font-black leading-none text-white">
+                            <span className="text-3xl font-black leading-none text-foreground">
                                 #{order.orderNumber}
                             </span>
                             {isDelayed && (
                                 <AlertCircle className="h-5 w-5 shrink-0 text-red-300" />
                             )}
                         </div>
-                        <div className="mt-2 flex items-center gap-2 text-sm font-medium text-white/55">
+                        <div className="mt-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
                             <Store className="h-4 w-4" />
                             <span>{getOrderTypeLabel(order)}</span>
                         </div>
@@ -459,10 +459,10 @@ function KitchenOrderCard({ order, column, onNextStatus, now, updating }: Kitche
                     <div className={cn(
                         "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-lg font-black leading-none",
                         isDelayed
-                            ? "border-red-300/25 bg-red-500/12 text-red-100"
+                            ? "border-red-200 bg-red-50 text-red-700"
                             : isReady
-                                ? "border-emerald-300/25 bg-emerald-400/12 text-emerald-100"
-                                : "border-white/[0.08] bg-white/[0.045] text-white/86"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-border bg-muted text-foreground"
                     )}
                         style={{ fontFamily: "var(--font-heading)" }}
                     >
@@ -473,13 +473,13 @@ function KitchenOrderCard({ order, column, onNextStatus, now, updating }: Kitche
 
                 <div className="space-y-2">
                     {order.items.map((item, idx) => (
-                        <div key={idx} className="rounded-xl border border-white/[0.055] bg-black/10 p-3">
+                        <div key={idx} className="rounded-xl border border-border/70 bg-muted/45 p-3">
                             <div className="flex items-baseline gap-2 text-[15px] leading-snug">
-                                <span className="font-black text-white">{item.quantity}x</span>
-                                <span className="font-semibold text-white/92">{item.name}</span>
+                                <span className="font-black text-foreground">{item.quantity}x</span>
+                                <span className="font-semibold text-foreground/85">{item.name}</span>
                             </div>
                             {item.modifiers.length > 0 && (
-                                <p className="mt-1.5 pl-6 text-sm leading-relaxed text-white/58">
+                                <p className="mt-1.5 pl-6 text-sm leading-relaxed text-muted-foreground">
                                     {item.modifiers.map((m) => m.optionName).join(", ")}
                                 </p>
                             )}
@@ -488,7 +488,7 @@ function KitchenOrderCard({ order, column, onNextStatus, now, updating }: Kitche
                 </div>
 
                 {order.deliveryNotes && (
-                    <div className="flex gap-2 rounded-xl border border-amber-300/18 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-100">
+                    <div className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
                         <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0" />
                         <p>{order.deliveryNotes}</p>
                     </div>
@@ -511,7 +511,7 @@ function KitchenOrderCard({ order, column, onNextStatus, now, updating }: Kitche
                         )}
                     </Button>
                 ) : (
-                    <Badge className="h-10 w-full justify-center rounded-xl border-emerald-300/20 bg-emerald-400/12 text-sm font-black text-emerald-100 hover:bg-emerald-400/12">
+                    <Badge className="h-10 w-full justify-center rounded-xl border-emerald-200 bg-emerald-50 text-sm font-black text-emerald-700 hover:bg-emerald-50">
                         <CheckCircle2 className="h-4 w-4" />
                         Listo
                     </Badge>
@@ -534,10 +534,10 @@ function ReadyHistoryDialog({
 }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[86vh] overflow-hidden rounded-2xl border-white/[0.08] bg-[#101114] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,0.48)] sm:max-w-4xl">
-                <DialogHeader className="border-b border-white/[0.07] px-5 py-4">
+            <DialogContent className="max-h-[86vh] overflow-hidden rounded-2xl border-border bg-card p-0 text-foreground shadow-xl sm:max-w-4xl">
+                <DialogHeader className="border-b border-border px-5 py-4">
                     <DialogTitle className="flex items-center gap-2 text-xl">
-                        <ClipboardList className="h-5 w-5 text-emerald-200" />
+                        <ClipboardList className="h-5 w-5 text-emerald-600" />
                         Historial de listos
                     </DialogTitle>
                     <DialogDescription>
@@ -552,21 +552,21 @@ function ReadyHistoryDialog({
                             {orders.map((order) => (
                                 <div
                                     key={order.id}
-                                    className="rounded-2xl border border-white/[0.075] bg-white/[0.035] p-4"
+                                    className="rounded-2xl border border-border bg-background p-4"
                                 >
                                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                                         <div>
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="text-2xl font-black">#{order.orderNumber}</span>
-                                                <Badge variant="outline" className="rounded-full border-white/[0.09] bg-white/[0.04] text-white/70">
+                                                <Badge variant="outline" className="rounded-full border-border bg-muted text-muted-foreground">
                                                     {getOrderTypeLabel(order)}
                                                 </Badge>
-                                                <Badge variant="outline" className="rounded-full border-emerald-300/20 bg-emerald-400/10 text-emerald-100">
+                                                <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700">
                                                     <Clock className="h-3.5 w-3.5" />
                                                     {formatElapsedTime(order.createdAt, now, order.readyAt)}
                                                 </Badge>
                                             </div>
-                                            <div className="mt-2 grid gap-1 text-sm text-white/52 sm:grid-cols-2">
+                                            <div className="mt-2 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
                                                 <span>Creado: {formatDateTime(order.createdAt)}</span>
                                                 <span>Listo: {formatDateTime(order.readyAt)}</span>
                                             </div>
@@ -575,11 +575,11 @@ function ReadyHistoryDialog({
 
                                     <div className="mt-3 space-y-1.5">
                                         {order.items.map((item, idx) => (
-                                            <div key={idx} className="text-[15px] leading-relaxed text-white/84">
-                                                <span className="font-black text-white">{item.quantity}x</span>{" "}
+                                            <div key={idx} className="text-[15px] leading-relaxed text-foreground/85">
+                                                <span className="font-black text-foreground">{item.quantity}x</span>{" "}
                                                 {item.name}
                                                 {item.modifiers.length > 0 && (
-                                                    <span className="text-sm text-white/55">
+                                                    <span className="text-sm text-muted-foreground">
                                                         {" "}({item.modifiers.map((m) => m.optionName).join(", ")})
                                                     </span>
                                                 )}
@@ -588,7 +588,7 @@ function ReadyHistoryDialog({
                                     </div>
 
                                     {order.deliveryNotes && (
-                                        <div className="mt-3 flex gap-2 rounded-xl border border-amber-300/16 bg-amber-400/10 p-3 text-xs text-amber-100">
+                                        <div className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                                             <MessageSquareText className="h-4 w-4 shrink-0" />
                                             <span>{order.deliveryNotes}</span>
                                         </div>
