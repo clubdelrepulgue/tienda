@@ -284,6 +284,24 @@ export function AddressSelector({
     }, [])
 
     useEffect(() => {
+        if (!value) {
+            setMarker(null)
+            setSelectedZone(null)
+            return
+        }
+
+        setMarker({ lat: value.lat, lng: value.lng })
+        setSearchQuery(value.address)
+        checkZone(value.lat, value.lng)
+    }, [checkZone, value])
+
+    useEffect(() => {
+        if (!mapInstance || !marker) return
+        mapInstance.panTo(marker)
+        mapInstance.setZoom(16)
+    }, [mapInstance, marker])
+
+    useEffect(() => {
         if (!mapInstance || marker) return
         mapInstance.panTo(mapCenter)
         mapInstance.setZoom(branchMarker ? 13 : 12)

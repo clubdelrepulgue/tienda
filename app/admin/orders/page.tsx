@@ -328,11 +328,11 @@ function ReadyColumn({
 
   if (orders.length === 0) {
     return (
-      <div className="flex min-h-[112px] flex-col items-center justify-center rounded-[20px] border border-dashed border-white/[0.08] bg-white/[0.025] p-8 text-center text-white/42">
-        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white/[0.035]">
-          <Package className="h-5 w-5 opacity-45" />
+      <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.11] bg-black/10 p-6 text-center text-white/58">
+        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white/[0.06]">
+          <Package className="h-5 w-5 opacity-60" />
         </div>
-        <p className="text-sm font-medium">Sin pedidos</p>
+        <p className="text-sm font-semibold">Sin pedidos</p>
       </div>
     )
   }
@@ -546,6 +546,8 @@ type Column = {
   label: string
   icon: any
   color: string
+  headerTint: string
+  iconClassName: string
   statuses: OrderStatus[]
   nextStatus?: OrderStatus
 }
@@ -555,7 +557,9 @@ const COLUMNS: Column[] = [
     id: "pending",
     label: "Pendientes",
     icon: Clock,
-    color: "bg-chart-1/15 text-chart-1 border-chart-1/20",
+    color: "border-orange-300/25 bg-orange-500/15 text-orange-100",
+    headerTint: "from-orange-500/[0.13]",
+    iconClassName: "border-orange-300/20 bg-orange-500/12 text-orange-100",
     statuses: ["new", "accepted"],
     nextStatus: "preparing",
   },
@@ -563,7 +567,9 @@ const COLUMNS: Column[] = [
     id: "preparing",
     label: "Preparando",
     icon: ChefHat,
-    color: "bg-accent/15 text-accent border-accent/20",
+    color: "border-amber-300/25 bg-amber-400/15 text-amber-100",
+    headerTint: "from-amber-400/[0.13]",
+    iconClassName: "border-amber-300/20 bg-amber-400/12 text-amber-100",
     statuses: ["preparing"],
     nextStatus: "ready",
   },
@@ -571,7 +577,9 @@ const COLUMNS: Column[] = [
     id: "ready",
     label: "Listos",
     icon: Package,
-    color: "bg-chart-3/15 text-chart-3 border-chart-3/20",
+    color: "border-emerald-300/25 bg-emerald-400/15 text-emerald-100",
+    headerTint: "from-emerald-400/[0.13]",
+    iconClassName: "border-emerald-300/20 bg-emerald-400/12 text-emerald-100",
     statuses: ["ready"],
   },
 ]
@@ -803,25 +811,25 @@ export default function OrdersPage() {
   )
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col gap-6">
+    <div className="flex min-h-0 flex-col gap-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-        <h1
-          className="text-3xl font-bold tracking-tight text-foreground"
-          style={{ fontFamily: "var(--font-heading)" }}
-        >
-          Pedidos
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Gestiona la operacion activa en tiempo real
-        </p>
+          <h1
+            className="text-3xl font-bold tracking-tight text-foreground"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            Pedidos
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Gestiona la operacion activa en tiempo real
+          </p>
         </div>
-        <div className="flex w-fit items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.035] px-3 py-2 text-xs font-medium text-muted-foreground">
+        <div className="flex w-fit items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
           <span className="h-1.5 w-1.5 rounded-full bg-chart-3 shadow-[0_0_18px_rgba(34,197,94,0.7)]" />
           Actualizacion en vivo
         </div>
         <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-          <SelectTrigger className="w-full rounded-xl bg-card sm:w-56">
+          <SelectTrigger className="h-11 w-full rounded-full border-border bg-card px-4 shadow-sm sm:w-56">
             <SelectValue placeholder="Sucursal" />
           </SelectTrigger>
           <SelectContent>
@@ -834,50 +842,57 @@ export default function OrdersPage() {
         </Select>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[repeat(3,minmax(300px,1fr))] gap-4 overflow-x-auto pb-4 snap-x xl:gap-5">
+      <div className="grid min-h-0 grid-cols-[repeat(3,minmax(280px,1fr))] gap-4 overflow-x-auto pb-3 snap-x xl:gap-5">
         {COLUMNS.map((col) => {
           const colOrders = activeOrders.filter((o) =>
             col.statuses.includes(o.status)
           )
           const ColIcon = col.icon
           const isReadyCol = col.id === "ready"
-          const columnTint =
-            col.id === "pending"
-              ? "from-primary/[0.08]"
-              : col.id === "preparing"
-                ? "from-accent/[0.08]"
-                : "from-chart-3/[0.08]"
 
           return (
             <div
               key={col.id}
-              className="flex min-w-[300px] max-w-full snap-center flex-col overflow-hidden rounded-[26px] border border-white/[0.075] bg-[#101114] shadow-[0_18px_52px_rgba(0,0,0,0.22)]"
+              className="flex h-[calc(100dvh-14rem)] min-h-[420px] min-w-[280px] max-h-[680px] max-w-full snap-center flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111216] shadow-[0_14px_40px_rgba(0,0,0,0.16)]"
             >
               {/* Column header */}
-              <div className={cn("border-b border-white/[0.06] bg-gradient-to-b to-transparent px-4 py-4", columnTint)}>
+              <div
+                className={cn(
+                  "border-b border-white/[0.07] bg-gradient-to-b to-transparent px-4 py-3.5",
+                  col.headerTint
+                )}
+              >
                 <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/[0.07] bg-white/[0.045] text-muted-foreground">
-                    <ColIcon className="h-4 w-4" />
-                  </span>
-                  <h2
-                    className="truncate text-sm font-bold uppercase tracking-[0.12em] text-foreground"
-                    style={{ fontFamily: "var(--font-heading)" }}
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      className={cn(
+                        "grid h-9 w-9 shrink-0 place-items-center rounded-full border",
+                        col.iconClassName
+                      )}
+                    >
+                      <ColIcon className="h-4 w-4" />
+                    </span>
+                    <h2
+                      className="truncate text-sm font-bold uppercase tracking-[0.1em] text-white/90"
+                      style={{ fontFamily: "var(--font-heading)" }}
+                    >
+                      {col.label}
+                    </h2>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "h-7 rounded-full px-2.5 text-xs font-bold tabular-nums",
+                      col.color
+                    )}
                   >
-                    {col.label}
-                  </h2>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={cn("h-7 rounded-full px-2.5 text-xs font-bold tabular-nums", col.color)}
-                >
-                  {colOrders.length}
-                </Badge>
+                    {colOrders.length}
+                  </Badge>
                 </div>
               </div>
 
               {/* Column body */}
-              <ScrollArea className="min-h-0 flex-1 p-2.5 [scrollbar-gutter:stable]">
+              <ScrollArea className="min-h-0 flex-1 p-3 [scrollbar-gutter:stable]">
                 {isReadyCol ? (
                   <ReadyColumn
                     orders={colOrders}
@@ -892,11 +907,11 @@ export default function OrdersPage() {
                 ) : (
                   <div className="flex min-w-0 flex-col gap-3 overflow-hidden">
                     {colOrders.length === 0 ? (
-                      <div className="flex min-h-[112px] flex-col items-center justify-center rounded-[20px] border border-dashed border-white/[0.08] bg-white/[0.025] p-8 text-center text-white/42">
-                        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white/[0.035]">
-                          <ColIcon className="h-5 w-5 opacity-45" />
+                      <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.11] bg-black/10 p-6 text-center text-white/58">
+                        <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-white/[0.06]">
+                          <ColIcon className="h-5 w-5 opacity-60" />
                         </div>
-                        <p className="text-sm font-medium">Sin pedidos</p>
+                        <p className="text-sm font-semibold">Sin pedidos</p>
                       </div>
                     ) : (
                       colOrders.map((order) => (

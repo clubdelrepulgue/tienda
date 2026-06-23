@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { useCartStore } from "@/lib/store"
+import { useCartStore, useCheckoutDraftStore } from "@/lib/store"
 import type { PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
 import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
@@ -36,17 +36,18 @@ export default function CheckoutPage() {
   const cartBranchName = useCartStore((s) => s.branchName)
   const totalPrice = useCartStore((s) => s.totalPrice())
   const clearCart = useCartStore((s) => s.clearCart)
+  const draftBranchId = useCheckoutDraftStore((s) => s.branchId)
+  const deliveryMethod = useCheckoutDraftStore((s) => s.deliveryMethod)
+  const paymentMethod = useCheckoutDraftStore((s) => s.paymentMethod)
+  const name = useCheckoutDraftStore((s) => s.name)
+  const phone = useCheckoutDraftStore((s) => s.phone)
+  const address = useCheckoutDraftStore((s) => s.address)
+  const notes = useCheckoutDraftStore((s) => s.notes)
+  const selectedLocation = useCheckoutDraftStore((s) => s.selectedLocation)
+  const setCheckoutDraft = useCheckoutDraftStore((s) => s.setDraft)
+  const clearCheckoutDraft = useCheckoutDraftStore((s) => s.clearDraft)
   const router = useRouter()
 
-  const [deliveryMethod, setDeliveryMethod] =
-    useState<"delivery" | "pickup">("delivery")
-  const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>("mercadopago")
-
-  const [name, setName] = useState("")
-  const [phone, setPhone] = useState("")
-  const [address, setAddress] = useState("")
-  const [notes, setNotes] = useState("")
   const [loading, setLoading] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranch, setSelectedBranch] = useState("")
@@ -60,12 +61,30 @@ export default function CheckoutPage() {
     discountValue: number
   } | null>(null)
 
-  // Map location state
-  const [selectedLocation, setSelectedLocation] = useState<{
-    lat: number
-    lng: number
-    address: string
-  } | null>(null)
+  const setDeliveryMethod = (value: "delivery" | "pickup") =>
+    setCheckoutDraft({ deliveryMethod: value })
+  const setPaymentMethod = (value: PaymentMethod) =>
+    setCheckoutDraft({ paymentMethod: value })
+  const setName = (value: string) => setCheckoutDraft({ name: value })
+  const setPhone = (value: string) => setCheckoutDraft({ phone: value })
+  const setAddress = (value: string) => setCheckoutDraft({ address: value })
+  const setNotes = (value: string) => setCheckoutDraft({ notes: value })
+  const setSelectedLocation = (value: { lat: number; lng: number; address: string }) =>
+    setCheckoutDraft({ selectedLocation: value })
+
+  useEffect(() => {
+    if (!cartBranchId) return
+
+    if (draftBranchId && draftBranchId !== cartBranchId) {
+      clearCheckoutDraft()
+      setCheckoutDraft({ branchId: cartBranchId })
+      return
+    }
+
+    if (!draftBranchId) {
+      setCheckoutDraft({ branchId: cartBranchId })
+    }
+  }, [cartBranchId, clearCheckoutDraft, draftBranchId, setCheckoutDraft])
 
   useEffect(() => {
     if (!cartBranchId) return
@@ -184,6 +203,7 @@ export default function CheckoutPage() {
       }
 
       clearCart()
+      clearCheckoutDraft()
       toast.success(`¡Pedido #${result.orderNumber} realizado!`)
       router.push(`/order/${result.trackingToken}`)
     } catch {
