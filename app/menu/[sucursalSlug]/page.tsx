@@ -5,8 +5,9 @@ import {
   getCategories,
   getModifierGroups,
   getProducts,
+  getUpsellRules,
 } from "@/lib/supabase/queries"
-import type { Category, ModifierGroup, Product } from "@/lib/types"
+import type { Category, ModifierGroup, Product, UpsellRule } from "@/lib/types"
 
 export default async function BranchMenuPage({
   params,
@@ -21,17 +22,20 @@ export default async function BranchMenuPage({
   let categories: Category[] = []
   let products: Product[] = []
   let modifierGroups: ModifierGroup[] = []
+  let upsellRules: UpsellRule[] = []
 
   try {
-    ;[categories, products, modifierGroups] = await Promise.all([
+    ;[categories, products, modifierGroups, upsellRules] = await Promise.all([
       getCategories(branch.id),
       getProducts(branch.id),
       getModifierGroups(branch.id),
+      getUpsellRules(branch.id),
     ])
   } catch {
     categories = []
     products = []
     modifierGroups = []
+    upsellRules = []
   }
 
   return (
@@ -40,6 +44,7 @@ export default async function BranchMenuPage({
       categories={categories}
       products={products}
       modifierGroups={modifierGroups}
+      upsellRules={upsellRules}
     />
   )
 }

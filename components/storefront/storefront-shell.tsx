@@ -8,7 +8,7 @@ import { ProductModal } from "@/components/storefront/product-modal"
 import { CartSheet } from "@/components/storefront/cart-sheet"
 import { FloatingCart } from "@/components/storefront/floating-cart"
 import { useCartStore } from "@/lib/store"
-import type { Branch, Product, Category, ModifierGroup } from "@/lib/types"
+import type { Branch, Product, Category, ModifierGroup, UpsellRule } from "@/lib/types"
 import { toast } from "sonner"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ interface StorefrontShellProps {
     categories: Category[]
     products: Product[]
     modifierGroups: ModifierGroup[]
+    upsellRules: UpsellRule[]
 }
 
 function Banner({ branch }: { branch: Branch }) {
@@ -65,6 +66,7 @@ export function StorefrontShell({
     categories,
     products,
     modifierGroups,
+    upsellRules,
 }: StorefrontShellProps) {
     const [activeCategory, setActiveCategory] = useState("all")
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -164,7 +166,12 @@ export function StorefrontShell({
                     setSelectedProduct(null)
                 }}
             />
-            <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} />
+            <CartSheet
+                open={cartOpen}
+                onClose={() => setCartOpen(false)}
+                products={products}
+                upsellRules={upsellRules}
+            />
             <FloatingCart onCartOpen={() => setCartOpen(true)} />
         </div>
     )

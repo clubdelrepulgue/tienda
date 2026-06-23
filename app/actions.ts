@@ -4,8 +4,9 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { canAccessBranch, getAdminScope } from "@/lib/admin-scope"
 import { revalidatePath } from "next/cache"
-import type { AdminRole, CartItem } from "@/lib/types"
+import type { AdminRole, CartItem, DeliveryZone } from "@/lib/types"
 import { formatPrice, slugify } from "@/lib/utils"
+import { findDeliveryZoneForPoint, getZoneDeliveryFee } from "@/lib/delivery-zones"
 
 type ActionResult<T extends object = {}> = Promise<
     T & {
@@ -37,6 +38,24 @@ function validateAdminAssignment(role: AdminRole, branchId?: string | null) {
 
 function normalizePhone(value: string) {
     return value.replace(/\D/g, "")
+}
+
+function toCents(value: number) {
+    return Math.round((value + Number.EPSILON) * 100)
+}
+
+function mapDeliveryZoneRow(row: any): DeliveryZone {
+    return {
+        id: row.id,
+        branchId: row.sucursal_id,
+        name: row.name,
+        color: row.color || "#3b82f6",
+        coordinates: row.coordinates || [],
+        deliveryFee: parseFloat(row.delivery_fee || 0),
+        minOrderAmount: parseFloat(row.min_order_amount || 0),
+        estimatedTimeMin: row.estimated_time_min,
+        isActive: row.is_active,
+    }
 }
 
 async function assertBranchAccess(branchId: string) {
@@ -189,16 +208,60 @@ export async function createOrder(formData: {
         }
     }
 
-    if (formData.deliveryZoneId) {
-        const { data: zone, error: zoneError } = await supabase
-            .from("delivery_zones")
-            .select("id, sucursal_id, is_active")
-            .eq("id", formData.deliveryZoneId)
-            .single()
+    let resolvedDeliveryZoneId = formData.deliveryZoneId || null
 
-        if (zoneError || !zone || zone.sucursal_id !== formData.sucursalId || !zone.is_active) {
+    if (formData.fulfillmentType === "delivery") {
+        if (!formData.addressText.trim()) {
+            return { error: "Ingresa la dirección de entrega" }
+        }
+
+        const { data: zoneRows, error: zonesError } = await supabase
+            .from("delivery_zones")
+            .select("id, sucursal_id, name, color, coordinates, delivery_fee, min_order_amount, estimated_time_min, is_active")
+            .eq("sucursal_id", formData.sucursalId)
+            .eq("is_active", true)
+
+        if (zonesError) return { error: zonesError.message }
+
+        const activeZones = (zoneRows || []).map(mapDeliveryZoneRow)
+
+        if (activeZones.length > 0) {
+            if (formData.addressLat == null || formData.addressLng == null) {
+                return { error: "Marca la ubicación en el mapa para calcular la zona de envío" }
+            }
+
+            const matchedZone = findDeliveryZoneForPoint(activeZones, {
+                lat: formData.addressLat,
+                lng: formData.addressLng,
+            })
+
+            if (!matchedZone) {
+                return { error: "La ubicación está fuera de las zonas de envío disponibles" }
+            }
+
+            if (resolvedDeliveryZoneId && resolvedDeliveryZoneId !== matchedZone.id) {
+                return { error: "La ubicación no corresponde a la zona de envío seleccionada" }
+            }
+
+            resolvedDeliveryZoneId = matchedZone.id
+            const subtotalAfterDiscount = Math.max(0, formData.subtotal - (formData.couponDiscount || 0))
+            const expectedDeliveryFee = getZoneDeliveryFee(matchedZone, subtotalAfterDiscount)
+
+            if (toCents(expectedDeliveryFee) !== toCents(formData.deliveryFee)) {
+                return { error: "El costo de envío no coincide con la zona seleccionada" }
+            }
+        } else if (resolvedDeliveryZoneId) {
             return { error: "La zona de envio no corresponde a la sucursal" }
         }
+    } else {
+        resolvedDeliveryZoneId = null
+    }
+
+    const expectedTotal = Math.max(0, formData.subtotal - (formData.couponDiscount || 0)) +
+        (formData.fulfillmentType === "delivery" ? formData.deliveryFee : 0)
+
+    if (toCents(expectedTotal) !== toCents(formData.total)) {
+        return { error: "El total del pedido no coincide con el subtotal y el envío" }
     }
 
     const { data: order, error: orderError } = await supabase
@@ -217,7 +280,7 @@ export async function createOrder(formData: {
             status: "new",
             coupon_code: formData.couponCode || null,
             coupon_discount: formData.couponDiscount || 0,
-            delivery_zone_id: formData.deliveryZoneId || null,
+            delivery_zone_id: resolvedDeliveryZoneId,
             order_type: formData.orderType || "online",
             created_by: formData.createdBy || user?.id || null,
             address_lat: formData.addressLat || null,

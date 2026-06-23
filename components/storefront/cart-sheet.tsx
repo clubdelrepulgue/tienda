@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react"
@@ -13,18 +14,98 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useCartStore } from "@/lib/store"
+import type { Product, UpsellRule } from "@/lib/types"
+import { toast } from "sonner"
+
+type CartSuggestion = {
+  product: Product
+  rule: UpsellRule
+  discountedPrice: number
+}
 
 interface CartSheetProps {
   open: boolean
   onClose: () => void
+  products: Product[]
+  upsellRules: UpsellRule[]
 }
 
-export function CartSheet({ open, onClose }: CartSheetProps) {
+export function CartSheet({ open, onClose, products, upsellRules }: CartSheetProps) {
   const items = useCartStore((s) => s.items)
+  const addItem = useCartStore((s) => s.addItem)
   const updateQty = useCartStore((s) => s.updateQty)
   const removeItem = useCartStore((s) => s.removeItem)
   const totalPrice = useCartStore((s) => s.totalPrice())
   const branchSlug = useCartStore((s) => s.branchSlug)
+  const suggestions = useMemo<CartSuggestion[]>(() => {
+    if (items.length === 0 || products.length === 0 || upsellRules.length === 0) {
+      return []
+    }
+
+    const productsById = new Map(products.map((product) => [product.id, product]))
+    const cartProductIds = new Set(items.map((item) => item.productId))
+    const cartCategoryIds = new Set(
+      items
+        .map((item) => productsById.get(item.productId)?.categoryId)
+        .filter((categoryId): categoryId is string => Boolean(categoryId))
+    )
+    const seenSuggestions = new Set<string>()
+
+    return upsellRules
+      .filter((rule) => rule.isActive)
+      .filter((rule) => {
+        const hasTriggerProduct = rule.triggerProductIds.some((id) => cartProductIds.has(id))
+        const hasTriggerCategory = rule.triggerCategoryIds.some((id) => cartCategoryIds.has(id))
+
+        return hasTriggerProduct || hasTriggerCategory
+      })
+      .sort((a, b) => b.priority - a.priority)
+      .flatMap((rule) =>
+        rule.suggestedProductIds.map((productId) => {
+          const product = productsById.get(productId)
+          if (!product || !product.active || cartProductIds.has(productId) || seenSuggestions.has(productId)) {
+            return null
+          }
+
+          seenSuggestions.add(productId)
+          const discountPercentage = Math.max(rule.discountPercentage || 0, 0)
+          const discountedPrice =
+            discountPercentage > 0
+              ? product.price * (1 - discountPercentage / 100)
+              : product.price
+
+          return {
+            product,
+            rule,
+            discountedPrice,
+          }
+        })
+      )
+      .filter((suggestion): suggestion is CartSuggestion => Boolean(suggestion))
+      .slice(0, 3)
+  }, [items, products, upsellRules])
+  const hasDiscountedSuggestions = suggestions.some(
+    ({ rule }) => rule.discountPercentage > 0
+  )
+
+  const handleAddSuggestion = ({ product, discountedPrice }: CartSuggestion) => {
+    const result = addItem({
+      productId: product.id,
+      branchId: product.branchId,
+      name: product.name,
+      image: product.image,
+      price: discountedPrice,
+      quantity: 1,
+      modifiers: [],
+    })
+
+    if (!result.success) {
+      toast.error(result.error)
+      return
+    }
+
+    toast.success(`${product.name} agregado al carrito`)
+  }
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
@@ -128,6 +209,74 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
                     </div>
                   )
                 })}
+
+                {suggestions.length > 0 && (
+                  <div className="border-t border-border pt-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-extrabold text-foreground">
+                          {hasDiscountedSuggestions ? "Descuentos para sumar" : "También podés sumar"}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          Promos disponibles por tu carrito
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      {suggestions.map((suggestion) => {
+                        const { product, rule, discountedPrice } = suggestion
+                        const hasDiscount = rule.discountPercentage > 0
+
+                        return (
+                          <div
+                            key={`${rule.id}-${product.id}`}
+                            className="flex items-center gap-3 rounded-xl border border-primary/15 bg-primary/5 p-3"
+                          >
+                            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-primary/10">
+                              <Image
+                                src={product.image}
+                                alt={product.name}
+                                fill
+                                className="object-cover"
+                                sizes="56px"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start gap-2">
+                                <p className="truncate text-sm font-bold text-foreground">
+                                  {product.name}
+                                </p>
+                                {hasDiscount && (
+                                  <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-extrabold text-white">
+                                    -{rule.discountPercentage}%
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-1 flex items-center gap-2">
+                                <span className="text-sm font-extrabold text-primary">
+                                  ${discountedPrice.toFixed(2)}
+                                </span>
+                                {hasDiscount && (
+                                  <span className="text-xs text-muted-foreground line-through">
+                                    ${product.price.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              size="icon"
+                              className="h-9 w-9 shrink-0 rounded-full bg-primary text-white hover:bg-primary/90"
+                              onClick={() => handleAddSuggestion(suggestion)}
+                              aria-label={`Agregar ${product.name} con descuento`}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </ScrollArea>
 

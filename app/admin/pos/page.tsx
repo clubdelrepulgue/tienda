@@ -2,21 +2,24 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Image from "next/image"
-import { Plus, Minus, Trash2, ShoppingCart, Receipt, X, CreditCard, Banknote, Loader2 } from "lucide-react"
+import { Plus, Minus, Trash2, ShoppingCart, Receipt, X, CreditCard, Banknote, Loader2, MapPin, Truck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { ProductModal } from "@/components/storefront/product-modal"
 import { createOrder } from "@/app/actions"
-import type { Product, Category, Branch, CartItemModifier, ModifierGroup, CartItem as OrderCartItem } from "@/lib/types"
+import type { Product, Category, Branch, CartItemModifier, ModifierGroup, CartItem as OrderCartItem, DeliveryZone } from "@/lib/types"
 import { toast } from "sonner"
 import { cn, formatPrice } from "@/lib/utils"
 import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
+import { GoogleMapsProvider, AddressSelector } from "@/components/maps"
+import { findDeliveryZoneForPoint, formatZoneMeta, getZoneDeliveryFee } from "@/lib/delivery-zones"
 
 interface PosCartItem {
     tempId: string
@@ -33,6 +36,7 @@ export default function POSPage() {
     const [categories, setCategories] = useState<Category[]>([])
     const [branches, setBranches] = useState<Branch[]>([])
     const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([])
+    const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([])
     const [activeCategory, setActiveCategory] = useState<string>("all")
     const [cart, setCart] = useState<PosCartItem[]>([])
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -45,6 +49,10 @@ export default function POSPage() {
     const [orderType, setOrderType] = useState<"pickup" | "delivery">("pickup")
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "mercadopago">("cash")
     const [selectedBranch, setSelectedBranch] = useState("")
+    const [deliveryAddress, setDeliveryAddress] = useState("")
+    const [deliveryNotes, setDeliveryNotes] = useState("")
+    const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
+    const [selectedZone, setSelectedZone] = useState("")
 
     useEffect(() => {
         unlockAudio()
@@ -67,13 +75,19 @@ export default function POSPage() {
             fetch(`/api/admin?type=products&branchId=${selectedBranch}`).then((r) => r.json()),
             fetch(`/api/admin?type=categories&branchId=${selectedBranch}`).then((r) => r.json()),
             fetch(`/api/admin?type=modifiers&branchId=${selectedBranch}`).then((r) => r.json()),
+            fetch(`/api/admin?type=delivery-zones&branchId=${selectedBranch}`).then((r) => r.json()),
         ])
-            .then(([productsData, categoriesData, modifiersData]) => {
+            .then(([productsData, categoriesData, modifiersData, zonesData]) => {
                 setProducts(productsData || [])
                 setCategories(categoriesData || [])
                 setModifierGroups(modifiersData || [])
+                setDeliveryZones((zonesData || []).filter((zone: DeliveryZone) => zone.isActive))
                 setActiveCategory("all")
                 setCart([])
+                setDeliveryAddress("")
+                setDeliveryNotes("")
+                setSelectedLocation(null)
+                setSelectedZone("")
             })
             .catch(() => toast.error("Error al cargar menu de la sucursal"))
     }, [selectedBranch])
@@ -162,12 +176,62 @@ export default function POSPage() {
     const clearCart = () => {
         setCart([])
         setCustomerName("")
+        setDeliveryAddress("")
+        setDeliveryNotes("")
+        setSelectedLocation(null)
+        setSelectedZone("")
     }
 
     const subtotal = cart.reduce((sum, item) => {
         const modifiersPrice = item.modifiers.reduce((modSum, modifier) => modSum + modifier.price, 0)
         return sum + (item.price + modifiersPrice) * item.quantity
     }, 0)
+
+    const selectedBranchInfo = branches.find((branch) => branch.id === selectedBranch)
+    const selectedBranchLocation =
+        selectedBranchInfo?.lat != null && selectedBranchInfo?.lng != null
+            ? {
+                lat: selectedBranchInfo.lat,
+                lng: selectedBranchInfo.lng,
+                title: selectedBranchInfo.name,
+            }
+            : undefined
+    const visibleDeliveryZones = useMemo(
+        () => deliveryZones.filter((zone) => zone.isActive),
+        [deliveryZones]
+    )
+    const selectedZoneInfo = visibleDeliveryZones.find((zone) => zone.id === selectedZone)
+    const hasCoverageCheck = orderType === "delivery" && visibleDeliveryZones.length > 0
+    const isOutsideCoverage = hasCoverageCheck && selectedLocation && !selectedZoneInfo
+    const shouldCalculateDelivery = hasCoverageCheck && !selectedZoneInfo
+    const deliveryFee = orderType === "delivery"
+        ? getZoneDeliveryFee(selectedZoneInfo, subtotal)
+        : 0
+    const orderTotal = subtotal + deliveryFee
+
+    useEffect(() => {
+        if (orderType !== "delivery") {
+            setDeliveryAddress("")
+            setDeliveryNotes("")
+            setSelectedLocation(null)
+            setSelectedZone("")
+        }
+    }, [orderType])
+
+    useEffect(() => {
+        if (!selectedLocation) {
+            setSelectedZone("")
+            return
+        }
+
+        setDeliveryAddress(selectedLocation.address)
+        const zone = findDeliveryZoneForPoint(visibleDeliveryZones, selectedLocation)
+        setSelectedZone(zone?.id || "")
+
+        if (!zone && visibleDeliveryZones.length > 0 && orderType === "delivery") {
+            toast.warning("Esa dirección está fuera de las zonas de envío de esta sucursal")
+        }
+    }, [orderType, selectedLocation, visibleDeliveryZones])
 
     const handleCheckout = async () => {
         if (cart.length === 0) {
@@ -182,6 +246,18 @@ export default function POSPage() {
             toast.error("Selecciona una sucursal")
             return
         }
+        if (orderType === "delivery" && !deliveryAddress.trim()) {
+            toast.error("Ingresa la dirección de entrega")
+            return
+        }
+        if (orderType === "delivery" && !selectedLocation) {
+            toast.error("Marca la ubicación en el mapa para calcular la zona de envío")
+            return
+        }
+        if (orderType === "delivery" && visibleDeliveryZones.length > 0 && !selectedZone) {
+            toast.error("La ubicación está fuera de las zonas de envío disponibles")
+            return
+        }
 
         setLoading(true)
         try {
@@ -189,8 +265,10 @@ export default function POSPage() {
                 customerName,
                 customerPhone: "POS",
                 fulfillmentType: orderType,
-                addressText: "",
-                notes: "Pedido desde mostrador",
+                addressText: orderType === "delivery" ? deliveryAddress : "",
+                notes: orderType === "delivery" && deliveryNotes
+                    ? `Pedido desde mostrador\n${deliveryNotes}`
+                    : "Pedido desde mostrador",
                 paymentMethod,
                 sucursalId: selectedBranch,
                 items: cart.map((item) => ({
@@ -204,9 +282,12 @@ export default function POSPage() {
                     modifiers: item.modifiers,
                 })),
                 subtotal,
-                deliveryFee: 0,
-                total: subtotal,
+                deliveryFee,
+                total: orderTotal,
+                deliveryZoneId: orderType === "delivery" ? selectedZone || undefined : undefined,
                 orderType: "pos",
+                addressLat: orderType === "delivery" ? selectedLocation?.lat : undefined,
+                addressLng: orderType === "delivery" ? selectedLocation?.lng : undefined,
             })
 
             if ("error" in result) {
@@ -393,10 +474,16 @@ export default function POSPage() {
                         <span className="text-muted-foreground">Subtotal</span>
                         <span className="font-medium">{formatPrice(subtotal)}</span>
                     </div>
+                    {deliveryFee > 0 && (
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Envío</span>
+                            <span className="font-medium">{formatPrice(deliveryFee)}</span>
+                        </div>
+                    )}
                     <Separator />
                     <div className="flex justify-between items-center text-lg font-bold">
                         <span>Total</span>
-                        <span className="text-primary">{formatPrice(subtotal)}</span>
+                        <span className="text-primary">{formatPrice(orderTotal)}</span>
                     </div>
                     <Button
                         className="w-full h-14 rounded-xl text-lg font-semibold"
@@ -411,7 +498,7 @@ export default function POSPage() {
 
             {/* Checkout Dialog */}
             <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-                <DialogContent className="sm:max-w-md rounded-2xl">
+                <DialogContent className="sm:max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="text-xl">Completar pedido</DialogTitle>
                     </DialogHeader>
@@ -460,6 +547,77 @@ export default function POSPage() {
                             </RadioGroup>
                         </div>
 
+                        {orderType === "delivery" && (
+                            <div className="space-y-3 rounded-xl border border-border bg-secondary/40 p-3">
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-primary" />
+                                    <Label className="font-semibold">Ubicación de entrega</Label>
+                                </div>
+                                <GoogleMapsProvider>
+                                    <AddressSelector
+                                        value={selectedLocation || undefined}
+                                        onChange={setSelectedLocation}
+                                        onAddressChange={setDeliveryAddress}
+                                        defaultCenter={selectedBranchLocation}
+                                        searchCenter={selectedBranchLocation}
+                                        searchRadiusKm={80}
+                                        branchMarker={selectedBranchLocation}
+                                        zones={visibleDeliveryZones.map((zone) => ({
+                                            id: zone.id,
+                                            name: zone.name,
+                                            color: zone.color,
+                                            coordinates: zone.coordinates || [],
+                                        }))}
+                                        height="240px"
+                                        placeholder="Buscar dirección de entrega..."
+                                        showInstructions={false}
+                                        simpleMap
+                                        lazyMap
+                                    />
+                                </GoogleMapsProvider>
+
+                                <div className="rounded-xl border border-border bg-background p-3">
+                                    {selectedZoneInfo ? (
+                                        <div className="flex items-start gap-3">
+                                            <span
+                                                className="mt-1 h-3 w-3 rounded-full shrink-0"
+                                                style={{ backgroundColor: selectedZoneInfo.color }}
+                                            />
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-foreground">
+                                                    {selectedZoneInfo.name}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {formatZoneMeta(selectedZoneInfo)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : isOutsideCoverage ? (
+                                        <p className="text-sm text-destructive">
+                                            Esta ubicación está fuera de las zonas de envío.
+                                        </p>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">
+                                            Buscá la dirección o mové el pin para calcular el envío.
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm text-muted-foreground mb-1.5 block">
+                                        Notas de entrega
+                                    </Label>
+                                    <Textarea
+                                        placeholder="Tocar timbre, referencia, apartamento, etc."
+                                        value={deliveryNotes}
+                                        onChange={(e) => setDeliveryNotes(e.target.value)}
+                                        rows={2}
+                                        className="rounded-xl bg-background resize-none"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <div>
                             <Label>Metodo de pago</Label>
                             <div className="grid grid-cols-2 gap-3 mt-1.5">
@@ -492,9 +650,30 @@ export default function POSPage() {
 
                         <Separator />
 
-                        <div className="flex justify-between items-center text-xl font-bold">
-                            <span>Total</span>
-                            <span className="text-primary">{formatPrice(subtotal)}</span>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm text-muted-foreground">
+                                <span>Subtotal</span>
+                                <span>{formatPrice(subtotal)}</span>
+                            </div>
+                            {orderType === "delivery" && (
+                                <div className="flex justify-between text-sm text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                        <Truck className="h-3.5 w-3.5" />
+                                        {selectedZoneInfo ? `Envío · ${selectedZoneInfo.name}` : "Envío"}
+                                    </span>
+                                    <span>
+                                        {shouldCalculateDelivery
+                                            ? "A calcular"
+                                            : deliveryFee > 0
+                                                ? formatPrice(deliveryFee)
+                                                : "Gratis"}
+                                    </span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center text-xl font-bold">
+                                <span>Total</span>
+                                <span className="text-primary">{formatPrice(orderTotal)}</span>
+                            </div>
                         </div>
 
                         <div className="flex gap-3">
