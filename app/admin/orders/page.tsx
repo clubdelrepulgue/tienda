@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import useSWR from "swr"
 import {
   Clock,
@@ -14,11 +14,13 @@ import {
   MapPin,
   Bike,
   User,
+  UserCheck,
 } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -38,6 +40,7 @@ import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
 import { PrintReceiptButton } from "@/components/receipt/order-receipt"
+import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -59,6 +62,7 @@ function formatElapsedTime(createdAt: string, now: number, readyAt?: string): st
 function OrderCard({
   order,
   nextStatus,
+  buttonText = "Siguiente",
   now,
   updating,
   onNext,
@@ -71,6 +75,7 @@ function OrderCard({
 }: {
   order: Order
   nextStatus?: OrderStatus
+  buttonText?: string
   now: number
   updating: boolean
   onNext?: () => void
@@ -261,7 +266,7 @@ function OrderCard({
               className="ml-auto h-9 max-w-full shrink-0 rounded-full bg-primary px-3 text-sm font-bold text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.24)] hover:bg-primary/90 active:scale-95 max-[420px]:basis-full"
               onClick={onNext}
             >
-              <span className="truncate">Siguiente</span>
+              <span className="truncate">{buttonText}</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           )}
@@ -289,9 +294,11 @@ function ReadyColumn({
   now,
   updatingId,
   onMarkDelivered,
-  onDeliveryDepart,
-  departingOrderIds,
   branch,
+  selectedOrders,
+  onToggleSelect,
+  onSelectZone,
+  onOpenAssign,
 }: {
   orders: Order[]
   zones: DeliveryZone[]
@@ -299,9 +306,11 @@ function ReadyColumn({
   now: number
   updatingId: string | null
   onMarkDelivered: (orderId: string) => void
-  onDeliveryDepart: (orderId: string, driverId: string) => void
-  departingOrderIds: Set<string>
   branch?: Branch | null
+  selectedOrders: Set<string>
+  onToggleSelect: (orderId: string, checked: boolean) => void
+  onSelectZone: (zoneId: string, orderIds: string[]) => void
+  onOpenAssign: (orderIds: string[]) => void
 }) {
   const zoneMap = useMemo(() => {
     const map = new Map<string, DeliveryZone>()
@@ -315,13 +324,11 @@ function ReadyColumn({
     return map
   }, [drivers])
 
-  // Separate by fulfillment type
   const deliveryOrders = orders.filter((o) => o.deliveryMethod === "delivery")
   const pickupOrders = orders.filter(
     (o) => o.deliveryMethod === "pickup" || o.deliveryMethod === "dine_in"
   )
 
-  // Group delivery orders by zone
   const ordersByZone = useMemo(() => {
     const groups = new Map<string, Order[]>()
     deliveryOrders.forEach((order) => {
@@ -332,6 +339,10 @@ function ReadyColumn({
     })
     return groups
   }, [deliveryOrders])
+
+  const selectedDeliveryIds = deliveryOrders
+    .filter((o) => selectedOrders.has(o.id))
+    .map((o) => o.id)
 
   if (orders.length === 0) {
     return (
@@ -354,55 +365,112 @@ function ReadyColumn({
             <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
               Delivery
             </span>
-            <Badge variant="outline" className="ml-auto rounded-full border-border bg-card text-xs text-muted-foreground">
-              {deliveryOrders.length}
-            </Badge>
+            {selectedDeliveryIds.length > 0 ? (
+              <button
+                onClick={() => onOpenAssign(selectedDeliveryIds)}
+                className="ml-auto flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground shadow-[0_4px_12px_rgba(255,56,56,0.3)] transition-transform hover:bg-primary/90 active:scale-95"
+              >
+                <UserCheck className="h-3 w-3" />
+                Asignar ({selectedDeliveryIds.length})
+              </button>
+            ) : (
+              <Badge variant="outline" className="ml-auto rounded-full border-border bg-card text-xs text-muted-foreground">
+                {deliveryOrders.length}
+              </Badge>
+            )}
           </div>
 
           {Array.from(ordersByZone.entries()).map(([zoneId, zoneOrders]) => {
             const zone = zoneMap.get(zoneId)
+            const zoneOrderIds = zoneOrders.map((o) => o.id)
+            const allZoneSelected = zoneOrderIds.every((id) => selectedOrders.has(id))
+
             return (
               <div key={zoneId} className="min-w-0 space-y-2 overflow-hidden">
-                {/* Zone header */}
+                {/* Zone header — click to select all in zone */}
                 <div
-                  className="flex items-center gap-2 rounded-2xl border border-border px-3 py-2"
+                  className="flex cursor-pointer items-center gap-2 rounded-2xl border border-border px-3 py-2 transition-opacity hover:opacity-80"
                   style={{
-                    backgroundColor: zone
-                      ? `${zone.color}15`
-                      : "hsl(var(--secondary))",
+                    backgroundColor: zone ? `${zone.color}15` : "hsl(var(--secondary))",
                     borderLeft: `3px solid ${zone?.color || "hsl(var(--border))"}`,
                   }}
+                  onClick={() => onSelectZone(zoneId, zoneOrderIds)}
                 >
-                  <MapPin
-                    className="h-3.5 w-3.5"
-                    style={{ color: zone?.color }}
+                  <Checkbox
+                    checked={allZoneSelected}
+                    onCheckedChange={() => onSelectZone(zoneId, zoneOrderIds)}
+                    onClick={(e) => e.stopPropagation()}
                   />
-                  <span className="flex-1 text-xs font-bold text-foreground">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: zone?.color }} />
+                  <span className="min-w-0 flex-1 truncate text-xs font-bold text-foreground">
                     {zone?.name || "Sin zona"}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="shrink-0 text-xs text-muted-foreground">
                     {zoneOrders.length} orden{zoneOrders.length !== 1 ? "es" : ""}
                   </span>
                 </div>
 
                 {/* Orders in this zone */}
-                {zoneOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    now={now}
-                    updating={updatingId === order.id}
-                    departing={departingOrderIds.has(order.id)}
-                    driver={
-                      order.driverId
-                        ? driverMap.get(order.driverId) || null
-                        : null
-                    }
-                    deliveryDrivers={drivers}
-                    onDeliveryDepart={onDeliveryDepart}
-                    branch={branch}
-                  />
-                ))}
+                {zoneOrders.map((order) => {
+                  const driver = order.driverId ? driverMap.get(order.driverId) || null : null
+                  const isSelected = selectedOrders.has(order.id)
+
+                  return (
+                    <Card
+                      key={order.id}
+                      className={cn(
+                        "w-full min-w-0 overflow-hidden rounded-2xl border-border bg-card shadow-sm transition-all duration-200",
+                        updatingId === order.id && "pointer-events-none opacity-50",
+                        isSelected && "border-primary ring-2 ring-primary"
+                      )}
+                    >
+                      <CardContent className="p-3.5">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(c) => onToggleSelect(order.id, c as boolean)}
+                            className="mt-0.5 shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <span
+                                className="text-2xl font-black leading-none text-foreground"
+                                style={{ fontFamily: "var(--font-heading)" }}
+                              >
+                                #{order.orderNumber}
+                              </span>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {formatElapsedTime(order.createdAt, now, order.readyAt)}
+                              </span>
+                            </div>
+                            <p className="text-sm font-semibold text-foreground">{order.customerName}</p>
+                            {order.address && (
+                              <p className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                                <MapPin className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{order.address}</span>
+                              </p>
+                            )}
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <span className="font-extrabold text-foreground">
+                                {formatPrice(order.total)}
+                              </span>
+                              {driver ? (
+                                <span className="flex items-center gap-1 rounded-full border border-chart-2/20 bg-chart-2/10 px-2.5 py-1 text-xs font-medium text-chart-2">
+                                  <Bike className="h-3 w-3" />
+                                  {driver.name}
+                                </span>
+                              ) : (
+                                <Badge variant="outline" className="rounded-full border-dashed border-border text-xs text-muted-foreground">
+                                  Sin asignar
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
             )
           })}
@@ -428,7 +496,7 @@ function ReadyColumn({
               order={order}
               now={now}
               updating={updatingId === order.id}
-              departing={departingOrderIds.has(order.id)}
+              departing={false}
               nextStatus="delivered"
               onNext={() => onMarkDelivered(order.id)}
               branch={branch}
@@ -559,28 +627,29 @@ type Column = {
   iconClassName: string
   statuses: OrderStatus[]
   nextStatus?: OrderStatus
+  buttonText?: string
 }
 
 const COLUMNS: Column[] = [
   {
-    id: "pending",
-    label: "Pendientes",
+    id: "new",
+    label: "Nuevos",
     icon: Clock,
     color: "border-orange-200 bg-orange-50 text-orange-700",
     headerTint: "from-orange-50",
     iconClassName: "border-orange-200 bg-orange-50 text-orange-700",
-    statuses: ["new", "accepted"],
-    nextStatus: "preparing",
+    statuses: ["new"],
+    nextStatus: "accepted",
+    buttonText: "Aceptar",
   },
   {
-    id: "preparing",
-    label: "Preparando",
+    id: "in-progress",
+    label: "En cocina",
     icon: ChefHat,
     color: "border-amber-200 bg-amber-50 text-amber-700",
     headerTint: "from-amber-50",
     iconClassName: "border-amber-200 bg-amber-50 text-amber-700",
-    statuses: ["preparing"],
-    nextStatus: "ready",
+    statuses: ["accepted", "preparing"],
   },
   {
     id: "ready",
@@ -609,14 +678,10 @@ export default function OrdersPage() {
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [updatingId, setUpdatingId] = useState<string | null>(null)
-  const [departingOrderIds, setDepartingOrderIds] = useState<Set<string>>(new Set())
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set())
   const [assignSheetOpen, setAssignSheetOpen] = useState(false)
   const [assignOrderIds, setAssignOrderIds] = useState<string[]>([])
   const [now, setNow] = useState(Date.now())
-
-  // Audio ref for notification
-  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     if (!selectedBranch && session?.activeBranchId) {
@@ -625,12 +690,17 @@ export default function OrdersPage() {
   }, [selectedBranch, session?.activeBranchId])
 
   useEffect(() => {
-    audioRef.current = new Audio("/notification.mp3")
+    const interval = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
+    const unlock = () => {
+      unlockAudio()
+      document.removeEventListener("click", unlock)
+    }
+    document.addEventListener("click", unlock)
+    return () => document.removeEventListener("click", unlock)
   }, [])
 
   useEffect(() => {
@@ -651,8 +721,11 @@ export default function OrdersPage() {
         { event: "*", schema: "public", table: "orders" },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            toast.info("Nuevo pedido recibido")
-            audioRef.current?.play().catch(() => {})
+            playNewOrderSound()
+            toast.info(`Nuevo pedido #${payload.new.order_number}`, {
+              description: "Revisar y aceptar en mostrador",
+              duration: 12000,
+            })
             mutate()
           } else if (payload.eventType === "UPDATE") {
             setOrders((current) =>
@@ -695,6 +768,7 @@ export default function OrdersPage() {
           ? {
               ...order,
               status: nextStatus,
+              acceptedAt: nextStatus === "accepted" ? changedAt : order.acceptedAt,
               preparingAt: nextStatus === "preparing" ? changedAt : order.preparingAt,
               readyAt: nextStatus === "ready" ? changedAt : order.readyAt,
               deliveredAt: nextStatus === "delivered" ? changedAt : order.deliveredAt,
@@ -717,46 +791,6 @@ export default function OrdersPage() {
     await handleNextStatus(orderId, "delivered")
   }
 
-  const handleDeliveryDepart = async (orderId: string, driverId: string) => {
-    setUpdatingId(orderId)
-    setDepartingOrderIds((current) => {
-      const next = new Set(current)
-      next.add(orderId)
-      return next
-    })
-
-    await new Promise((resolve) => setTimeout(resolve, 320))
-
-    setOrders((current) =>
-      current.map((order) =>
-        order.id === orderId ? { ...order, driverId } : order
-      )
-    )
-
-    const result = await assignDriver(orderId, driverId)
-
-    if (result.error) {
-      toast.error(result.error)
-      setDepartingOrderIds((current) => {
-        const next = new Set(current)
-        next.delete(orderId)
-        return next
-      })
-      mutate()
-    } else {
-      const driverName =
-        drivers.find((driver) => driver.id === driverId)?.name || "Repartidor"
-      toast.success(`Salio! ${driverName} se llevo el pedido`)
-    }
-
-    setDepartingOrderIds((current) => {
-      const next = new Set(current)
-      next.delete(orderId)
-      return next
-    })
-    setUpdatingId(null)
-  }
-
   const handleToggleSelect = (orderId: string, checked: boolean) => {
     setSelectedOrders((prev) => {
       const next = new Set(prev)
@@ -765,6 +799,18 @@ export default function OrdersPage() {
       } else {
         next.delete(orderId)
       }
+      return next
+    })
+  }
+
+  const handleSelectZone = (zoneId: string, orderIds: string[]) => {
+    const allSelected = orderIds.every((id) => selectedOrders.has(id))
+    setSelectedOrders((prev) => {
+      const next = new Set(prev)
+      orderIds.forEach((id) => {
+        if (allSelected) next.delete(id)
+        else next.add(id)
+      })
       return next
     })
   }
@@ -897,7 +943,8 @@ export default function OrdersPage() {
                     variant="outline"
                     className={cn(
                       "h-7 rounded-full px-2.5 text-xs font-bold tabular-nums",
-                      col.color
+                      col.color,
+                      col.id === "new" && colOrders.length > 0 && "animate-pulse ring-2 ring-orange-400"
                     )}
                   >
                     {colOrders.length}
@@ -915,9 +962,11 @@ export default function OrdersPage() {
                     now={now}
                     updatingId={updatingId}
                     onMarkDelivered={handleMarkDelivered}
-                    onDeliveryDepart={handleDeliveryDepart}
-                    departingOrderIds={departingOrderIds}
                     branch={selectedBranchInfo}
+                    selectedOrders={selectedOrders}
+                    onToggleSelect={handleToggleSelect}
+                    onSelectZone={handleSelectZone}
+                    onOpenAssign={handleOpenAssign}
                   />
                 ) : (
                   <div className="flex min-w-0 flex-col gap-3 overflow-hidden">
@@ -934,9 +983,10 @@ export default function OrdersPage() {
                           key={order.id}
                           order={order}
                           nextStatus={col.nextStatus}
+                          buttonText={col.buttonText}
                           now={now}
                           updating={updatingId === order.id}
-                          departing={departingOrderIds.has(order.id)}
+                          departing={false}
                           onNext={
                             col.nextStatus
                               ? () =>

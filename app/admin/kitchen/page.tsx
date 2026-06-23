@@ -45,7 +45,7 @@ const MAX_VISIBLE_READY_ORDERS = 5
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 type KitchenColumn = {
-    id: "new" | "preparing" | "ready"
+    id: "accepted" | "preparing" | "ready"
     label: string
     statuses: OrderStatus[]
     icon: typeof Clock
@@ -59,21 +59,21 @@ type KitchenColumn = {
 
 const COLUMNS: KitchenColumn[] = [
     {
-        id: "new",
-        label: "Nuevos",
-        statuses: ["new"],
+        id: "accepted",
+        label: "Por preparar",
+        statuses: ["accepted"],
         icon: Clock,
         accent: "bg-red-500",
         headerTint: "from-red-50",
         badgeClassName: "border-red-200 bg-red-50 text-red-700",
         buttonClassName: "bg-red-500 text-white hover:bg-red-400 active:bg-red-600",
         nextStatus: "preparing",
-        buttonText: "Aceptar",
+        buttonText: "Comenzar",
     },
     {
         id: "preparing",
         label: "En preparacion",
-        statuses: ["accepted", "preparing"],
+        statuses: ["preparing"],
         icon: ChefHat,
         accent: "bg-amber-400",
         headerTint: "from-amber-50",
@@ -167,7 +167,7 @@ export default function KitchenDisplayPage() {
     useEffect(() => {
         if (initialOrders) {
             const prevIds = new Set(prevOrdersRef.current.map((o) => o.id))
-            const newOrders = initialOrders.filter((o) => !prevIds.has(o.id) && o.status === "new")
+            const newOrders = initialOrders.filter((o) => !prevIds.has(o.id) && o.status === "accepted")
 
             const readyOrders = initialOrders.filter((o) => {
                 const prevOrder = prevOrdersRef.current.find((po) => po.id === o.id)

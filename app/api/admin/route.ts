@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
             case "upsells":
                 return NextResponse.json(await getAllUpsellRules(branchId))
             case "kitchen-orders":
-                // Orders for kitchen display: new, accepted, preparing, ready
-                return NextResponse.json(await getOrdersByStatus(["new", "accepted", "preparing", "ready"], branchId))
+                // Orders for kitchen display: accepted, preparing, ready (new orders must be accepted first at counter)
+                return NextResponse.json(await getOrdersByStatus(["accepted", "preparing", "ready"], branchId))
             case "dispatch": {
                 // All data needed for the dispatch view
                 const [dispatchOrders, zones, availableDrivers] = await Promise.all([
