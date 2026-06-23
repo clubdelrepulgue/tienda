@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { ProductModal } from "@/components/storefront/product-modal"
 import { createOrder } from "@/app/actions"
-import type { Product, Category, Branch, CartItemModifier, ModifierGroup, CartItem as OrderCartItem, DeliveryZone } from "@/lib/types"
+import type { Product, Category, Branch, CartItemModifier, ModifierGroup, CartItem as OrderCartItem, DeliveryZone, Order } from "@/lib/types"
+import { printOrderReceipt } from "@/components/receipt/order-receipt"
 import { toast } from "sonner"
 import { cn, formatPrice } from "@/lib/utils"
 import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
@@ -297,6 +298,36 @@ export default function POSPage() {
 
             playNewOrderSound()
             toast.success(`Pedido #${result.orderNumber} creado`)
+
+            // Build the order locally and print 2 copies with branch data.
+            const printableOrder: Order = {
+                id: result.orderId,
+                orderNumber: result.orderNumber,
+                customerName,
+                customerPhone: "",
+                address: orderType === "delivery" ? deliveryAddress : "",
+                deliveryNotes: orderType === "delivery" ? deliveryNotes : "",
+                deliveryMethod: orderType,
+                paymentMethod,
+                items: cart.map((item) => ({
+                    id: item.tempId,
+                    productId: item.productId,
+                    branchId: selectedBranch,
+                    name: item.name,
+                    image: item.image,
+                    price: item.price,
+                    quantity: item.quantity,
+                    modifiers: item.modifiers,
+                })),
+                subtotal,
+                deliveryFee,
+                total: orderTotal,
+                status: "new",
+                createdAt: new Date().toISOString(),
+                branchId: selectedBranch,
+            }
+            printOrderReceipt(printableOrder, selectedBranchInfo)
+
             clearCart()
             setIsCheckoutOpen(false)
         } catch {

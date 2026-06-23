@@ -37,6 +37,7 @@ import type { Branch, Order, OrderStatus, Driver, DeliveryZone } from "@/lib/typ
 import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
+import { PrintReceiptButton } from "@/components/receipt/order-receipt"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -66,6 +67,7 @@ function OrderCard({
   deliveryDrivers = [],
   onDeliveryDepart,
   departing = false,
+  branch,
 }: {
   order: Order
   nextStatus?: OrderStatus
@@ -77,6 +79,7 @@ function OrderCard({
   deliveryDrivers?: Driver[]
   onDeliveryDepart?: (orderId: string, driverId: string) => void
   departing?: boolean
+  branch?: Branch | null
 }) {
   const [selectedDriverId, setSelectedDriverId] = useState(order.driverId || "")
   const fulfillmentIcon = {
@@ -250,6 +253,8 @@ function OrderCard({
             </span>
           </div>
 
+          <PrintReceiptButton order={order} branch={branch} variant="ghost" label="" />
+
           {onNext && nextStatus && (
             <Button
               size="sm"
@@ -286,6 +291,7 @@ function ReadyColumn({
   onMarkDelivered,
   onDeliveryDepart,
   departingOrderIds,
+  branch,
 }: {
   orders: Order[]
   zones: DeliveryZone[]
@@ -295,6 +301,7 @@ function ReadyColumn({
   onMarkDelivered: (orderId: string) => void
   onDeliveryDepart: (orderId: string, driverId: string) => void
   departingOrderIds: Set<string>
+  branch?: Branch | null
 }) {
   const zoneMap = useMemo(() => {
     const map = new Map<string, DeliveryZone>()
@@ -393,6 +400,7 @@ function ReadyColumn({
                     }
                     deliveryDrivers={drivers}
                     onDeliveryDepart={onDeliveryDepart}
+                    branch={branch}
                   />
                 ))}
               </div>
@@ -423,6 +431,7 @@ function ReadyColumn({
               departing={departingOrderIds.has(order.id)}
               nextStatus="delivered"
               onNext={() => onMarkDelivered(order.id)}
+              branch={branch}
             />
           ))}
         </div>
@@ -798,6 +807,11 @@ export default function OrdersPage() {
     setAssignOrderIds([])
   }
 
+  const selectedBranchInfo = useMemo(
+    () => (session?.branches || []).find((b) => b.id === selectedBranch) || null,
+    [session?.branches, selectedBranch]
+  )
+
   // Filter out delivered/cancelled from active view
   const activeOrders = useMemo(
     () =>
@@ -903,6 +917,7 @@ export default function OrdersPage() {
                     onMarkDelivered={handleMarkDelivered}
                     onDeliveryDepart={handleDeliveryDepart}
                     departingOrderIds={departingOrderIds}
+                    branch={selectedBranchInfo}
                   />
                 ) : (
                   <div className="flex min-w-0 flex-col gap-3 overflow-hidden">
@@ -928,6 +943,7 @@ export default function OrdersPage() {
                                   handleNextStatus(order.id, col.nextStatus!)
                               : undefined
                           }
+                          branch={selectedBranchInfo}
                         />
                       ))
                     )}
