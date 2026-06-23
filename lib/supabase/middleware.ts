@@ -37,6 +37,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   let isAdmin = false
+  let adminRole: string | null = null
   if (user) {
     const { data: adminUser } = await supabase
       .from('admin_users')
@@ -46,6 +47,7 @@ export async function updateSession(request: NextRequest) {
 
     if (adminUser) {
       isAdmin = true
+      adminRole = adminUser.role
     }
   }
 
@@ -63,6 +65,15 @@ export async function updateSession(request: NextRequest) {
       url.pathname = '/admin/login'
       return NextResponse.redirect(url)
     }
+  }
+
+  if (
+    request.nextUrl.pathname.startsWith('/admin/users') &&
+    (!adminRole || !['owner', 'admin'].includes(adminRole))
+  ) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/admin'
+    return NextResponse.redirect(url)
   }
 
   // If logged in and visiting /admin/login, redirect to /admin

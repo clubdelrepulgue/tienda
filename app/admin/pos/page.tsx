@@ -48,22 +48,35 @@ export default function POSPage() {
 
     useEffect(() => {
         unlockAudio()
-        Promise.all([
-            fetch("/api/admin?type=products").then((r) => r.json()),
-            fetch("/api/admin?type=categories").then((r) => r.json()),
-            fetch("/api/admin?type=branches").then((r) => r.json()),
-            fetch("/api/admin?type=modifiers").then((r) => r.json()),
-        ])
-            .then(([productsData, categoriesData, branchesData, modifiersData]) => {
-                setProducts(productsData || [])
-                setCategories(categoriesData || [])
-                setBranches(branchesData || [])
-                setModifierGroups(modifiersData || [])
-                const openBranch = branchesData?.find((b: Branch) => b.isOpen)
-                if (openBranch) setSelectedBranch(openBranch.id)
+        fetch("/api/admin?type=session")
+            .then((r) => r.json())
+            .then((data) => {
+                const branchesData = data?.branches || []
+                setBranches(branchesData)
+                const activeBranch = branchesData.find((b: Branch) => b.id === data?.activeBranchId) ||
+                    branchesData.find((b: Branch) => b.isOpen)
+                if (activeBranch) setSelectedBranch(activeBranch.id)
             })
             .catch(() => toast.error("Error al cargar datos"))
     }, [])
+
+    useEffect(() => {
+        if (!selectedBranch) return
+
+        Promise.all([
+            fetch(`/api/admin?type=products&branchId=${selectedBranch}`).then((r) => r.json()),
+            fetch(`/api/admin?type=categories&branchId=${selectedBranch}`).then((r) => r.json()),
+            fetch(`/api/admin?type=modifiers&branchId=${selectedBranch}`).then((r) => r.json()),
+        ])
+            .then(([productsData, categoriesData, modifiersData]) => {
+                setProducts(productsData || [])
+                setCategories(categoriesData || [])
+                setModifierGroups(modifiersData || [])
+                setActiveCategory("all")
+                setCart([])
+            })
+            .catch(() => toast.error("Error al cargar menu de la sucursal"))
+    }, [selectedBranch])
 
     const filteredProducts = useMemo(() => {
         if (activeCategory === "all") return products.filter((p) => p.active)
@@ -183,6 +196,7 @@ export default function POSPage() {
                 items: cart.map((item) => ({
                     id: item.tempId,
                     productId: item.productId,
+                    branchId: selectedBranch,
                     name: item.name,
                     image: item.image,
                     price: item.price,
@@ -510,6 +524,15 @@ export default function POSPage() {
 
             <ProductModal
                 product={selectedProduct}
+                branch={branches.find((branch) => branch.id === selectedBranch) || {
+                    id: selectedBranch,
+                    slug: selectedBranch,
+                    name: "Sucursal",
+                    address: "",
+                    lat: null,
+                    lng: null,
+                    isOpen: true,
+                }}
                 allModifierGroups={modifierGroups}
                 open={productModalOpen}
                 onAddItem={handleAddConfiguredProduct}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import useSWR from "swr"
 import { Plus, Pencil, Trash2, Search, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +16,13 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import {
     Table,
     TableBody,
     TableCell,
@@ -23,15 +30,20 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import type { Category } from "@/lib/types"
+import type { Branch, Category } from "@/lib/types"
 import { toast } from "sonner"
 import { createCategory, updateCategory, deleteCategory } from "@/app/actions"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function CategoriesPage() {
+    const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
+        "/api/admin?type=session",
+        fetcher
+    )
+    const [selectedBranch, setSelectedBranch] = useState("")
     const { data: categories, mutate: mutateCategories, isLoading } = useSWR<Category[]>(
-        "/api/admin?type=categories",
+        selectedBranch ? `/api/admin?type=categories&branchId=${selectedBranch}` : null,
         fetcher
     )
 
@@ -44,12 +56,22 @@ export default function CategoriesPage() {
     const [formSlug, setFormSlug] = useState("")
     const [formOrder, setFormOrder] = useState("")
 
+    useEffect(() => {
+        if (!selectedBranch && session?.activeBranchId) {
+            setSelectedBranch(session.activeBranchId)
+        }
+    }, [selectedBranch, session?.activeBranchId])
+
     const safeCategories = Array.isArray(categories) ? categories : []
     const filtered = safeCategories.filter((c) =>
         c.name.toLowerCase().includes(search.toLowerCase())
     )
 
     const openCreate = () => {
+        if (!selectedBranch) {
+            toast.error("Selecciona una sucursal")
+            return
+        }
         setEditCategory(null)
         setFormName("")
         setFormSlug("")
@@ -90,6 +112,7 @@ export default function CategoriesPage() {
         try {
             if (editCategory) {
                 const result = await updateCategory(editCategory.id, {
+                    branchId: selectedBranch,
                     nombre: formName,
                     slug: formSlug,
                     orden: parseInt(formOrder) || 0,
@@ -101,6 +124,7 @@ export default function CategoriesPage() {
                 toast.success("Categoria actualizada")
             } else {
                 const result = await createCategory({
+                    branchId: selectedBranch,
                     nombre: formName,
                     slug: formSlug,
                     orden: parseInt(formOrder) || 0,
@@ -136,7 +160,7 @@ export default function CategoriesPage() {
         }
     }
 
-    if (isLoading) {
+    if (!selectedBranch || isLoading) {
         return (
             <div className="flex flex-col gap-6 max-w-4xl">
                 <div>
@@ -168,13 +192,28 @@ export default function CategoriesPage() {
                         Organiza tus productos por categorias
                     </p>
                 </div>
-                <Button
-                    className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
-                    onClick={openCreate}
-                >
-                    <Plus className="h-4 w-4" />
-                    Agregar categoria
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                        <SelectTrigger className="w-full rounded-xl bg-card sm:w-56">
+                            <SelectValue placeholder="Sucursal" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {(session?.branches || []).map((branch) => (
+                                <SelectItem key={branch.id} value={branch.id}>
+                                    {branch.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button
+                        className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+                        onClick={openCreate}
+                        disabled={!selectedBranch}
+                    >
+                        <Plus className="h-4 w-4" />
+                        Agregar categoria
+                    </Button>
+                </div>
             </div>
 
             <Card className="rounded-2xl bg-card border-border">

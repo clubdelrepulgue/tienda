@@ -1,15 +1,18 @@
 "use client"
 
 import Image from "next/image"
+import Link from "next/link"
 import { ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/lib/store"
+import type { Branch } from "@/lib/types"
 
 interface HeaderProps {
+  branch: Branch
   onCartOpen: () => void
 }
 
-export function Header({ onCartOpen }: HeaderProps) {
+export function Header({ branch, onCartOpen }: HeaderProps) {
   const totalItems = useCartStore((s) => s.totalItems())
 
   return (
@@ -20,14 +23,19 @@ export function Header({ onCartOpen }: HeaderProps) {
             className="flex items-center"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            <Image
-              src="/assets/brand/logo.jpeg"
-              alt="El Club del Repulgue"
-              width={160}
-              height={32}
-              priority
-              className="h-7 w-auto sm:h-8"
-            />
+            <Link href="/" className="flex items-center gap-3">
+              <Image
+                src="/assets/brand/logo.jpeg"
+                alt="El Club del Repulgue"
+                width={160}
+                height={32}
+                priority
+                className="h-7 w-auto sm:h-8"
+              />
+              <span className="hidden rounded-full border border-border bg-white px-2.5 py-1 text-xs font-semibold text-muted-foreground sm:inline">
+                {branch.name}
+              </span>
+            </Link>
           </h1>
         </div>
         <Button

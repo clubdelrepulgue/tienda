@@ -1,12 +1,24 @@
 "use client"
 
 import { create } from "zustand"
-import type { CartItem, CartItemModifier, Product } from "./types"
+import type { Branch, CartItem, CartItemModifier, Product } from "./types"
+
+type CartBranch = Pick<Branch, "id" | "slug" | "name">
+
+type CartMutationResult = {
+  success: boolean
+  error?: string
+}
 
 interface CartStore {
+  branchId: string | null
+  branchSlug: string | null
+  branchName: string | null
   items: CartItem[]
-  addItem: (item: Omit<CartItem, "id">) => void
-  addProduct: (product: Product, modifiers: CartItemModifier[], overridePrice?: number) => void
+  setBranchContext: (branch: CartBranch) => CartMutationResult
+  clearCartAndSetBranch: (branch: CartBranch) => void
+  addItem: (item: Omit<CartItem, "id">, branch?: CartBranch) => CartMutationResult
+  addProduct: (product: Product, modifiers: CartItemModifier[], overridePrice?: number) => CartMutationResult
   removeItem: (id: string) => void
   updateQty: (id: string, quantity: number) => void
   clearCart: () => void
@@ -25,10 +37,49 @@ function getModifiersKey(modifiers: CartItemModifier[]) {
     .join("|")
 }
 
+function branchMismatchMessage(branchName: string | null) {
+  const current = branchName ? ` de ${branchName}` : ""
+  return `Tu carrito actual${current} pertenece a otra sucursal. Vacialo para cambiar de menu.`
+}
+
 export const useCartStore = create<CartStore>((set, get) => ({
+  branchId: null,
+  branchSlug: null,
+  branchName: null,
   items: [],
 
-  addItem: (item) => {
+  setBranchContext: (branch) => {
+    const state = get()
+    if (state.items.length > 0 && state.branchId && state.branchId !== branch.id) {
+      return { success: false, error: branchMismatchMessage(state.branchName) }
+    }
+
+    set({
+      branchId: branch.id,
+      branchSlug: branch.slug,
+      branchName: branch.name,
+    })
+
+    return { success: true }
+  },
+
+  clearCartAndSetBranch: (branch) => {
+    set({
+      branchId: branch.id,
+      branchSlug: branch.slug,
+      branchName: branch.name,
+      items: [],
+    })
+  },
+
+  addItem: (item, branch) => {
+    const state = get()
+    const nextBranchId = branch?.id || item.branchId
+
+    if (state.items.length > 0 && state.branchId && state.branchId !== nextBranchId) {
+      return { success: false, error: branchMismatchMessage(state.branchName) }
+    }
+
     const existingItem = get().items.find(
       (i) =>
         i.productId === item.productId &&
@@ -45,9 +96,14 @@ export const useCartStore = create<CartStore>((set, get) => ({
       })
     } else {
       set({
+        branchId: branch?.id || state.branchId || item.branchId,
+        branchSlug: branch?.slug || state.branchSlug,
+        branchName: branch?.name || state.branchName,
         items: [...get().items, { ...item, id: generateId() }],
       })
     }
+
+    return { success: true }
   },
 
   addProduct: (product, modifiers, overridePrice) => {
@@ -55,6 +111,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
     
     const newItem: Omit<CartItem, "id"> = {
       productId: product.id,
+      branchId: product.branchId,
       name: product.name,
       image: product.image,
       price: finalPrice,
@@ -77,10 +134,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
             : i
         ),
       })
+      return { success: true }
     } else {
-      set({
-        items: [...get().items, { ...newItem, id: generateId() }],
-      })
+      return get().addItem(newItem)
     }
   },
 
@@ -98,7 +154,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
     }
   },
 
-  clearCart: () => set({ items: [] }),
+  clearCart: () => set({ branchId: null, branchSlug: null, branchName: null, items: [] }),
 
   totalPrice: () => {
     return get().items.reduce((total, item) => {

@@ -29,41 +29,11 @@ function getBranchCity(address: string) {
   return parts[0] || "Ciudad no configurada"
 }
 
-function getDistanceKm(
-  from: { lat: number; lng: number },
-  to: { lat: number; lng: number }
-) {
-  const earthRadiusKm = 6371
-  const dLat = ((to.lat - from.lat) * Math.PI) / 180
-  const dLng = ((to.lng - from.lng) * Math.PI) / 180
-  const fromLat = (from.lat * Math.PI) / 180
-  const toLat = (to.lat * Math.PI) / 180
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2
-
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-function getBranchesCenter(branches: Branch[]) {
-  const locatedBranches = branches.filter(
-    (branch) => branch.isOpen && branch.lat != null && branch.lng != null
-  )
-
-  if (locatedBranches.length === 0) return undefined
-
-  return {
-    lat:
-      locatedBranches.reduce((sum, branch) => sum + branch.lat!, 0) /
-      locatedBranches.length,
-    lng:
-      locatedBranches.reduce((sum, branch) => sum + branch.lng!, 0) /
-      locatedBranches.length,
-  }
-}
-
 export default function CheckoutPage() {
   const items = useCartStore((s) => s.items)
+  const cartBranchId = useCartStore((s) => s.branchId)
+  const cartBranchSlug = useCartStore((s) => s.branchSlug)
+  const cartBranchName = useCartStore((s) => s.branchName)
   const totalPrice = useCartStore((s) => s.totalPrice())
   const clearCart = useCartStore((s) => s.clearCart)
   const router = useRouter()
@@ -98,12 +68,14 @@ export default function CheckoutPage() {
   } | null>(null)
 
   useEffect(() => {
-    fetch("/api/checkout-data")
+    if (!cartBranchId) return
+
+    fetch(`/api/checkout-data?branchId=${encodeURIComponent(cartBranchId)}`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data?.branches)) {
           setBranches(data.branches)
-          const openBranch = data.branches.find((b: Branch) => b.isOpen)
+          const openBranch = data.branches.find((b: Branch) => b.id === cartBranchId)
           if (openBranch) setSelectedBranch(openBranch.id)
         }
         if (Array.isArray(data?.deliveryZones)) setAllDeliveryZones(data.deliveryZones)
@@ -111,7 +83,7 @@ export default function CheckoutPage() {
       .catch(() => {
         toast.error("No se pudieron cargar las zonas de envío")
       })
-  }, [])
+  }, [cartBranchId])
 
   useEffect(() => {
     if (!selectedBranch) return
@@ -120,46 +92,16 @@ export default function CheckoutPage() {
 
   // Update address when location is selected from map
   useEffect(() => {
-    if (selectedLocation) {
-      setAddress(selectedLocation.address)
+    if (!selectedLocation) return
 
-      const openBranches = branches.filter(
-        (branch) => branch.isOpen && branch.lat != null && branch.lng != null
-      )
+    setAddress(selectedLocation.address)
+    const zone = findDeliveryZoneForPoint(deliveryZones, selectedLocation)
+    setSelectedZone(zone?.id || "")
 
-      const candidates = openBranches
-        .map((branch) => {
-          const branchZones = allDeliveryZones.filter((zone) => zone.branchId === branch.id)
-          const zone = findDeliveryZoneForPoint(branchZones, selectedLocation)
-
-          return {
-            branch,
-            branchZones,
-            zone,
-            distanceKm: getDistanceKm(
-              { lat: branch.lat!, lng: branch.lng! },
-              selectedLocation
-            ),
-          }
-        })
-        .sort((a, b) => {
-          if (a.zone && !b.zone) return -1
-          if (!a.zone && b.zone) return 1
-          return a.distanceKm - b.distanceKm
-        })
-
-      const best = candidates[0]
-      if (best) {
-        setSelectedBranch(best.branch.id)
-        setDeliveryZones(best.branchZones)
-        setSelectedZone(best.zone?.id || "")
-      }
-
-      if (!best?.zone && allDeliveryZones.length > 0) {
-        toast.warning("Esa dirección está fuera de las zonas de envío")
-      }
+    if (!zone && deliveryZones.length > 0) {
+      toast.warning("Esa dirección está fuera de las zonas de envío de esta sucursal")
     }
-  }, [allDeliveryZones, branches, selectedLocation])
+  }, [deliveryZones, selectedLocation])
 
   const selectedBranchInfo = branches.find((branch) => branch.id === selectedBranch)
   const selectedBranchLocation =
@@ -170,15 +112,8 @@ export default function CheckoutPage() {
           title: selectedBranchInfo.name,
         }
       : undefined
-  const branchesSearchCenter = getBranchesCenter(branches)
-  const openBranchIds = new Set(
-    branches.filter((branch) => branch.isOpen).map((branch) => branch.id)
-  )
-  const visibleDeliveryZones = selectedLocation
-    ? deliveryZones
-    : allDeliveryZones.filter(
-        (zone) => zone.isActive && openBranchIds.has(zone.branchId)
-      )
+  const branchesSearchCenter = selectedBranchLocation
+  const visibleDeliveryZones = deliveryZones.filter((zone) => zone.isActive)
   const selectedZoneInfo = deliveryZones.find((z) => z.id === selectedZone)
   const hasCoverageCheck = deliveryMethod === "delivery" && deliveryZones.length > 0
   const isOutsideCoverage = hasCoverageCheck && selectedLocation && !selectedZoneInfo
@@ -195,6 +130,11 @@ export default function CheckoutPage() {
   const grandTotal = subtotalAfterDiscount + deliveryFee
 
   const handlePlaceOrder = async () => {
+    if (!cartBranchId) {
+      toast.error("Selecciona una sucursal antes de finalizar")
+      router.push("/")
+      return
+    }
     if (!name || !phone) {
       toast.error("Por favor completá tu nombre y teléfono")
       return
@@ -225,7 +165,7 @@ export default function CheckoutPage() {
         addressText: address,
         notes,
         paymentMethod,
-        sucursalId: selectedBranch,
+        sucursalId: cartBranchId || selectedBranch,
         items,
         subtotal: totalPrice,
         deliveryFee,
@@ -264,13 +204,27 @@ export default function CheckoutPage() {
     )
   }
 
+  if (!cartBranchId) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-secondary p-6 text-center">
+        <p className="font-semibold text-foreground">Selecciona una sucursal para continuar</p>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          El checkout necesita saber desde que restaurante sale el pedido.
+        </p>
+        <Button asChild className="rounded-full bg-primary text-white hover:bg-primary/90">
+          <Link href="/">Elegir sucursal</Link>
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <GoogleMapsProvider>
       <div className="flex min-h-dvh flex-col bg-secondary">
         <header className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
           <div className="mx-auto max-w-3xl flex items-center gap-3 px-4 py-3">
             <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" asChild>
-              <Link href="/" aria-label="Volver al menú">
+              <Link href={cartBranchSlug ? `/menu/${cartBranchSlug}` : "/"} aria-label="Volver al menú">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
@@ -280,6 +234,11 @@ export default function CheckoutPage() {
             >
               Finalizar pedido
             </h1>
+            {cartBranchName && (
+              <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                {cartBranchName}
+              </span>
+            )}
           </div>
         </header>
 

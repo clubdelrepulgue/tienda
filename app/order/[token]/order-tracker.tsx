@@ -67,41 +67,18 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
     }, [order.branchId])
 
     useEffect(() => {
-        const supabase = createClient()
+        const refreshOrder = async () => {
+            const response = await fetch(`/api/order/${encodeURIComponent(token)}`, { cache: "no-store" })
+            if (!response.ok) return
 
-        const channel = supabase
-            .channel(`order-${token}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "UPDATE",
-                    schema: "public",
-                    table: "orders",
-                    filter: `public_tracking_token=eq.${token}`,
-                },
-                (payload) => {
-                    const row = payload.new as any
-                    setOrder((prev) => ({
-                        ...prev,
-                        status: row.status,
-                        acceptedAt: row.accepted_at || prev.acceptedAt,
-                        preparingAt: row.preparing_at || prev.preparingAt,
-                        readyAt: row.ready_at || prev.readyAt,
-                        deliveredAt: row.delivered_at || prev.deliveredAt,
-                        cancelledAt: row.cancelled_at || prev.cancelledAt,
-                        driverId: row.driver_id || prev.driverId,
-                        addressLat: row.address_lat ? parseFloat(row.address_lat) : prev.addressLat,
-                        addressLng: row.address_lng ? parseFloat(row.address_lng) : prev.addressLng,
-                    }))
-                    if (row.driver_id) {
-                        setDriverId(row.driver_id)
-                    }
-                }
-            )
-            .subscribe()
+            const nextOrder = (await response.json()) as Order
+            setOrder(nextOrder)
+            setDriverId(nextOrder.driverId ?? undefined)
+        }
 
+        const interval = window.setInterval(refreshOrder, 10000)
         return () => {
-            supabase.removeChannel(channel)
+            window.clearInterval(interval)
         }
     }, [token])
 
@@ -217,6 +194,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                                 <LiveTrackingMap
                                     orderId={order.id}
                                     driverId={driverId}
+                                    trackingToken={token}
                                     destination={destination}
                                     branchLocation={branchLocation ?? undefined}
                                     height="300px"

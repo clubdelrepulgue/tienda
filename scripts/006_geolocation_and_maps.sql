@@ -100,7 +100,7 @@ begin
             exists (
                 select 1 from orders 
                 where orders.id = driver_location_history.order_id 
-                and orders.public_tracking_token = current_setting('app.order_token', true)::uuid
+                and orders.public_tracking_token = public.current_order_token()
             )
         );
     
@@ -128,12 +128,12 @@ begin
     -- Luego en el historial si no está actualizada
     return query
     select 
-        d.current_location->>'lat'::numeric as lat,
-        d.current_location->>'lng'::numeric as lng,
+        (d.current_location->>'lat')::numeric as lat,
+        (d.current_location->>'lng')::numeric as lng,
         (d.current_location->>'updated_at')::timestamptz as updated_at,
         o.id as order_id
     from drivers d
-    left join orders o on o.driver_id = d.id and o.status in ('ready', 'delivering')
+    left join orders o on o.driver_id = d.id and o.status = 'ready'
     where d.id = p_driver_id;
 end;
 $$ language plpgsql security definer;
@@ -209,6 +209,9 @@ begin
     set current_location = jsonb_build_object(
         'lat', new.lat,
         'lng', new.lng,
+        'accuracy', new.accuracy,
+        'heading', new.heading,
+        'speed', case when new.speed is not null then new.speed / 3.6 else null end,
         'updated_at', new.created_at
     ),
     updated_at = new.created_at

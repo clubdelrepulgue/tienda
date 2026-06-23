@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
-import { updateOrderStatus } from "@/app/actions"
+import { completeDriverOrder } from "@/app/actions"
 import type { DeliveryZone, Order } from "@/lib/types"
 import { toast } from "sonner"
 import { useDriverLocation } from "@/hooks/use-driver-location"
@@ -164,7 +164,15 @@ export default function DriverDashboardPage() {
     }
 
     const handleStatusUpdate = async (orderId: string, status: string) => {
-        const result = await updateOrderStatus(orderId, status)
+        if (!driverId) {
+            toast.error("Sesion de repartidor requerida")
+            return
+        }
+
+        const result = status === "delivered"
+            ? await completeDriverOrder(orderId, driverId)
+            : { error: "Estado no permitido para repartidor" }
+
         if (result.error) {
             toast.error(result.error)
         } else {

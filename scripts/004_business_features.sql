@@ -239,7 +239,7 @@ begin
             exists (
                 select 1 from orders 
                 where orders.id = order_status_history.order_id 
-                and orders.public_tracking_token = current_setting('app.order_token', true)::uuid
+                and orders.public_tracking_token = public.current_order_token()
             )
         );
     

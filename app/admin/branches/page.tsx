@@ -40,7 +40,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import type { Branch, DeliveryZone } from "@/lib/types"
-import { cn, formatPrice } from "@/lib/utils"
+import { cn, formatPrice, slugify } from "@/lib/utils"
 import { toast } from "sonner"
 import {
     createBranch,
@@ -113,6 +113,8 @@ export default function BranchesPage() {
     const [editBranch, setEditBranch] = useState<Branch | null>(null)
     const [savingBranch, setSavingBranch] = useState(false)
     const [formName, setFormName] = useState("")
+    const [formSlug, setFormSlug] = useState("")
+    const [formSlugTouched, setFormSlugTouched] = useState(false)
     const [formAddress, setFormAddress] = useState("")
     const [formIsOpen, setFormIsOpen] = useState(true)
     const [formLat, setFormLat] = useState<number | null>(null)
@@ -159,6 +161,8 @@ export default function BranchesPage() {
     const openCreateBranch = () => {
         setEditBranch(null)
         setFormName("")
+        setFormSlug("")
+        setFormSlugTouched(false)
         setFormAddress("")
         setFormIsOpen(true)
         setFormLat(null)
@@ -169,6 +173,8 @@ export default function BranchesPage() {
     const openEditBranch = (branch: Branch) => {
         setEditBranch(branch)
         setFormName(branch.name)
+        setFormSlug(branch.slug)
+        setFormSlugTouched(true)
         setFormAddress(branch.address)
         setFormIsOpen(branch.isOpen)
         setFormLat(branch.lat)
@@ -181,10 +187,12 @@ export default function BranchesPage() {
             toast.error("Ingresá un nombre para la sucursal")
             return
         }
+        const normalizedSlug = slugify(formSlug || formName)
         setSavingBranch(true)
         try {
             const payload = {
                 nombre: formName,
+                slug: normalizedSlug,
                 direccion: formAddress,
                 lat: formLat ?? undefined,
                 lng: formLng ?? undefined,
@@ -465,6 +473,9 @@ export default function BranchesPage() {
                                                         <MapPin className="h-3 w-3" />
                                                         {branch.address || "Sin dirección"}
                                                     </div>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        /menu/{branch.slug}
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
@@ -658,10 +669,33 @@ export default function BranchesPage() {
                                 </Label>
                                 <Input
                                     value={formName}
-                                    onChange={(e) => setFormName(e.target.value)}
+                                    onChange={(e) => {
+                                        const nextName = e.target.value
+                                        setFormName(nextName)
+                                        if (!formSlugTouched) {
+                                            setFormSlug(slugify(nextName))
+                                        }
+                                    }}
                                     placeholder="Ej: Sucursal Centro"
                                     className="rounded-xl bg-secondary border-0"
                                 />
+                            </div>
+                            <div>
+                                <Label className="text-sm text-muted-foreground mb-1.5 block">
+                                    URL del menú
+                                </Label>
+                                <Input
+                                    value={formSlug}
+                                    onChange={(e) => {
+                                        setFormSlug(slugify(e.target.value))
+                                        setFormSlugTouched(true)
+                                    }}
+                                    placeholder="sucursal-centro"
+                                    className="rounded-xl bg-secondary border-0"
+                                />
+                                <p className="mt-1.5 text-xs text-muted-foreground">
+                                    URL pública: /menu/{formSlug || slugify(formName)}
+                                </p>
                             </div>
                             <div>
                                 <Label className="text-sm text-muted-foreground mb-1.5 block">

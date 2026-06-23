@@ -24,6 +24,7 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
   const updateQty = useCartStore((s) => s.updateQty)
   const removeItem = useCartStore((s) => s.removeItem)
   const totalPrice = useCartStore((s) => s.totalPrice())
+  const branchSlug = useCartStore((s) => s.branchSlug)
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
@@ -143,7 +144,9 @@ export function CartSheet({ open, onClose }: CartSheetProps) {
                 asChild
                 onClick={onClose}
               >
-                <Link href="/checkout">Ir al checkout</Link>
+                <Link href={branchSlug ? `/checkout?branch=${branchSlug}` : "/checkout"}>
+                  Ir al checkout
+                </Link>
               </Button>
             </div>
           </>

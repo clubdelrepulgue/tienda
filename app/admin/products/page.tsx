@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import useSWR from "swr"
 import { Plus, Pencil, Search, Loader2, Upload, X } from "lucide-react"
@@ -34,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { Product, Category, ModifierGroup } from "@/lib/types"
+import type { Product, Category, ModifierGroup, Branch } from "@/lib/types"
 import { toast } from "sonner"
 import { createProduct, updateProduct, toggleProductActive } from "@/app/actions"
 import { createClient } from "@/lib/supabase/client"
@@ -43,16 +43,22 @@ import { formatPrice } from "@/lib/utils"
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function ProductsPage() {
+  const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
+    "/api/admin?type=session",
+    fetcher
+  )
+  const [selectedBranch, setSelectedBranch] = useState("")
+
   const { data: products, mutate: mutateProducts, isLoading: productsLoading } = useSWR<Product[]>(
-    "/api/admin?type=products",
+    selectedBranch ? `/api/admin?type=products&branchId=${selectedBranch}` : null,
     fetcher
   )
   const { data: categories } = useSWR<Category[]>(
-    "/api/admin?type=categories",
+    selectedBranch ? `/api/admin?type=categories&branchId=${selectedBranch}` : null,
     fetcher
   )
   const { data: modifiers } = useSWR<ModifierGroup[]>(
-    "/api/admin?type=modifiers",
+    selectedBranch ? `/api/admin?type=modifiers&branchId=${selectedBranch}` : null,
     fetcher
   )
 
@@ -72,12 +78,22 @@ export default function ProductsPage() {
   const [existingImages, setExistingImages] = useState<string[]>([])
   const [newImageFiles, setNewImageFiles] = useState<{ file: File, preview: string }[]>([])
 
+  useEffect(() => {
+    if (!selectedBranch && session?.activeBranchId) {
+      setSelectedBranch(session.activeBranchId)
+    }
+  }, [selectedBranch, session?.activeBranchId])
+
   const safeProducts = Array.isArray(products) ? products : []
   const filtered = safeProducts.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   )
 
   const openCreate = () => {
+    if (!selectedBranch) {
+      toast.error("Selecciona una sucursal")
+      return
+    }
     setEditProduct(null)
     setFormName("")
     setFormDescription("")
@@ -160,6 +176,7 @@ export default function ProductsPage() {
 
       if (editProduct) {
         const result = await updateProduct(editProduct.id, {
+          branchId: selectedBranch,
           nombre: formName,
           descripcion: formDescription,
           precio: parseFloat(formPrice),
@@ -176,6 +193,7 @@ export default function ProductsPage() {
         toast.success("Producto actualizado")
       } else {
         const result = await createProduct({
+          branchId: selectedBranch,
           nombre: formName,
           descripcion: formDescription,
           precio: parseFloat(formPrice),
@@ -222,7 +240,7 @@ export default function ProductsPage() {
     return safeCategories.find((c) => c.id === id)?.name || "Sin categoria"
   }
 
-  if (productsLoading) {
+  if (!selectedBranch || productsLoading) {
     return (
       <div className="flex flex-col gap-6 max-w-6xl">
         <div>
@@ -254,13 +272,28 @@ export default function ProductsPage() {
             Administra los productos del menu
           </p>
         </div>
-        <Button
-          className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
-          onClick={openCreate}
-        >
-          <Plus className="h-4 w-4" />
-          Agregar producto
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="w-full rounded-xl bg-card sm:w-56">
+              <SelectValue placeholder="Sucursal" />
+            </SelectTrigger>
+            <SelectContent>
+              {(session?.branches || []).map((branch) => (
+                <SelectItem key={branch.id} value={branch.id}>
+                  {branch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+            onClick={openCreate}
+            disabled={!selectedBranch}
+          >
+            <Plus className="h-4 w-4" />
+            Agregar producto
+          </Button>
+        </div>
       </div>
 
       <Card className="rounded-2xl bg-card border-border">

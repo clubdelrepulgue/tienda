@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Map, AdvancedMarker, useMap } from "@vis.gl/react-google-maps"
+import { Map, AdvancedMarker } from "@vis.gl/react-google-maps"
 import { createClient } from "@/lib/supabase/client"
 import type { Driver } from "@/lib/types"
 import { Card, CardContent } from "@/components/ui/card"
@@ -23,7 +23,7 @@ interface DriverWithLocation extends Driver {
     }
 }
 
-const defaultCenter = { lat: -34.6037, lng: -58.3816 }
+const defaultCenter = { lat: -34.9011, lng: -56.1645 }
 
 function DriverMarker({
     driver,
@@ -152,7 +152,7 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
                         .from("orders")
                         .select("id, order_number, address_text, status")
                         .eq("driver_id", driver.id)
-                        .in("status", ["ready", "delivering"])
+                        .eq("status", "ready")
                         .order("driver_assigned_at", { ascending: false })
                         .limit(1)
 

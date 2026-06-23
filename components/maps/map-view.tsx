@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
-import { Map, useMap, AdvancedMarker, Pin, MapControl, ControlPosition } from "@vis.gl/react-google-maps"
+import { Map, useMap, AdvancedMarker, Pin, MapControl, ControlPosition, type MapEvent, type MapMouseEvent } from "@vis.gl/react-google-maps"
 import { Polygon } from "./polygon"
 
 export interface MapMarker {
@@ -34,7 +34,7 @@ interface MapViewProps {
     showCurrentLocation?: boolean
 }
 
-const defaultCenter = { lat: -34.6037, lng: -58.3816 } // Buenos Aires
+const defaultCenter = { lat: -34.9011, lng: -56.1645 } // Montevideo
 
 function CurrentLocationButton() {
     const map = useMap()
@@ -140,21 +140,25 @@ export function MapView({
 }: MapViewProps) {
     const [selectedMarker, setSelectedMarker] = useState<string | null>(null)
     const [map, setMap] = useState<google.maps.Map | null>(null)
+    const mapLoadRef = useRef(false)
     const hasMapId = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID
 
     const handleMapClick = useCallback(
-        (e: google.maps.MapMouseEvent) => {
-            if (e.latLng && onMapClick) {
-                onMapClick(e.latLng.lat(), e.latLng.lng())
+        (e: MapMouseEvent) => {
+            if (e.detail.latLng && onMapClick) {
+                onMapClick(e.detail.latLng.lat, e.detail.latLng.lng)
             }
         },
         [onMapClick]
     )
 
     const handleMapLoad = useCallback(
-        (mapInstance: google.maps.Map) => {
-            setMap(mapInstance)
-            onMapLoad?.(mapInstance)
+        (event: MapEvent) => {
+            if (!mapLoadRef.current) {
+                mapLoadRef.current = true
+                setMap(event.map)
+                onMapLoad?.(event.map)
+            }
         },
         [onMapLoad]
     )
@@ -182,7 +186,7 @@ export function MapView({
                 disableDefaultUI={false}
                 mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || undefined}
                 onClick={handleMapClick}
-                onLoad={handleMapLoad}
+                onIdle={handleMapLoad}
             >
                 {/* Render zones */}
                 {zones.map((zone) => (

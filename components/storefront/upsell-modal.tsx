@@ -18,6 +18,7 @@ interface UpsellModalProps {
 export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
     const items = useCartStore((s) => s.items)
     const addItem = useCartStore((s) => s.addItem)
+    const branchId = useCartStore((s) => s.branchId)
     const [products, setProducts] = useState<Product[]>([])
     const [rules, setRules] = useState<UpsellRule[]>([])
     const [suggestions, setSuggestions] = useState<Array<{
@@ -27,17 +28,19 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
     }>>([])
 
     useEffect(() => {
-        // Load products and upsell rules
+        if (!branchId) return
+
+        // Load products and upsell rules for the current branch.
         Promise.all([
-            fetch("/api/admin?type=products").then((r) => r.json()),
-            fetch("/api/admin?type=upsells").then((r) => r.json()),
+            fetch(`/api/admin?type=products&branchId=${branchId}`).then((r) => r.json()),
+            fetch(`/api/admin?type=upsells&branchId=${branchId}`).then((r) => r.json()),
         ])
             .then(([productsData, rulesData]) => {
                 setProducts(productsData || [])
                 setRules(rulesData || [])
             })
             .catch(() => { })
-    }, [])
+    }, [branchId])
 
     useEffect(() => {
         if (!isOpen || items.length === 0 || rules.length === 0 || products.length === 0) {
@@ -97,8 +100,20 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
     }, [isOpen, items, rules, products])
 
     const handleAddToCart = (product: Product, discountedPrice: number, rule: UpsellRule) => {
-        addItem(product, [], discountedPrice)
-        toast.success(`Added ${product.name} with ${rule.discountPercentage}% off!`)
+        const result = addItem({
+            productId: product.id,
+            branchId: product.branchId,
+            name: product.name,
+            image: product.image,
+            price: discountedPrice,
+            quantity: 1,
+            modifiers: [],
+        })
+        if (!result.success) {
+            toast.error(result.error)
+            return
+        }
+        toast.success(`${product.name} agregado`)
     }
 
     if (suggestions.length === 0) return null

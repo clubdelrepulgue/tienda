@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import useSWR from "swr"
 import { Plus, Trash2, GripVertical, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,6 +9,13 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
@@ -17,7 +24,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import type { ModifierGroup, ModifierOption } from "@/lib/types"
+import type { Branch, ModifierGroup, ModifierOption } from "@/lib/types"
 import { toast } from "sonner"
 import { createModifierGroup, updateModifierGroup } from "@/app/actions"
 import { formatPrice } from "@/lib/utils"
@@ -25,8 +32,13 @@ import { formatPrice } from "@/lib/utils"
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function ModifiersPage() {
+  const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
+    "/api/admin?type=session",
+    fetcher
+  )
+  const [selectedBranch, setSelectedBranch] = useState("")
   const { data: groups, mutate, isLoading } = useSWR<ModifierGroup[]>(
-    "/api/admin?type=modifiers",
+    selectedBranch ? `/api/admin?type=modifiers&branchId=${selectedBranch}` : null,
     fetcher
   )
 
@@ -41,7 +53,17 @@ export default function ModifiersPage() {
     { name: string; price: string }[]
   >([])
 
+  useEffect(() => {
+    if (!selectedBranch && session?.activeBranchId) {
+      setSelectedBranch(session.activeBranchId)
+    }
+  }, [selectedBranch, session?.activeBranchId])
+
   const openCreate = () => {
+    if (!selectedBranch) {
+      toast.error("Selecciona una sucursal")
+      return
+    }
     setEditGroup(null)
     setFormName("")
     setFormRequired(false)
@@ -94,6 +116,7 @@ export default function ModifiersPage() {
     try {
       if (editGroup) {
         const result = await updateModifierGroup(editGroup.id, {
+          branchId: selectedBranch,
           nombre: formName,
           required: formRequired,
           maxSel: parseInt(formMax) || 5,
@@ -110,6 +133,7 @@ export default function ModifiersPage() {
         toast.success("Grupo de modificadores actualizado")
       } else {
         const result = await createModifierGroup({
+          branchId: selectedBranch,
           nombre: formName,
           required: formRequired,
           maxSel: parseInt(formMax) || 5,
@@ -134,7 +158,7 @@ export default function ModifiersPage() {
     }
   }
 
-  if (isLoading) {
+  if (!selectedBranch || isLoading) {
     return (
       <div className="flex flex-col gap-6 max-w-4xl">
         <div>
@@ -164,13 +188,28 @@ export default function ModifiersPage() {
             Configura extras, salsas, tamanos y mas
           </p>
         </div>
-        <Button
-          className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
-          onClick={openCreate}
-        >
-          <Plus className="h-4 w-4" />
-          Agregar grupo
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="w-full rounded-xl bg-card sm:w-56">
+              <SelectValue placeholder="Sucursal" />
+            </SelectTrigger>
+            <SelectContent>
+              {(session?.branches || []).map((branch) => (
+                <SelectItem key={branch.id} value={branch.id}>
+                  {branch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+            onClick={openCreate}
+            disabled={!selectedBranch}
+          >
+            <Plus className="h-4 w-4" />
+            Agregar grupo
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

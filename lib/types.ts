@@ -1,5 +1,6 @@
 export interface Category {
   id: string
+  branchId: string
   name: string
   slug: string
   order: number
@@ -13,6 +14,7 @@ export interface ModifierOption {
 
 export interface ModifierGroup {
   id: string
+  branchId: string
   name: string
   required: boolean
   maxSelections: number
@@ -21,6 +23,7 @@ export interface ModifierGroup {
 
 export interface Product {
   id: string
+  branchId: string
   name: string
   description: string
   price: number
@@ -42,6 +45,7 @@ export interface CartItemModifier {
 export interface CartItem {
   id: string // unique cart item id
   productId: string
+  branchId: string
   name: string
   image: string
   price: number
@@ -86,6 +90,7 @@ export interface Order {
 
 export interface Branch {
   id: string
+  slug: string
   name: string
   address: string
   lat: number | null
@@ -151,6 +156,7 @@ export interface Driver {
 
 export interface UpsellRule {
   id: string
+  branchId: string
   name: string
   triggerProductIds: string[]
   triggerCategoryIds: string[]
@@ -159,6 +165,28 @@ export interface UpsellRule {
   discountPercentage: number
   priority: number
   isActive: boolean
+}
+
+export type AdminRole = "owner" | "admin" | "operator"
+
+export interface AdminScope {
+  userId: string
+  role: AdminRole
+  branchId: string | null
+  isGlobalAdmin: boolean
+}
+
+export interface AdminUserAccount {
+  id: string
+  userId: string
+  email: string
+  name: string
+  role: AdminRole
+  branchId: string | null
+  branchName: string | null
+  emailConfirmed: boolean
+  lastSignInAt: string | null
+  createdAt: string
 }
 
 export interface OrderStatusHistory {

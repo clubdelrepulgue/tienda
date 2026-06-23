@@ -11,3 +11,14 @@ export function formatPrice(value: number) {
 
   return `$${roundedValue.toFixed(hasDecimals ? 2 : 0)}`
 }
+
+export function slugify(value: string) {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+
+  return normalized || "sucursal"
+}

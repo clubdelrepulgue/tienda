@@ -13,17 +13,30 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { useCartStore } from "@/lib/store"
-import type { Product, CartItemModifier, ModifierGroup } from "@/lib/types"
+import type { Branch, Product, CartItem, CartItemModifier, ModifierGroup } from "@/lib/types"
 import { toast } from "sonner"
 
 interface ProductModalProps {
   product: Product | null
+  branch: Branch
   allModifierGroups: ModifierGroup[]
   open: boolean
+  onAddItem?: (item: Omit<CartItem, "id">) => void
+  addButtonLabel?: string
+  successMessage?: (product: Product) => string
   onClose: () => void
 }
 
-export function ProductModal({ product, allModifierGroups, open, onClose }: ProductModalProps) {
+export function ProductModal({
+  product,
+  branch,
+  allModifierGroups,
+  open,
+  onAddItem,
+  addButtonLabel = "Agregar",
+  successMessage,
+  onClose,
+}: ProductModalProps) {
   const [quantity, setQuantity] = useState(1)
   const [selectedModifiers, setSelectedModifiers] = useState<CartItemModifier[]>([])
   const addItem = useCartStore((s) => s.addItem)
@@ -70,15 +83,27 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
   }
 
   const handleAddToCart = () => {
-    addItem({
+    const item = {
       productId: product.id,
+      branchId: branch.id,
       name: product.name,
       image: product.image,
       price: product.price,
       quantity,
       modifiers: selectedModifiers,
-    })
-    toast.success(`${product.name} agregado al carrito`)
+    }
+
+    if (onAddItem) {
+      onAddItem(item)
+    } else {
+      const result = addItem(item, branch)
+      if (!result.success) {
+        toast.error(result.error)
+        return
+      }
+    }
+
+    toast.success(successMessage ? successMessage(product) : `${product.name} agregado al carrito`)
     setQuantity(1)
     setSelectedModifiers([])
     onClose()
@@ -264,7 +289,7 @@ export function ProductModal({ product, allModifierGroups, open, onClose }: Prod
             className="flex-1 h-11 rounded-xl bg-primary text-white hover:bg-primary/90 font-bold shadow-sm"
             onClick={handleAddToCart}
           >
-            Agregar — ${itemTotal.toFixed(2)}
+            {addButtonLabel} — ${itemTotal.toFixed(2)}
           </Button>
         </div>
       </DialogContent>

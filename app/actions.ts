@@ -2,9 +2,100 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { canAccessBranch, getAdminScope } from "@/lib/admin-scope"
 import { revalidatePath } from "next/cache"
-import type { CartItem } from "@/lib/types"
-import { formatPrice } from "@/lib/utils"
+import type { AdminRole, CartItem } from "@/lib/types"
+import { formatPrice, slugify } from "@/lib/utils"
+
+type ActionResult<T extends object = {}> = Promise<
+    T & {
+        success?: boolean
+        error?: string
+    }
+>
+
+const ADMIN_ROLES: AdminRole[] = ["owner", "admin", "operator"]
+
+function isAdminRole(value: string): value is AdminRole {
+    return ADMIN_ROLES.includes(value as AdminRole)
+}
+
+async function requireGlobalAdmin() {
+    const scope = await getAdminScope()
+    if (!scope) return { error: "Sesion requerida" }
+    if (!scope.isGlobalAdmin) return { error: "Solo un administrador global puede gestionar usuarios" }
+    return { scope }
+}
+
+function validateAdminAssignment(role: AdminRole, branchId?: string | null) {
+    if (role === "operator" && !branchId) {
+        return "Los operadores deben tener una sucursal asignada"
+    }
+
+    return null
+}
+
+function normalizePhone(value: string) {
+    return value.replace(/\D/g, "")
+}
+
+async function assertBranchAccess(branchId: string) {
+    const scope = await getAdminScope()
+
+    if (!scope) {
+        return { error: "Sesion requerida" }
+    }
+
+    if (!canAccessBranch(scope, branchId)) {
+        return { error: "No tienes acceso a esta sucursal" }
+    }
+
+    return { success: true }
+}
+
+async function getExistingBranchForCatalogRow(
+    table: "categorias" | "productos" | "modifier_groups" | "upsell_rules",
+    id: string
+) {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from(table)
+        .select("sucursal_id")
+        .eq("id", id)
+        .single()
+
+    if (error || !data) return null
+    return data.sucursal_id as string | null
+}
+
+async function setDriverAvailability(supabase: any, driverId: string, isAvailable: boolean) {
+    const { error } = await supabase
+        .from("drivers")
+        .update({ is_available: isAvailable })
+        .eq("id", driverId)
+
+    if (error) {
+        console.error("Error updating driver availability:", error.message)
+    }
+}
+
+async function releaseDriverIfIdle(supabase: any, driverId: string) {
+    const { data: activeOrders, error } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("driver_id", driverId)
+        .eq("status", "ready")
+        .limit(1)
+
+    if (error) {
+        console.error("Error checking driver active orders:", error.message)
+        return
+    }
+
+    if (!activeOrders || activeOrders.length === 0) {
+        await setDriverAvailability(supabase, driverId, true)
+    }
+}
 
 // ─── Orders ────────────────────────────────────────────────────
 
@@ -32,6 +123,83 @@ export async function createOrder(formData: {
 
     // Get current user if authenticated (for POS orders)
     const { data: { user } } = await supabase.auth.getUser()
+
+    if (!formData.sucursalId) {
+        return { error: "Selecciona una sucursal para el pedido" }
+    }
+
+    const { data: branch, error: branchError } = await supabase
+        .from("sucursales")
+        .select("id, is_open")
+        .eq("id", formData.sucursalId)
+        .single()
+
+    if (branchError || !branch) {
+        return { error: "Sucursal no encontrada" }
+    }
+
+    if ((formData.orderType || "online") === "online" && !branch.is_open) {
+        return { error: "La sucursal seleccionada esta cerrada" }
+    }
+
+    const productIds = Array.from(new Set(formData.items.map((item) => item.productId).filter(Boolean)))
+    if (productIds.length === 0) {
+        return { error: "El pedido no tiene productos validos" }
+    }
+
+    const { data: products, error: productsError } = await supabase
+        .from("productos")
+        .select("id, sucursal_id, activo")
+        .in("id", productIds)
+
+    if (productsError) return { error: productsError.message }
+    if (!products || products.length !== productIds.length) {
+        return { error: "Hay productos que ya no estan disponibles" }
+    }
+
+    const invalidProduct = products.find(
+        (product) => product.sucursal_id !== formData.sucursalId || product.activo === false
+    )
+    if (invalidProduct) {
+        return { error: "El carrito contiene productos de otra sucursal o inactivos" }
+    }
+
+    const modifierGroupIds = Array.from(
+        new Set(
+            formData.items
+                .flatMap((item) => item.modifiers || [])
+                .map((modifier) => modifier.groupId)
+                .filter(Boolean)
+        )
+    )
+
+    if (modifierGroupIds.length > 0) {
+        const { data: groups, error: groupsError } = await supabase
+            .from("modifier_groups")
+            .select("id, sucursal_id")
+            .in("id", modifierGroupIds)
+
+        if (groupsError) return { error: groupsError.message }
+        if (!groups || groups.length !== modifierGroupIds.length) {
+            return { error: "Hay modificadores que ya no estan disponibles" }
+        }
+
+        if (groups.some((group) => group.sucursal_id !== formData.sucursalId)) {
+            return { error: "El carrito contiene modificadores de otra sucursal" }
+        }
+    }
+
+    if (formData.deliveryZoneId) {
+        const { data: zone, error: zoneError } = await supabase
+            .from("delivery_zones")
+            .select("id, sucursal_id, is_active")
+            .eq("id", formData.deliveryZoneId)
+            .single()
+
+        if (zoneError || !zone || zone.sucursal_id !== formData.sucursalId || !zone.is_active) {
+            return { error: "La zona de envio no corresponde a la sucursal" }
+        }
+    }
 
     const { data: order, error: orderError } = await supabase
         .from("orders")
@@ -108,12 +276,27 @@ export async function updateOrderStatus(
 
     const { data: adminUser, error: adminError } = await adminSupabase
         .from("admin_users")
-        .select("id")
+        .select("id, role, sucursal_id")
         .eq("user_id", user.id)
         .single()
 
     if (adminError || !adminUser) {
         return { error: "No tienes acceso para actualizar pedidos" }
+    }
+
+    const { data: existingOrder, error: existingOrderError } = await adminSupabase
+        .from("orders")
+        .select("sucursal_id, driver_id")
+        .eq("id", orderId)
+        .single()
+
+    if (existingOrderError || !existingOrder) {
+        return { error: "Pedido no encontrado" }
+    }
+
+    const isGlobalAdmin = adminUser.role === "owner" || adminUser.role === "admin"
+    if (!isGlobalAdmin && adminUser.sucursal_id !== existingOrder.sucursal_id) {
+        return { error: "No tienes acceso a este pedido" }
     }
 
     const updateData: Record<string, any> = { status: newStatus }
@@ -152,15 +335,40 @@ export async function updateOrderStatus(
         return { error: error.message }
     }
 
+    if (driverId) {
+        await setDriverAvailability(adminSupabase, driverId, false)
+    }
+
+    if (
+        existingOrder.driver_id &&
+        (newStatus === "delivered" ||
+            newStatus === "cancelled" ||
+            (driverId && driverId !== existingOrder.driver_id))
+    ) {
+        await releaseDriverIfIdle(adminSupabase, existingOrder.driver_id)
+    }
+
     revalidatePath("/admin/orders")
     revalidatePath("/admin")
     revalidatePath("/admin/kitchen")
+    revalidatePath("/admin/dispatch")
     revalidatePath("/driver/dashboard")
     return { success: true }
 }
 
 export async function assignDriver(orderId: string, driverId: string | null) {
     const supabase = await createClient()
+
+    const { data: order } = await supabase
+        .from("orders")
+        .select("sucursal_id, driver_id")
+        .eq("id", orderId)
+        .single()
+
+    if (!order) return { error: "Pedido no encontrado" }
+
+    const access = await assertBranchAccess(order.sucursal_id)
+    if ("error" in access) return access
 
     const { error } = await supabase
         .from("orders")
@@ -172,13 +380,36 @@ export async function assignDriver(orderId: string, driverId: string | null) {
 
     if (error) return { error: error.message }
 
+    if (driverId) {
+        await setDriverAvailability(supabase, driverId, false)
+    }
+
+    if (order.driver_id && order.driver_id !== driverId) {
+        await releaseDriverIfIdle(supabase, order.driver_id)
+    }
+
     revalidatePath("/admin/orders")
+    revalidatePath("/admin/dispatch")
     revalidatePath("/driver/dashboard")
     return { success: true }
 }
 
 export async function assignDriverBatch(orderIds: string[], driverId: string) {
     const supabase = await createClient()
+
+    const { data: orders, error: ordersError } = await supabase
+        .from("orders")
+        .select("id, sucursal_id, driver_id")
+        .in("id", orderIds)
+
+    if (ordersError) return { error: ordersError.message }
+    if (!orders || orders.length !== orderIds.length) return { error: "Hay pedidos no encontrados" }
+
+    const scope = await getAdminScope()
+    if (!scope) return { error: "Sesion requerida" }
+    if (!scope.isGlobalAdmin && orders.some((order) => order.sucursal_id !== scope.branchId)) {
+        return { error: "No tienes acceso a todos los pedidos seleccionados" }
+    }
 
     const { error } = await supabase
         .from("orders")
@@ -190,7 +421,59 @@ export async function assignDriverBatch(orderIds: string[], driverId: string) {
 
     if (error) return { error: error.message }
 
+    await setDriverAvailability(supabase, driverId, false)
+
+    const previousDriverIds = Array.from(
+        new Set(
+            orders
+                .map((order) => order.driver_id)
+                .filter((id): id is string => !!id && id !== driverId)
+        )
+    )
+
+    await Promise.all(previousDriverIds.map((id) => releaseDriverIfIdle(supabase, id)))
+
     revalidatePath("/admin/orders")
+    revalidatePath("/admin/dispatch")
+    revalidatePath("/driver/dashboard")
+    return { success: true }
+}
+
+export async function completeDriverOrder(orderId: string, driverId: string): ActionResult {
+    if (!driverId) {
+        return { error: "Repartidor requerido" }
+    }
+
+    const supabase = createAdminClient()
+    const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .select("id, driver_id, status")
+        .eq("id", orderId)
+        .maybeSingle()
+
+    if (orderError) return { error: orderError.message }
+    if (!order || order.driver_id !== driverId) {
+        return { error: "Este pedido no esta asignado a este repartidor" }
+    }
+    if (order.status !== "ready") {
+        return { error: "El pedido no esta listo para entregar" }
+    }
+
+    const { error } = await supabase
+        .from("orders")
+        .update({
+            status: "delivered",
+            delivered_at: new Date().toISOString(),
+        })
+        .eq("id", orderId)
+        .eq("driver_id", driverId)
+
+    if (error) return { error: error.message }
+
+    await releaseDriverIfIdle(supabase, driverId)
+
+    revalidatePath("/admin/orders")
+    revalidatePath("/admin/dispatch")
     revalidatePath("/driver/dashboard")
     return { success: true }
 }
@@ -203,15 +486,45 @@ export async function createProduct(data: {
     precio: number
     imageUrl?: string
     images?: string[]
+    branchId: string
     categoriaId: string
     activo?: boolean
     modifierGroupIds?: string[]
-}) {
+}): ActionResult<{ id?: string }> {
     const supabase = await createClient()
+
+    const access = await assertBranchAccess(data.branchId)
+    if ("error" in access) return access
+
+    const { data: category, error: categoryError } = await supabase
+        .from("categorias")
+        .select("id, sucursal_id")
+        .eq("id", data.categoriaId)
+        .single()
+
+    if (categoryError || !category || category.sucursal_id !== data.branchId) {
+        return { error: "La categoria no corresponde a la sucursal" }
+    }
+
+    if (data.modifierGroupIds && data.modifierGroupIds.length > 0) {
+        const { data: groups, error: groupsError } = await supabase
+            .from("modifier_groups")
+            .select("id, sucursal_id")
+            .in("id", data.modifierGroupIds)
+
+        if (groupsError) return { error: groupsError.message }
+        if (!groups || groups.length !== data.modifierGroupIds.length) {
+            return { error: "Hay modificadores no encontrados" }
+        }
+        if (groups.some((group) => group.sucursal_id !== data.branchId)) {
+            return { error: "Los modificadores deben ser de la misma sucursal" }
+        }
+    }
 
     const { data: product, error } = await supabase
         .from("productos")
         .insert({
+            sucursal_id: data.branchId,
             nombre: data.nombre,
             descripcion: data.descripcion || "",
             precio: data.precio,
@@ -246,14 +559,54 @@ export async function updateProduct(
         precio?: number
         imageUrl?: string
         images?: string[]
+        branchId?: string
         categoriaId?: string
         activo?: boolean
         modifierGroupIds?: string[]
     }
-) {
+): ActionResult {
     const supabase = await createClient()
+    const existingBranchId = await getExistingBranchForCatalogRow("productos", id)
+    if (!existingBranchId) return { error: "Producto no encontrado" }
+
+    const targetBranchId = data.branchId || existingBranchId
+    const access = await assertBranchAccess(targetBranchId)
+    if ("error" in access) return access
+
+    if (existingBranchId !== targetBranchId) {
+        const moveAccess = await assertBranchAccess(existingBranchId)
+        if ("error" in moveAccess) return moveAccess
+    }
+
+    if (data.categoriaId) {
+        const { data: category, error: categoryError } = await supabase
+            .from("categorias")
+            .select("id, sucursal_id")
+            .eq("id", data.categoriaId)
+            .single()
+
+        if (categoryError || !category || category.sucursal_id !== targetBranchId) {
+            return { error: "La categoria no corresponde a la sucursal" }
+        }
+    }
+
+    if (data.modifierGroupIds !== undefined && data.modifierGroupIds.length > 0) {
+        const { data: groups, error: groupsError } = await supabase
+            .from("modifier_groups")
+            .select("id, sucursal_id")
+            .in("id", data.modifierGroupIds)
+
+        if (groupsError) return { error: groupsError.message }
+        if (!groups || groups.length !== data.modifierGroupIds.length) {
+            return { error: "Hay modificadores no encontrados" }
+        }
+        if (groups.some((group) => group.sucursal_id !== targetBranchId)) {
+            return { error: "Los modificadores deben ser de la misma sucursal" }
+        }
+    }
 
     const updateData: Record<string, any> = {}
+    if (data.branchId !== undefined) updateData.sucursal_id = data.branchId
     if (data.nombre !== undefined) updateData.nombre = data.nombre
     if (data.descripcion !== undefined) updateData.descripcion = data.descripcion
     if (data.precio !== undefined) updateData.precio = data.precio
@@ -288,17 +641,20 @@ export async function updateProduct(
     return { success: true }
 }
 
-export async function toggleProductActive(id: string) {
+export async function toggleProductActive(id: string): ActionResult {
     const supabase = await createClient()
 
     // Get current state
     const { data: product } = await supabase
         .from("productos")
-        .select("activo")
+        .select("activo, sucursal_id")
         .eq("id", id)
         .single()
 
     if (!product) return { error: "Producto no encontrado" }
+
+    const access = await assertBranchAccess(product.sucursal_id)
+    if ("error" in access) return access
 
     const { error } = await supabase
         .from("productos")
@@ -314,13 +670,18 @@ export async function toggleProductActive(id: string) {
 // ─── Categories ────────────────────────────────────────────────
 
 export async function createCategory(data: {
+    branchId: string
     nombre: string
     slug: string
     orden?: number
-}) {
+}): ActionResult {
     const supabase = await createClient()
 
+    const access = await assertBranchAccess(data.branchId)
+    if ("error" in access) return access
+
     const { error } = await supabase.from("categorias").insert({
+        sucursal_id: data.branchId,
         nombre: data.nombre,
         slug: data.slug,
         orden: data.orden || 0,
@@ -336,14 +697,22 @@ export async function createCategory(data: {
 export async function updateCategory(
     id: string,
     data: {
+        branchId?: string
         nombre?: string
         slug?: string
         orden?: number
     }
-) {
+): ActionResult {
     const supabase = await createClient()
+    const existingBranchId = await getExistingBranchForCatalogRow("categorias", id)
+    if (!existingBranchId) return { error: "Categoria no encontrada" }
+
+    const targetBranchId = data.branchId || existingBranchId
+    const access = await assertBranchAccess(targetBranchId)
+    if ("error" in access) return access
 
     const updateData: Record<string, any> = {}
+    if (data.branchId !== undefined) updateData.sucursal_id = data.branchId
     if (data.nombre !== undefined) updateData.nombre = data.nombre
     if (data.slug !== undefined) updateData.slug = data.slug
     if (data.orden !== undefined) updateData.orden = data.orden
@@ -360,8 +729,13 @@ export async function updateCategory(
     return { success: true }
 }
 
-export async function deleteCategory(id: string) {
+export async function deleteCategory(id: string): ActionResult {
     const supabase = await createClient()
+    const existingBranchId = await getExistingBranchForCatalogRow("categorias", id)
+    if (!existingBranchId) return { error: "Categoria no encontrada" }
+
+    const access = await assertBranchAccess(existingBranchId)
+    if ("error" in access) return access
 
     const { error } = await supabase
         .from("categorias")
@@ -378,6 +752,7 @@ export async function deleteCategory(id: string) {
 // ─── Modifier Groups ──────────────────────────────────────────
 
 export async function createModifierGroup(data: {
+    branchId: string
     nombre: string
     required: boolean
     minSel?: number
@@ -385,12 +760,31 @@ export async function createModifierGroup(data: {
     orden?: number
     options: { nombre: string; precioExtra: number; orden?: number }[]
     productoIds?: string[]
-}) {
+}): ActionResult<{ id?: string }> {
     const supabase = await createClient()
+
+    const access = await assertBranchAccess(data.branchId)
+    if ("error" in access) return access
+
+    if (data.productoIds && data.productoIds.length > 0) {
+        const { data: products, error: productsError } = await supabase
+            .from("productos")
+            .select("id, sucursal_id")
+            .in("id", data.productoIds)
+
+        if (productsError) return { error: productsError.message }
+        if (!products || products.length !== data.productoIds.length) {
+            return { error: "Hay productos no encontrados" }
+        }
+        if (products.some((product) => product.sucursal_id !== data.branchId)) {
+            return { error: "Los productos deben ser de la misma sucursal" }
+        }
+    }
 
     const { data: group, error: gErr } = await supabase
         .from("modifier_groups")
         .insert({
+            sucursal_id: data.branchId,
             nombre: data.nombre,
             required: data.required,
             min_sel: data.minSel || 0,
@@ -429,16 +823,24 @@ export async function createModifierGroup(data: {
 export async function updateModifierGroup(
     id: string,
     data: {
+        branchId?: string
         nombre?: string
         required?: boolean
         minSel?: number
         maxSel?: number
         options?: { id?: string; nombre: string; precioExtra: number; orden?: number }[]
     }
-) {
+): ActionResult {
     const supabase = await createClient()
+    const existingBranchId = await getExistingBranchForCatalogRow("modifier_groups", id)
+    if (!existingBranchId) return { error: "Grupo no encontrado" }
+
+    const targetBranchId = data.branchId || existingBranchId
+    const access = await assertBranchAccess(targetBranchId)
+    if ("error" in access) return access
 
     const updateData: Record<string, any> = {}
+    if (data.branchId !== undefined) updateData.sucursal_id = data.branchId
     if (data.nombre !== undefined) updateData.nombre = data.nombre
     if (data.required !== undefined) updateData.required = data.required
     if (data.minSel !== undefined) updateData.min_sel = data.minSel
@@ -474,15 +876,20 @@ export async function updateModifierGroup(
 
 export async function createBranch(data: {
     nombre: string
+    slug?: string
     direccion?: string
     lat?: number
     lng?: number
     isOpen?: boolean
-}) {
+}): ActionResult {
     const supabase = await createClient()
+    const scope = await getAdminScope()
+    if (!scope) return { error: "Sesion requerida" }
+    if (!scope.isGlobalAdmin) return { error: "Solo un admin global puede crear sucursales" }
 
     const { error } = await supabase.from("sucursales").insert({
         nombre: data.nombre,
+        slug: data.slug || slugify(data.nombre),
         direccion: data.direccion || "",
         lat: data.lat,
         lng: data.lng,
@@ -499,16 +906,21 @@ export async function updateBranch(
     id: string,
     data: {
         nombre?: string
+        slug?: string
         direccion?: string
         lat?: number | null
         lng?: number | null
         isOpen?: boolean
     }
-) {
+): ActionResult {
     const supabase = await createClient()
+    const access = await assertBranchAccess(id)
+    if ("error" in access) return access
 
     const updateData: Record<string, any> = {}
     if (data.nombre !== undefined) updateData.nombre = data.nombre
+    if (data.slug !== undefined) updateData.slug = data.slug
+    if (data.slug === undefined && data.nombre !== undefined) updateData.slug = slugify(data.nombre)
     if (data.direccion !== undefined) updateData.direccion = data.direccion
     if (data.lat !== undefined) updateData.lat = data.lat
     if (data.lng !== undefined) updateData.lng = data.lng
@@ -525,8 +937,10 @@ export async function updateBranch(
     return { success: true }
 }
 
-export async function toggleBranchOpen(id: string) {
+export async function toggleBranchOpen(id: string): ActionResult {
     const supabase = await createClient()
+    const access = await assertBranchAccess(id)
+    if ("error" in access) return access
 
     const { data: branch } = await supabase
         .from("sucursales")
@@ -544,6 +958,124 @@ export async function toggleBranchOpen(id: string) {
     if (error) return { error: error.message }
 
     revalidatePath("/admin/branches")
+    return { success: true }
+}
+
+// ─── Admin Users ────────────────────────────────────────────────
+
+export async function createAdminUser(data: {
+    email: string
+    password: string
+    name?: string
+    role: AdminRole
+    branchId?: string | null
+}): ActionResult<{ userId?: string }> {
+    const globalAccess = await requireGlobalAdmin()
+    if ("error" in globalAccess) return globalAccess
+
+    const email = data.email.trim().toLowerCase()
+    if (!email) return { error: "Ingresa un email" }
+    if (!data.password || data.password.length < 8) {
+        return { error: "La contrasena debe tener al menos 8 caracteres" }
+    }
+    if (!isAdminRole(data.role)) return { error: "Rol invalido" }
+
+    const assignmentError = validateAdminAssignment(data.role, data.branchId)
+    if (assignmentError) return { error: assignmentError }
+
+    const adminSupabase = createAdminClient()
+    const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
+        email,
+        password: data.password,
+        email_confirm: true,
+        user_metadata: {
+            name: data.name?.trim() || email,
+        },
+    })
+
+    if (authError || !authData.user) {
+        return { error: authError?.message || "No se pudo crear el usuario" }
+    }
+
+    const { error: adminError } = await adminSupabase
+        .from("admin_users")
+        .insert({
+            user_id: authData.user.id,
+            role: data.role,
+            sucursal_id: data.role === "operator" ? data.branchId : null,
+        })
+
+    if (adminError) {
+        await adminSupabase.auth.admin.deleteUser(authData.user.id)
+        return { error: adminError.message }
+    }
+
+    revalidatePath("/admin/users")
+    return { success: true, userId: authData.user.id }
+}
+
+export async function updateAdminUserAccess(
+    userId: string,
+    data: {
+        role: AdminRole
+        branchId?: string | null
+        name?: string
+    }
+): ActionResult {
+    const globalAccess = await requireGlobalAdmin()
+    if ("error" in globalAccess) return globalAccess
+
+    if (!isAdminRole(data.role)) return { error: "Rol invalido" }
+
+    const assignmentError = validateAdminAssignment(data.role, data.branchId)
+    if (assignmentError) return { error: assignmentError }
+
+    if (globalAccess.scope.userId === userId && data.role === "operator") {
+        return { error: "No puedes convertir tu propio usuario global en operador" }
+    }
+
+    const adminSupabase = createAdminClient()
+    const nextBranchId = data.role === "operator" ? data.branchId : null
+
+    const { error } = await adminSupabase
+        .from("admin_users")
+        .update({
+            role: data.role,
+            sucursal_id: nextBranchId,
+        })
+        .eq("user_id", userId)
+
+    if (error) return { error: error.message }
+
+    if (data.name) {
+        const { error: authError } = await adminSupabase.auth.admin.updateUserById(userId, {
+            user_metadata: { name: data.name.trim() },
+        })
+
+        if (authError) return { error: authError.message }
+    }
+
+    revalidatePath("/admin/users")
+    return { success: true }
+}
+
+export async function removeAdminUserAccess(userId: string): ActionResult {
+    const globalAccess = await requireGlobalAdmin()
+    if ("error" in globalAccess) return globalAccess
+
+    if (globalAccess.scope.userId === userId) {
+        return { error: "No puedes quitar tu propio acceso" }
+    }
+
+    const adminSupabase = createAdminClient()
+    const { error } = await adminSupabase
+        .from("admin_users")
+        .delete()
+        .eq("user_id", userId)
+
+    if (error) return { error: error.message }
+
+    revalidatePath("/admin/users")
     return { success: true }
 }
 
@@ -699,8 +1231,10 @@ export async function createDeliveryZone(data: {
     deliveryFee: number
     minOrderAmount?: number
     estimatedTimeMin?: number
-}) {
+}): ActionResult {
     const supabase = await createClient()
+    const access = await assertBranchAccess(data.branchId)
+    if ("error" in access) return access
 
     const { error } = await supabase.from("delivery_zones").insert({
         sucursal_id: data.branchId,
@@ -728,10 +1262,15 @@ export async function createDeliveryZones(
         minOrderAmount?: number
         estimatedTimeMin?: number
     }[]
-) {
+): ActionResult {
     const supabase = await createClient()
 
     if (zones.length === 0) return { error: "No hay zonas para crear" }
+    const scope = await getAdminScope()
+    if (!scope) return { error: "Sesion requerida" }
+    if (!scope.isGlobalAdmin && zones.some((zone) => zone.branchId !== scope.branchId)) {
+        return { error: "No tienes acceso a todas las sucursales seleccionadas" }
+    }
 
     const { error } = await supabase.from("delivery_zones").insert(
         zones.map((zone) => ({
@@ -763,8 +1302,18 @@ export async function updateDeliveryZone(
         estimatedTimeMin?: number
         isActive?: boolean
     }
-) {
+): ActionResult {
     const supabase = await createClient()
+    const { data: existingZone } = await supabase
+        .from("delivery_zones")
+        .select("sucursal_id")
+        .eq("id", id)
+        .single()
+
+    if (!existingZone) return { error: "Zona no encontrada" }
+
+    const access = await assertBranchAccess(existingZone.sucursal_id)
+    if ("error" in access) return access
 
     const updateData: Record<string, any> = {}
     if (data.name !== undefined) updateData.name = data.name
@@ -786,8 +1335,18 @@ export async function updateDeliveryZone(
     return { success: true }
 }
 
-export async function deleteDeliveryZone(id: string) {
+export async function deleteDeliveryZone(id: string): ActionResult {
     const supabase = await createClient()
+    const { data: existingZone } = await supabase
+        .from("delivery_zones")
+        .select("sucursal_id")
+        .eq("id", id)
+        .single()
+
+    if (!existingZone) return { error: "Zona no encontrada" }
+
+    const access = await assertBranchAccess(existingZone.sucursal_id)
+    if ("error" in access) return access
 
     const { error } = await supabase.from("delivery_zones").delete().eq("id", id)
 
@@ -800,7 +1359,7 @@ export async function deleteDeliveryZone(id: string) {
 // ─── Driver Login (bypasses RLS for unauthenticated drivers) ──
 
 export async function driverLogin(phone: string) {
-    const normalizedPhone = phone.replace(/\D/g, "")
+    const normalizedPhone = normalizePhone(phone)
 
     if (!normalizedPhone) {
         return { error: "Ingresa tu número de teléfono" }
@@ -808,14 +1367,18 @@ export async function driverLogin(phone: string) {
 
     const supabase = createAdminClient()
 
-    const { data: driver, error } = await supabase
+    const { data: drivers, error } = await supabase
         .from("drivers")
-        .select("id, name")
-        .eq("phone", normalizedPhone)
+        .select("id, name, phone")
         .eq("is_active", true)
-        .single()
 
-    if (error || !driver) {
+    if (error) {
+        return { error: "Error al validar repartidor" }
+    }
+
+    const driver = drivers?.find((item) => normalizePhone(item.phone || "") === normalizedPhone)
+
+    if (!driver) {
         return { error: "Número no registrado o inactivo" }
     }
 
@@ -947,6 +1510,7 @@ export async function updateDriverLocation(
 // ─── Upsell Rules ──────────────────────────────────────────────
 
 export async function createUpsellRule(data: {
+    branchId: string
     name: string
     triggerProductIds?: string[]
     triggerCategoryIds?: string[]
@@ -954,10 +1518,34 @@ export async function createUpsellRule(data: {
     message?: string
     discountPercentage?: number
     priority?: number
-}) {
+}): ActionResult {
     const supabase = await createClient()
 
+    const access = await assertBranchAccess(data.branchId)
+    if ("error" in access) return access
+
+    const relatedProductIds = Array.from(new Set([
+        ...(data.triggerProductIds || []),
+        ...data.suggestedProductIds,
+    ]))
+
+    if (relatedProductIds.length > 0) {
+        const { data: products, error: productsError } = await supabase
+            .from("productos")
+            .select("id, sucursal_id")
+            .in("id", relatedProductIds)
+
+        if (productsError) return { error: productsError.message }
+        if (!products || products.length !== relatedProductIds.length) {
+            return { error: "Hay productos no encontrados" }
+        }
+        if (products.some((product) => product.sucursal_id !== data.branchId)) {
+            return { error: "Las sugerencias deben usar productos de la misma sucursal" }
+        }
+    }
+
     const { error } = await supabase.from("upsell_rules").insert({
+        sucursal_id: data.branchId,
         name: data.name,
         trigger_product_ids: data.triggerProductIds || [],
         trigger_category_ids: data.triggerCategoryIds || [],
@@ -976,6 +1564,7 @@ export async function createUpsellRule(data: {
 export async function updateUpsellRule(
     id: string,
     data: {
+        branchId?: string
         name?: string
         triggerProductIds?: string[]
         triggerCategoryIds?: string[]
@@ -985,10 +1574,37 @@ export async function updateUpsellRule(
         priority?: number
         isActive?: boolean
     }
-) {
+): ActionResult {
     const supabase = await createClient()
+    const existingBranchId = await getExistingBranchForCatalogRow("upsell_rules", id)
+    if (!existingBranchId) return { error: "Regla no encontrada" }
+
+    const targetBranchId = data.branchId || existingBranchId
+    const access = await assertBranchAccess(targetBranchId)
+    if ("error" in access) return access
+
+    const relatedProductIds = Array.from(new Set([
+        ...(data.triggerProductIds || []),
+        ...(data.suggestedProductIds || []),
+    ]))
+
+    if (relatedProductIds.length > 0) {
+        const { data: products, error: productsError } = await supabase
+            .from("productos")
+            .select("id, sucursal_id")
+            .in("id", relatedProductIds)
+
+        if (productsError) return { error: productsError.message }
+        if (!products || products.length !== relatedProductIds.length) {
+            return { error: "Hay productos no encontrados" }
+        }
+        if (products.some((product) => product.sucursal_id !== targetBranchId)) {
+            return { error: "Las sugerencias deben usar productos de la misma sucursal" }
+        }
+    }
 
     const updateData: Record<string, any> = {}
+    if (data.branchId !== undefined) updateData.sucursal_id = data.branchId
     if (data.name !== undefined) updateData.name = data.name
     if (data.triggerProductIds !== undefined) updateData.trigger_product_ids = data.triggerProductIds
     if (data.triggerCategoryIds !== undefined) updateData.trigger_category_ids = data.triggerCategoryIds
@@ -1009,8 +1625,13 @@ export async function updateUpsellRule(
     return { success: true }
 }
 
-export async function deleteUpsellRule(id: string) {
+export async function deleteUpsellRule(id: string): ActionResult {
     const supabase = await createClient()
+    const existingBranchId = await getExistingBranchForCatalogRow("upsell_rules", id)
+    if (!existingBranchId) return { error: "Regla no encontrada" }
+
+    const access = await assertBranchAccess(existingBranchId)
+    if ("error" in access) return access
 
     const { error } = await supabase.from("upsell_rules").delete().eq("id", id)
 

@@ -3,33 +3,56 @@ import type { Category, Product, ModifierGroup, ModifierOption, Order, Branch, C
 
 // ─── Catalog Queries ───────────────────────────────────────────
 
-export async function getCategories(): Promise<Category[]> {
+function mapBranch(row: any): Branch {
+    return {
+        id: row.id,
+        slug: row.slug || row.id,
+        name: row.nombre,
+        address: row.direccion || "",
+        lat: row.lat ? parseFloat(row.lat) : null,
+        lng: row.lng ? parseFloat(row.lng) : null,
+        isOpen: row.is_open,
+    }
+}
+
+export async function getCategories(branchId?: string): Promise<Category[]> {
     const supabase = await createClient()
-    const { data, error } = await supabase
+    let query = supabase
         .from("categorias")
         .select("*")
-        .order("orden", { ascending: true })
+
+    if (branchId) {
+        query = query.eq("sucursal_id", branchId)
+    }
+
+    const { data, error } = await query.order("orden", { ascending: true })
 
     if (error) throw error
     if (!data) return []
 
     return data.map((row) => ({
         id: row.id,
+        branchId: row.sucursal_id || "",
         name: row.nombre,
         slug: row.slug,
         order: row.orden,
     }))
 }
 
-export async function getProducts(): Promise<Product[]> {
+export async function getProducts(branchId?: string): Promise<Product[]> {
     const supabase = await createClient()
 
     // Get products
-    const { data: productos, error: pErr } = await supabase
+    let productQuery = supabase
         .from("productos")
         .select("*")
         .eq("activo", true)
-        .order("created_at", { ascending: true })
+
+    if (branchId) {
+        productQuery = productQuery.eq("sucursal_id", branchId)
+    }
+
+    const { data: productos, error: pErr } = await productQuery.order("created_at", { ascending: true })
 
     if (pErr) throw pErr
     if (!productos) return []
@@ -50,6 +73,7 @@ export async function getProducts(): Promise<Product[]> {
 
     return productos.map((row) => ({
         id: row.id,
+        branchId: row.sucursal_id || "",
         name: row.nombre,
         description: row.descripcion || "",
         price: parseFloat(row.precio),
@@ -61,13 +85,18 @@ export async function getProducts(): Promise<Product[]> {
     }))
 }
 
-export async function getAllProducts(): Promise<Product[]> {
+export async function getAllProducts(branchId?: string): Promise<Product[]> {
     const supabase = await createClient()
 
-    const { data: productos, error: pErr } = await supabase
+    let productQuery = supabase
         .from("productos")
         .select("*")
-        .order("created_at", { ascending: true })
+
+    if (branchId) {
+        productQuery = productQuery.eq("sucursal_id", branchId)
+    }
+
+    const { data: productos, error: pErr } = await productQuery.order("created_at", { ascending: true })
 
     if (pErr) throw pErr
     if (!productos) return []
@@ -87,6 +116,7 @@ export async function getAllProducts(): Promise<Product[]> {
 
     return productos.map((row) => ({
         id: row.id,
+        branchId: row.sucursal_id || "",
         name: row.nombre,
         description: row.descripcion || "",
         price: parseFloat(row.precio),
@@ -98,13 +128,18 @@ export async function getAllProducts(): Promise<Product[]> {
     }))
 }
 
-export async function getModifierGroups(): Promise<ModifierGroup[]> {
+export async function getModifierGroups(branchId?: string): Promise<ModifierGroup[]> {
     const supabase = await createClient()
 
-    const { data: groups, error: gErr } = await supabase
+    let groupsQuery = supabase
         .from("modifier_groups")
         .select("*")
-        .order("orden", { ascending: true })
+
+    if (branchId) {
+        groupsQuery = groupsQuery.eq("sucursal_id", branchId)
+    }
+
+    const { data: groups, error: gErr } = await groupsQuery.order("orden", { ascending: true })
 
     if (gErr) throw gErr
     if (!groups) return []
@@ -130,6 +165,7 @@ export async function getModifierGroups(): Promise<ModifierGroup[]> {
 
     return groups.map((row) => ({
         id: row.id,
+        branchId: row.sucursal_id || "",
         name: row.nombre,
         required: row.required,
         maxSelections: row.max_sel,
@@ -147,22 +183,40 @@ export async function getBranches(): Promise<Branch[]> {
     if (error) throw error
     if (!data) return []
 
-    return data.map((row) => ({
-        id: row.id,
-        name: row.nombre,
-        address: row.direccion || "",
-        lat: row.lat ? parseFloat(row.lat) : null,
-        lng: row.lng ? parseFloat(row.lng) : null,
-        isOpen: row.is_open,
-    }))
+    return data.map(mapBranch)
+}
+
+export async function getBranchBySlug(slug: string): Promise<Branch | null> {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from("sucursales")
+        .select("*")
+        .eq("slug", slug)
+        .single()
+
+    if (error || !data) return null
+    return mapBranch(data)
+}
+
+export async function getBranchById(id: string): Promise<Branch | null> {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from("sucursales")
+        .select("*")
+        .eq("id", id)
+        .single()
+
+    if (error || !data) return null
+    return mapBranch(data)
 }
 
 // ─── Order Queries ─────────────────────────────────────────────
 
-function mapOrderItems(items: any[]): CartItem[] {
+function mapOrderItems(items: any[], branchId: string): CartItem[] {
     return items.map((item) => ({
         id: item.id,
         productId: item.producto_id || "",
+        branchId,
         name: item.nombre_snapshot,
         image: "/images/classic-burger.jpg",
         price: parseFloat(item.precio_unit),
@@ -202,13 +256,22 @@ function mapOrder(row: any, items: CartItem[]): Order {
     }
 }
 
-export async function getOrders(): Promise<Order[]> {
+export async function getOrders(options: { branchId?: string; statuses?: string[] } = {}): Promise<Order[]> {
     const supabase = await createClient()
 
-    const { data: orders, error: oErr } = await supabase
+    let ordersQuery = supabase
         .from("orders")
         .select("*")
-        .order("created_at", { ascending: false })
+
+    if (options.branchId) {
+        ordersQuery = ordersQuery.eq("sucursal_id", options.branchId)
+    }
+
+    if (options.statuses && options.statuses.length > 0) {
+        ordersQuery = ordersQuery.in("status", options.statuses)
+    }
+
+    const { data: orders, error: oErr } = await ordersQuery.order("created_at", { ascending: false })
 
     if (oErr) throw oErr
     if (!orders || orders.length === 0) return []
@@ -230,41 +293,12 @@ export async function getOrders(): Promise<Order[]> {
 
     return orders.map((row) => {
         const rawItems = itemsByOrder.get(row.id) || []
-        return mapOrder(row, mapOrderItems(rawItems))
+        return mapOrder(row, mapOrderItems(rawItems, row.sucursal_id || ""))
     })
 }
 
-export async function getOrdersByStatus(statuses: string[]): Promise<Order[]> {
-    const supabase = await createClient()
-
-    const { data: orders, error: oErr } = await supabase
-        .from("orders")
-        .select("*")
-        .in("status", statuses)
-        .order("created_at", { ascending: true })
-
-    if (oErr) throw oErr
-    if (!orders || orders.length === 0) return []
-
-    const orderIds = orders.map((o) => o.id)
-    const { data: allItems, error: iErr } = await supabase
-        .from("order_items")
-        .select("*")
-        .in("order_id", orderIds)
-
-    if (iErr) throw iErr
-
-    const itemsByOrder = new Map<string, any[]>()
-    for (const item of allItems || []) {
-        const arr = itemsByOrder.get(item.order_id) || []
-        arr.push(item)
-        itemsByOrder.set(item.order_id, arr)
-    }
-
-    return orders.map((row) => {
-        const rawItems = itemsByOrder.get(row.id) || []
-        return mapOrder(row, mapOrderItems(rawItems))
-    })
+export async function getOrdersByStatus(statuses: string[], branchId?: string): Promise<Order[]> {
+    return getOrders({ branchId, statuses })
 }
 
 export async function getOrderByToken(token: string): Promise<Order | null> {
@@ -284,7 +318,7 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
     const { data: itemsData } = await supabase
         .rpc("get_order_items_by_token", { p_token: token })
 
-    return mapOrder(row, mapOrderItems(itemsData || []))
+    return mapOrder(row, mapOrderItems(itemsData || [], row.sucursal_id || ""))
 }
 
 export async function getOrderById(id: string): Promise<Order | null> {
@@ -303,7 +337,7 @@ export async function getOrderById(id: string): Promise<Order | null> {
         .select("*")
         .eq("order_id", id)
 
-    return mapOrder(order, mapOrderItems(items || []))
+    return mapOrder(order, mapOrderItems(items || [], order.sucursal_id || ""))
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -507,26 +541,32 @@ export async function getDriverDeliveries(driverId: string): Promise<Order[]> {
 
     return orders.map((row) => {
         const rawItems = itemsByOrder.get(row.id) || []
-        return mapOrder(row, mapOrderItems(rawItems))
+        return mapOrder(row, mapOrderItems(rawItems, row.sucursal_id || ""))
     })
 }
 
 // ─── Upsells ───────────────────────────────────────────────────
 
-export async function getUpsellRules(): Promise<UpsellRule[]> {
+export async function getUpsellRules(branchId?: string): Promise<UpsellRule[]> {
     const supabase = await createClient()
 
-    const { data, error } = await supabase
+    let query = supabase
         .from("upsell_rules")
         .select("*")
         .eq("is_active", true)
-        .order("priority", { ascending: false })
+
+    if (branchId) {
+        query = query.eq("sucursal_id", branchId)
+    }
+
+    const { data, error } = await query.order("priority", { ascending: false })
 
     if (error) throw error
     if (!data) return []
 
     return data.map((row) => ({
         id: row.id,
+        branchId: row.sucursal_id || "",
         name: row.name,
         triggerProductIds: row.trigger_product_ids || [],
         triggerCategoryIds: row.trigger_category_ids || [],
@@ -538,19 +578,25 @@ export async function getUpsellRules(): Promise<UpsellRule[]> {
     }))
 }
 
-export async function getAllUpsellRules(): Promise<UpsellRule[]> {
+export async function getAllUpsellRules(branchId?: string): Promise<UpsellRule[]> {
     const supabase = await createClient()
 
-    const { data, error } = await supabase
+    let query = supabase
         .from("upsell_rules")
         .select("*")
-        .order("priority", { ascending: false })
+
+    if (branchId) {
+        query = query.eq("sucursal_id", branchId)
+    }
+
+    const { data, error } = await query.order("priority", { ascending: false })
 
     if (error) throw error
     if (!data) return []
 
     return data.map((row) => ({
         id: row.id,
+        branchId: row.sucursal_id || "",
         name: row.name,
         triggerProductIds: row.trigger_product_ids || [],
         triggerCategoryIds: row.trigger_category_ids || [],

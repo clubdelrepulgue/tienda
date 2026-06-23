@@ -9,6 +9,7 @@ import { Navigation, Clock, Bike, MapPin, Gauge } from "lucide-react"
 interface LiveTrackingMapProps {
     orderId: string
     driverId?: string
+    trackingToken?: string
     destination: { lat: number; lng: number; address: string }
     branchLocation?: { lat: number; lng: number }
     initialDriverLocation?: {
@@ -129,6 +130,7 @@ function haversineDistance(
 export function LiveTrackingMap({
     orderId,
     driverId,
+    trackingToken,
     destination,
     branchLocation,
     initialDriverLocation,
@@ -255,6 +257,22 @@ export function LiveTrackingMap({
         })
 
         const fetchDriverLocation = async () => {
+            if (trackingToken) {
+                const res = await fetch(`/api/order/${encodeURIComponent(trackingToken)}/driver-location`, {
+                    cache: "no-store",
+                })
+                if (!res.ok) return
+
+                const data = await res.json()
+                if (data.location) {
+                    const location = parseLocation(data.location)
+                    setDriverLocation(location)
+                    setLastUpdated(new Date(location.updatedAt))
+                    fetchRoute(location.lat, location.lng)
+                }
+                return
+            }
+
             const { data } = await supabase
                 .from("drivers")
                 .select("current_location")
@@ -270,6 +288,13 @@ export function LiveTrackingMap({
         }
 
         fetchDriverLocation()
+
+        if (trackingToken) {
+            const interval = window.setInterval(fetchDriverLocation, 10000)
+            return () => {
+                window.clearInterval(interval)
+            }
+        }
 
         const channel = supabase
             .channel(`driver-location-${driverId}`)
@@ -296,7 +321,7 @@ export function LiveTrackingMap({
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [driverId, fetchRoute])
+    }, [driverId, fetchRoute, trackingToken])
 
     const center = driverLocation
         ? {

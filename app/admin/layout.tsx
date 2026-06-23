@@ -22,6 +22,7 @@ import {
   Sparkles,
   Map as MapIcon,
   PackageCheck,
+  Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -50,6 +51,7 @@ const configItems: AdminNavItem[] = [
   { href: "/admin/categories", label: "Categorias", icon: Tags },
   { href: "/admin/products", label: "Productos", icon: Package },
   { href: "/admin/modifiers", label: "Modificadores", icon: Sliders },
+  { href: "/admin/users", label: "Usuarios", icon: Users },
   { href: "/admin/branches", label: "Sucursales", icon: Building2 },
   { href: "/admin/coupons", label: "Cupones", icon: Tag },
   { href: "/admin/upsells", label: "Sugerencias", icon: Sparkles },

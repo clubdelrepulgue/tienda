@@ -160,7 +160,7 @@ export default function DriverLoginPage() {
                                 style={{ fontSize: '16px' }} // Previene zoom en iOS
                             />
                             <p className="text-xs text-muted-foreground mt-2">
-                                Ingresa el número exactamente como lo registró el administrador
+                                Podés escribirlo con espacios, guiones o solo números
                             </p>
                         </div>
                         

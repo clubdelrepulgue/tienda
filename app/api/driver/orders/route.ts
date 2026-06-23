@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
             items: (itemsByOrder.get(row.id) || []).map((item: any) => ({
                 id: item.id,
                 productId: item.producto_id || "",
+                branchId: row.sucursal_id || "",
                 name: item.nombre_snapshot,
                 image: "/images/classic-burger.jpg",
                 price: parseFloat(item.precio_unit),

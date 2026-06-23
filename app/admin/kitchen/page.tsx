@@ -20,6 +20,13 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -28,7 +35,7 @@ import {
 } from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase/client"
 import { updateOrderStatus } from "@/app/actions"
-import type { Order, OrderStatus } from "@/lib/types"
+import type { Branch, Order, OrderStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { playNewOrderSound, playOrderReadySound, unlockAudio } from "@/lib/sounds"
@@ -125,8 +132,13 @@ function sortByReadyTimeDesc(a: Order, b: Order): number {
 }
 
 export default function KitchenDisplayPage() {
+    const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
+        "/api/admin?type=session",
+        fetcher
+    )
+    const [selectedBranch, setSelectedBranch] = useState("")
     const { data: initialOrders, mutate } = useSWR<Order[]>(
-        "/api/admin?type=kitchen-orders",
+        selectedBranch ? `/api/admin?type=kitchen-orders&branchId=${selectedBranch}` : null,
         fetcher,
         { refreshInterval: 10000 }
     )
@@ -136,6 +148,12 @@ export default function KitchenDisplayPage() {
     const [historyOpen, setHistoryOpen] = useState(false)
     const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set())
     const prevOrdersRef = useRef<Order[]>([])
+
+    useEffect(() => {
+        if (!selectedBranch && session?.activeBranchId) {
+            setSelectedBranch(session.activeBranchId)
+        }
+    }, [selectedBranch, session?.activeBranchId])
 
     useEffect(() => {
         const unlock = () => {
@@ -283,6 +301,18 @@ export default function KitchenDisplayPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                        <SelectTrigger className="h-10 w-48 rounded-full border-white/10 bg-white/[0.035]">
+                            <SelectValue placeholder="Sucursal" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {(session?.branches || []).map((branch) => (
+                                <SelectItem key={branch.id} value={branch.id}>
+                                    {branch.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Button
                         variant="outline"
                         size="icon"

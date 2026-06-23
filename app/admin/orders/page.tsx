@@ -33,7 +33,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { createClient } from "@/lib/supabase/client"
-import type { Order, OrderStatus, Driver, DeliveryZone } from "@/lib/types"
+import type { Branch, Order, OrderStatus, Driver, DeliveryZone } from "@/lib/types"
 import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
@@ -577,11 +577,16 @@ const COLUMNS: Column[] = [
 ]
 
 export default function OrdersPage() {
+  const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
+    "/api/admin?type=session",
+    fetcher
+  )
+  const [selectedBranch, setSelectedBranch] = useState("")
   const { data: dispatchData, mutate } = useSWR<{
     orders: Order[]
     zones: DeliveryZone[]
     drivers: Driver[]
-  }>("/api/admin?type=dispatch", fetcher)
+  }>(selectedBranch ? `/api/admin?type=dispatch&branchId=${selectedBranch}` : null, fetcher)
 
   const [orders, setOrders] = useState<Order[]>([])
   const [zones, setZones] = useState<DeliveryZone[]>([])
@@ -595,6 +600,12 @@ export default function OrdersPage() {
 
   // Audio ref for notification
   const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  useEffect(() => {
+    if (!selectedBranch && session?.activeBranchId) {
+      setSelectedBranch(session.activeBranchId)
+    }
+  }, [selectedBranch, session?.activeBranchId])
 
   useEffect(() => {
     audioRef.current = new Audio("/notification.mp3")
@@ -809,6 +820,18 @@ export default function OrdersPage() {
           <span className="h-1.5 w-1.5 rounded-full bg-chart-3 shadow-[0_0_18px_rgba(34,197,94,0.7)]" />
           Actualizacion en vivo
         </div>
+        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+          <SelectTrigger className="w-full rounded-xl bg-card sm:w-56">
+            <SelectValue placeholder="Sucursal" />
+          </SelectTrigger>
+          <SelectContent>
+            {(session?.branches || []).map((branch) => (
+              <SelectItem key={branch.id} value={branch.id}>
+                {branch.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-[repeat(3,minmax(300px,1fr))] gap-4 overflow-x-auto pb-4 snap-x xl:gap-5">
