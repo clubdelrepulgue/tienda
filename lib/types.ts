@@ -53,7 +53,7 @@ export interface CartItem {
   modifiers: CartItemModifier[]
 }
 
-export type OrderStatus = "new" | "accepted" | "preparing" | "ready" | "delivered" | "cancelled"
+export type OrderStatus = "new" | "accepted" | "preparing" | "ready" | "en_route" | "delivered" | "cancelled"
 
 export type DeliveryMethod = "delivery" | "pickup" | "dine_in"
 
@@ -78,6 +78,7 @@ export interface Order {
   acceptedAt?: string
   preparingAt?: string
   readyAt?: string
+  enRouteAt?: string
   deliveredAt?: string
   cancelledAt?: string
   branchId: string

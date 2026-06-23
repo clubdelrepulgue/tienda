@@ -103,7 +103,7 @@ async function releaseDriverIfIdle(supabase: any, driverId: string) {
         .from("orders")
         .select("id")
         .eq("driver_id", driverId)
-        .eq("status", "ready")
+        .in("status", ["ready", "en_route"])
         .limit(1)
 
     if (error) {
@@ -381,6 +381,10 @@ export async function updateOrderStatus(
         updateData.ready_at = new Date().toISOString()
     }
 
+    if (newStatus === "en_route") {
+        updateData.en_route_at = new Date().toISOString()
+    }
+
     if (newStatus === "delivered") {
         updateData.delivered_at = new Date().toISOString()
     }
@@ -502,6 +506,37 @@ export async function assignDriverBatch(orderIds: string[], driverId: string) {
     return { success: true }
 }
 
+export async function setOrderEnRoute(orderId: string, driverId: string): ActionResult {
+    if (!driverId) return { error: "Repartidor requerido" }
+
+    const supabase = createAdminClient()
+
+    const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .select("id, driver_id, status")
+        .eq("id", orderId)
+        .maybeSingle()
+
+    if (orderError) return { error: orderError.message }
+    if (!order || order.driver_id !== driverId) {
+        return { error: "Este pedido no está asignado a este repartidor" }
+    }
+    if (order.status !== "ready") {
+        return { error: "El pedido no está en estado listo" }
+    }
+
+    const { error } = await supabase
+        .from("orders")
+        .update({ status: "en_route", en_route_at: new Date().toISOString() })
+        .eq("id", orderId)
+        .eq("driver_id", driverId)
+
+    if (error) return { error: error.message }
+
+    revalidatePath("/driver/dashboard")
+    return { success: true }
+}
+
 export async function completeDriverOrder(orderId: string, driverId: string): ActionResult {
     if (!driverId) {
         return { error: "Repartidor requerido" }
@@ -518,7 +553,7 @@ export async function completeDriverOrder(orderId: string, driverId: string): Ac
     if (!order || order.driver_id !== driverId) {
         return { error: "Este pedido no esta asignado a este repartidor" }
     }
-    if (order.status !== "ready") {
+    if (order.status !== "ready" && order.status !== "en_route") {
         return { error: "El pedido no esta listo para entregar" }
     }
 

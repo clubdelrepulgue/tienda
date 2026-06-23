@@ -3,12 +3,15 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Package, MapPin, Phone, LogOut, Clock, Navigation, Locate, AlertCircle, Wifi } from "lucide-react"
+import {
+    Package, MapPin, Phone, LogOut, Clock, Navigation,
+    Locate, AlertCircle, Wifi, Truck, CheckCircle2,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
-import { completeDriverOrder } from "@/app/actions"
+import { completeDriverOrder, setOrderEnRoute } from "@/app/actions"
 import type { DeliveryZone, Order } from "@/lib/types"
 import { toast } from "sonner"
 import { useDriverLocation } from "@/hooks/use-driver-location"
@@ -21,14 +24,14 @@ export default function DriverDashboardPage() {
     const [driverName, setDriverName] = useState<string>("")
     const [orders, setOrders] = useState<Order[]>([])
     const [loading, setLoading] = useState(true)
-    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-    const [showMap, setShowMap] = useState(false)
     const [storageError, setStorageError] = useState(false)
     const [branchLocations, setBranchLocations] = useState<Record<string, { lat: number; lng: number }>>({})
     const [deliveryZones, setDeliveryZones] = useState<Record<string, DeliveryZone>>({})
+    const [enRoutingId, setEnRoutingId] = useState<string | null>(null)
+    const [deliveringId, setDeliveringId] = useState<string | null>(null)
     const router = useRouter()
 
-    const { isTracking, lastLocation, error, locationStatus } = useDriverLocation({
+    const { lastLocation, error, locationStatus } = useDriverLocation({
         driverId,
         enabled: true,
         interval: 10000,
@@ -42,30 +45,20 @@ export default function DriverDashboardPage() {
     useEffect(() => {
         let id = null
         let name = null
-
         try {
             id = localStorage.getItem("driverId")
             name = localStorage.getItem("driverName")
-        } catch {
-            // localStorage no disponible
-        }
+        } catch {}
 
         if (!id) {
             try {
                 id = sessionStorage.getItem("driverId")
                 name = sessionStorage.getItem("driverName")
-                if (id) {
-                    setStorageError(true)
-                }
-            } catch {
-                // Ningún storage disponible
-            }
+                if (id) setStorageError(true)
+            } catch {}
         }
 
-        if (!id) {
-            router.push("/driver")
-            return
-        }
+        if (!id) { router.push("/driver"); return }
 
         setDriverId(id)
         setDriverName(name || "")
@@ -74,22 +67,14 @@ export default function DriverDashboardPage() {
 
     useEffect(() => {
         if (!driverId) return
-
         const supabase = createClient()
         const channel = supabase
             .channel("driver-orders")
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "orders" },
-                () => {
-                    loadOrders(driverId)
-                }
-            )
+            .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
+                loadOrders(driverId)
+            })
             .subscribe()
-
-        return () => {
-            supabase.removeChannel(channel)
-        }
+        return () => { supabase.removeChannel(channel) }
     }, [driverId])
 
     const loadOrders = async (id: string) => {
@@ -98,21 +83,15 @@ export default function DriverDashboardPage() {
             const data = await response.json()
             setOrders(data || [])
 
-            // Fetch branch coordinates for orders that have them
             const branchIds = [...new Set((data || []).map((o: Order) => o.branchId).filter(Boolean))]
             if (branchIds.length > 0) {
                 const supabase = createClient()
                 const { data: branches } = await supabase
-                    .from("sucursales")
-                    .select("id, lat, lng")
-                    .in("id", branchIds)
-
+                    .from("sucursales").select("id, lat, lng").in("id", branchIds)
                 if (branches) {
                     const locs: Record<string, { lat: number; lng: number }> = {}
                     for (const b of branches) {
-                        if (b.lat && b.lng) {
-                            locs[b.id] = { lat: parseFloat(b.lat), lng: parseFloat(b.lng) }
-                        }
+                        if (b.lat && b.lng) locs[b.id] = { lat: parseFloat(b.lat), lng: parseFloat(b.lng) }
                     }
                     setBranchLocations(locs)
                 }
@@ -122,23 +101,16 @@ export default function DriverDashboardPage() {
             if (zoneIds.length > 0) {
                 const supabase = createClient()
                 const { data: zones } = await supabase
-                    .from("delivery_zones")
-                    .select("*")
-                    .in("id", zoneIds)
-
+                    .from("delivery_zones").select("*").in("id", zoneIds)
                 if (zones) {
                     const mapped: Record<string, DeliveryZone> = {}
                     for (const zone of zones) {
                         mapped[zone.id] = {
-                            id: zone.id,
-                            branchId: zone.sucursal_id,
-                            name: zone.name,
-                            color: zone.color || "#3b82f6",
-                            coordinates: zone.coordinates || [],
+                            id: zone.id, branchId: zone.sucursal_id, name: zone.name,
+                            color: zone.color || "#3b82f6", coordinates: zone.coordinates || [],
                             deliveryFee: parseFloat(zone.delivery_fee),
                             minOrderAmount: parseFloat(zone.min_order_amount || 0),
-                            estimatedTimeMin: zone.estimated_time_min,
-                            isActive: zone.is_active,
+                            estimatedTimeMin: zone.estimated_time_min, isActive: zone.is_active,
                         }
                     }
                     setDeliveryZones(mapped)
@@ -152,60 +124,48 @@ export default function DriverDashboardPage() {
     }
 
     const handleLogout = () => {
-        try {
-            localStorage.removeItem("driverId")
-            localStorage.removeItem("driverName")
-        } catch {}
-        try {
-            sessionStorage.removeItem("driverId")
-            sessionStorage.removeItem("driverName")
-        } catch {}
+        try { localStorage.removeItem("driverId"); localStorage.removeItem("driverName") } catch {}
+        try { sessionStorage.removeItem("driverId"); sessionStorage.removeItem("driverName") } catch {}
         router.push("/driver")
     }
 
-    const handleStatusUpdate = async (orderId: string, status: string) => {
-        if (!driverId) {
-            toast.error("Sesion de repartidor requerida")
-            return
-        }
-
-        const result = status === "delivered"
-            ? await completeDriverOrder(orderId, driverId)
-            : { error: "Estado no permitido para repartidor" }
-
+    const handleSetEnRoute = async (orderId: string) => {
+        if (!driverId) return
+        setEnRoutingId(orderId)
+        const result = await setOrderEnRoute(orderId, driverId)
         if (result.error) {
             toast.error(result.error)
         } else {
-            toast.success("Estado actualizado")
-            if (driverId) loadOrders(driverId)
-            if (status === "delivered") {
-                setSelectedOrder(null)
-                setShowMap(false)
-            }
+            toast.success("¡En camino! El cliente fue notificado")
+            loadOrders(driverId)
         }
+        setEnRoutingId(null)
+    }
+
+    const handleDeliver = async (orderId: string) => {
+        if (!driverId) return
+        setDeliveringId(orderId)
+        const result = await completeDriverOrder(orderId, driverId)
+        if (result.error) {
+            toast.error(result.error)
+        } else {
+            toast.success("Pedido entregado")
+            loadOrders(driverId)
+        }
+        setDeliveringId(null)
     }
 
     const handleNavigate = (order: Order) => {
-        // Use coordinates for precision when available, fallback to address text
         if (order.addressLat && order.addressLng) {
-            window.open(
-                `https://www.google.com/maps/dir/?api=1&destination=${order.addressLat},${order.addressLng}`,
-                "_blank"
-            )
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.addressLat},${order.addressLng}`, "_blank")
         } else {
-            const encodedAddress = encodeURIComponent(order.address || "")
-            window.open(
-                `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`,
-                "_blank"
-            )
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.address || "")}`, "_blank")
         }
     }
 
-    const activeOrders = orders.filter((o) => o.status === "ready")
+    const enRouteOrder = orders.find((o) => o.status === "en_route") ?? null
+    const pendingOrders = orders.filter((o) => o.status === "ready")
     const completedOrders = orders.filter((o) => o.status === "delivered")
-
-    // Check if selected order has real coordinates for LiveTrackingMap
-    const selectedHasCoords = selectedOrder?.addressLat != null && selectedOrder?.addressLng != null
 
     if (loading) {
         return (
@@ -218,36 +178,29 @@ export default function DriverDashboardPage() {
     return (
         <GoogleMapsProvider>
             <div className="min-h-screen bg-background">
+                {/* Header */}
                 <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
                     <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                             <h1 className="font-bold text-lg truncate">Hola, {driverName}</h1>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-xs text-muted-foreground">
-                                    {activeOrders.length} entregas pendientes
+                                    {pendingOrders.length} pendiente{pendingOrders.length !== 1 ? "s" : ""}
+                                    {enRouteOrder ? " · 1 en camino" : ""}
                                 </p>
                                 {locationStatus === "active" && (
                                     <Badge variant="outline" className="text-xs bg-green-50 text-green-600 border-green-200">
-                                        <Locate className="h-3 w-3 mr-1" />
-                                        GPS activo
+                                        <Locate className="h-3 w-3 mr-1" />GPS activo
                                     </Badge>
                                 )}
                                 {locationStatus === "fallback" && (
                                     <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-600 border-yellow-200">
-                                        <Wifi className="h-3 w-3 mr-1" />
-                                        Ubicación aprox.
-                                    </Badge>
-                                )}
-                                {locationStatus === "requesting" && (
-                                    <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-600 border-yellow-200">
-                                        <Locate className="h-3 w-3 mr-1" />
-                                        Obteniendo GPS...
+                                        <Wifi className="h-3 w-3 mr-1" />Ubicación aprox.
                                     </Badge>
                                 )}
                                 {locationStatus === "error" && (
                                     <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">
-                                        <AlertCircle className="h-3 w-3 mr-1" />
-                                        GPS sin acceso
+                                        <AlertCircle className="h-3 w-3 mr-1" />GPS sin acceso
                                     </Badge>
                                 )}
                             </div>
@@ -258,16 +211,14 @@ export default function DriverDashboardPage() {
                     </div>
                 </header>
 
-                <main className="max-w-md mx-auto px-4 py-4 space-y-4">
+                <main className="max-w-md mx-auto px-4 py-4 space-y-5">
                     {storageError && (
                         <Card className="rounded-2xl border-orange-200 bg-orange-50">
                             <CardContent className="p-4 flex gap-3">
                                 <AlertCircle className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
                                 <div>
                                     <p className="text-sm text-orange-800 font-medium">Modo privado detectado</p>
-                                    <p className="text-xs text-orange-700 mt-1">
-                                        Estás en modo incógnito. Tu sesión no se guardará si cierras el navegador.
-                                    </p>
+                                    <p className="text-xs text-orange-700 mt-1">Tu sesión no se guardará si cerrás el navegador.</p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -277,178 +228,192 @@ export default function DriverDashboardPage() {
                         <Card className="rounded-2xl border-orange-200 bg-orange-50">
                             <CardContent className="p-4">
                                 <p className="text-sm text-orange-800">
-                                    <strong>Ubicación desactivada:</strong> Activa el GPS para que los clientes puedan seguir tu ubicación.
+                                    <strong>Ubicación desactivada:</strong> Activá el GPS para que los clientes puedan seguir tu ubicación.
                                 </p>
                             </CardContent>
                         </Card>
                     )}
 
-                    {/* Map with route — uses LiveTrackingMap when coordinates available */}
-                    {showMap && selectedOrder && (
-                        <Card className="rounded-2xl overflow-hidden">
-                            <CardContent className="p-0">
-                                <div className="p-4 border-b border-border flex items-center justify-between">
-                                    <div className="min-w-0">
-                                        <h3 className="font-bold">Pedido #{selectedOrder.orderNumber}</h3>
-                                        <p className="text-xs text-muted-foreground truncate">
-                                            {selectedOrder.address || "Retiro en local"}
-                                        </p>
-                                        {selectedOrder.deliveryZoneId && deliveryZones[selectedOrder.deliveryZoneId] && (
-                                            <p
-                                                className="mt-1 text-xs font-medium"
-                                                style={{ color: deliveryZones[selectedOrder.deliveryZoneId].color }}
-                                            >
-                                                {deliveryZones[selectedOrder.deliveryZoneId].name} · {formatZoneMeta(deliveryZones[selectedOrder.deliveryZoneId])}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <Button variant="ghost" size="sm" onClick={() => setShowMap(false)}>
-                                        Cerrar
-                                    </Button>
-                                </div>
+                    {/* ── En camino ── */}
+                    {enRouteOrder && (
+                        <section>
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                                <h2 className="text-sm font-bold uppercase tracking-wide text-primary">
+                                    En camino
+                                </h2>
+                            </div>
 
-                                {selectedHasCoords ? (
+                            <Card className="rounded-2xl overflow-hidden border-primary/30 ring-2 ring-primary/20 shadow-md">
+                                {/* Map */}
+                                {enRouteOrder.addressLat && enRouteOrder.addressLng ? (
                                     <LiveTrackingMap
-                                        orderId={selectedOrder.id}
+                                        orderId={enRouteOrder.id}
                                         driverId={driverId ?? undefined}
                                         initialDriverLocation={lastLocation}
                                         destination={{
-                                            lat: selectedOrder.addressLat!,
-                                            lng: selectedOrder.addressLng!,
-                                            address: selectedOrder.address,
+                                            lat: enRouteOrder.addressLat,
+                                            lng: enRouteOrder.addressLng,
+                                            address: enRouteOrder.address,
                                         }}
-                                        branchLocation={branchLocations[selectedOrder.branchId]}
-                                        height="300px"
+                                        branchLocation={branchLocations[enRouteOrder.branchId]}
+                                        height="220px"
                                     />
                                 ) : (
-                                    <div className="h-[200px] bg-muted flex items-center justify-center">
-                                        <p className="text-sm text-muted-foreground">
-                                            Sin coordenadas — usa el botón Navegar
-                                        </p>
+                                    <div className="h-32 bg-muted flex items-center justify-center">
+                                        <p className="text-sm text-muted-foreground">Sin coordenadas GPS</p>
                                     </div>
                                 )}
 
-                                <div className="p-4 flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        className="flex-1 rounded-xl"
-                                        onClick={() => handleNavigate(selectedOrder)}
-                                    >
-                                        <Navigation className="h-4 w-4 mr-2" />
-                                        Navegar
-                                    </Button>
-                                    <Button
-                                        className="flex-1 rounded-xl"
-                                        onClick={() => handleStatusUpdate(selectedOrder.id, "delivered")}
-                                    >
-                                        Entregado
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                                <CardContent className="p-4">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div>
+                                            <span className="text-2xl font-black">#{enRouteOrder.orderNumber}</span>
+                                            <Badge className="ml-2 bg-primary/10 text-primary border-primary/20">
+                                                En camino
+                                            </Badge>
+                                        </div>
+                                        <span className="text-sm font-semibold">{formatPrice(enRouteOrder.total)}</span>
+                                    </div>
 
-                    <section>
-                        <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wide">
-                            Entregas Activas
-                        </h2>
+                                    {enRouteOrder.deliveryZoneId && deliveryZones[enRouteOrder.deliveryZoneId] && (
+                                        <div className="flex items-center gap-2 text-sm mb-2">
+                                            <span
+                                                className="h-2.5 w-2.5 rounded-full shrink-0"
+                                                style={{ backgroundColor: deliveryZones[enRouteOrder.deliveryZoneId].color }}
+                                            />
+                                            <span className="font-medium">{deliveryZones[enRouteOrder.deliveryZoneId].name}</span>
+                                            {deliveryZones[enRouteOrder.deliveryZoneId].estimatedTimeMin && (
+                                                <span className="text-muted-foreground">
+                                                    ~{deliveryZones[enRouteOrder.deliveryZoneId].estimatedTimeMin} min
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
 
-                        {activeOrders.length === 0 ? (
-                            <Card className="rounded-2xl border-dashed border-2">
-                                <CardContent className="py-8 text-center">
-                                    <Package className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                                    <p className="text-sm text-muted-foreground">
-                                        No hay entregas pendientes
-                                    </p>
+                                    <div className="space-y-1.5 mb-4 text-sm text-muted-foreground">
+                                        <div className="flex items-center gap-2">
+                                            <MapPin className="h-4 w-4 shrink-0" />
+                                            <span className="line-clamp-2">{enRouteOrder.address || "Sin dirección"}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Phone className="h-4 w-4 shrink-0" />
+                                            <span>{enRouteOrder.customerPhone}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" className="flex-1 rounded-xl" asChild>
+                                            <Link href={`tel:${enRouteOrder.customerPhone}`}>Llamar</Link>
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="flex-1 rounded-xl"
+                                            onClick={() => handleNavigate(enRouteOrder)}
+                                        >
+                                            <Navigation className="h-4 w-4 mr-1.5" />
+                                            Navegar
+                                        </Button>
+                                        <Button
+                                            className="flex-1 rounded-xl"
+                                            disabled={deliveringId === enRouteOrder.id}
+                                            onClick={() => handleDeliver(enRouteOrder.id)}
+                                        >
+                                            <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                                            Entregar
+                                        </Button>
+                                    </div>
                                 </CardContent>
                             </Card>
-                        ) : (
-                            <div className="space-y-3">
-                                {activeOrders.map((order) => (
-                                    <Card key={order.id} className="rounded-2xl overflow-hidden">
-                                        <CardContent className="p-4">
-                                            <div className="flex items-start justify-between mb-3">
-                                                <div>
-                                                    <span className="text-2xl font-bold">
-                                                        #{order.orderNumber}
-                                                    </span>
-                                                    <Badge variant="outline" className="ml-2">
-                                                        Listo
-                                                    </Badge>
-                                                </div>
-                                                <span className="text-sm text-muted-foreground">
-                                                    {formatPrice(order.total)}
-                                                </span>
-                                            </div>
+                        </section>
+                    )}
 
-                                            <div className="space-y-2 mb-4">
-                                                {order.deliveryZoneId && deliveryZones[order.deliveryZoneId] && (
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <span
-                                                            className="h-2.5 w-2.5 rounded-full shrink-0"
-                                                            style={{ backgroundColor: deliveryZones[order.deliveryZoneId].color }}
-                                                        />
-                                                        <span className="font-medium">
-                                                            {deliveryZones[order.deliveryZoneId].name}
-                                                        </span>
-                                                        {deliveryZones[order.deliveryZoneId].estimatedTimeMin && (
-                                                            <span className="text-muted-foreground">
-                                                                ~{deliveryZones[order.deliveryZoneId].estimatedTimeMin} min
-                                                            </span>
+                    {/* ── Pendientes ── */}
+                    {(pendingOrders.length > 0 || (!enRouteOrder && pendingOrders.length === 0)) && (
+                        <section>
+                            <div className="flex items-center justify-between mb-3">
+                                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                                    Pendientes
+                                </h2>
+                                <Badge variant="outline" className="text-xs">{pendingOrders.length}</Badge>
+                            </div>
+
+                            {pendingOrders.length === 0 ? (
+                                <Card className="rounded-2xl border-dashed border-2">
+                                    <CardContent className="py-8 text-center">
+                                        <Package className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                                        <p className="text-sm text-muted-foreground">
+                                            {enRouteOrder ? "Entregá el pedido actual para ver los siguientes" : "No hay entregas pendientes"}
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                <div className="space-y-3">
+                                    {pendingOrders.map((order) => (
+                                        <Card key={order.id} className="rounded-2xl overflow-hidden">
+                                            <CardContent className="p-4">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <span className="text-xl font-bold">#{order.orderNumber}</span>
+                                                        {order.deliveryZoneId && deliveryZones[order.deliveryZoneId] && (
+                                                            <Badge variant="outline" className="ml-2 text-xs"
+                                                                style={{
+                                                                    borderColor: deliveryZones[order.deliveryZoneId].color,
+                                                                    color: deliveryZones[order.deliveryZoneId].color,
+                                                                }}
+                                                            >
+                                                                {deliveryZones[order.deliveryZoneId].name}
+                                                            </Badge>
                                                         )}
                                                     </div>
+                                                    <span className="text-sm text-muted-foreground">{formatPrice(order.total)}</span>
+                                                </div>
+
+                                                <div className="space-y-1.5 mb-4 text-sm text-muted-foreground">
+                                                    <div className="flex items-center gap-2">
+                                                        <MapPin className="h-4 w-4 shrink-0" />
+                                                        <span className="line-clamp-1">{order.address || "Sin dirección"}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Phone className="h-4 w-4 shrink-0" />
+                                                        <span>{order.customerPhone}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex gap-2">
+                                                    <Button variant="outline" size="sm" className="rounded-xl" asChild>
+                                                        <Link href={`tel:${order.customerPhone}`}>
+                                                            <Phone className="h-3.5 w-3.5" />
+                                                        </Link>
+                                                    </Button>
+                                                    <Button
+                                                        className="flex-1 rounded-xl gap-1.5"
+                                                        disabled={!!enRouteOrder || enRoutingId === order.id}
+                                                        onClick={() => handleSetEnRoute(order.id)}
+                                                    >
+                                                        <Truck className="h-4 w-4" />
+                                                        {enRoutingId === order.id ? "..." : "Me dirijo aquí"}
+                                                    </Button>
+                                                </div>
+
+                                                {enRouteOrder && (
+                                                    <p className="mt-2 text-xs text-center text-muted-foreground">
+                                                        Entregá el pedido actual primero
+                                                    </p>
                                                 )}
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                    <span className="line-clamp-2">
-                                                        {order.address || "Retiro en local"}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                    <span>{order.customerPhone}</span>
-                                                </div>
-                                            </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    )}
 
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    variant="outline"
-                                                    className="flex-1 rounded-xl"
-                                                    asChild
-                                                >
-                                                    <Link href={`tel:${order.customerPhone}`}>
-                                                        Llamar
-                                                    </Link>
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    className="flex-1 rounded-xl"
-                                                    onClick={() => {
-                                                        setSelectedOrder(order)
-                                                        setShowMap(true)
-                                                    }}
-                                                >
-                                                    <MapPin className="h-4 w-4 mr-2" />
-                                                    Ruta
-                                                </Button>
-                                                <Button
-                                                    className="flex-1 rounded-xl"
-                                                    onClick={() => handleStatusUpdate(order.id, "delivered")}
-                                                >
-                                                    Entregar
-                                                </Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                    </section>
-
+                    {/* ── Completadas hoy ── */}
                     {completedOrders.length > 0 && (
                         <section>
                             <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wide">
-                                Completadas Hoy
+                                Completadas hoy
                             </h2>
                             <Card className="rounded-2xl">
                                 <CardContent className="p-0">
@@ -458,21 +423,15 @@ export default function DriverDashboardPage() {
                                             className="flex items-center justify-between p-4 border-b last:border-0 border-border"
                                         >
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
-                                                    <Package className="h-5 w-5 text-green-600" />
+                                                <div className="h-9 w-9 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+                                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="font-medium truncate">
-                                                        Pedido #{order.orderNumber}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground truncate">
-                                                        {order.address || "Retiro en local"}
-                                                    </p>
+                                                    <p className="font-medium truncate">Pedido #{order.orderNumber}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">{order.address || "Retiro"}</p>
                                                 </div>
                                             </div>
-                                            <span className="text-sm font-medium shrink-0">
-                                                {formatPrice(order.total)}
-                                            </span>
+                                            <span className="text-sm font-medium shrink-0">{formatPrice(order.total)}</span>
                                         </div>
                                     ))}
                                 </CardContent>

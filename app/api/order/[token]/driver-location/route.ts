@@ -26,7 +26,7 @@ export async function GET(
         return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 })
     }
 
-    if (order.status !== "ready" || !order.driver_id) {
+    if (order.status !== "en_route" || !order.driver_id) {
         return NextResponse.json({ location: null })
     }
 

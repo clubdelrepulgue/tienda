@@ -858,13 +858,14 @@ export default function OrdersPage() {
     [session?.branches, selectedBranch]
   )
 
-  // Filter out delivered/cancelled from active view
+  // Filter out delivered/cancelled/en_route from active view
   const activeOrders = useMemo(
     () =>
       (Array.isArray(orders) ? orders : []).filter(
         (o) =>
           o.status !== "delivered" &&
           o.status !== "cancelled" &&
+          o.status !== "en_route" &&
           !(o.status === "ready" && o.deliveryMethod === "delivery" && o.driverId)
       ),
     [orders]

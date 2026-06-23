@@ -29,11 +29,11 @@ interface OrderTrackerProps {
 }
 
 const steps: { status: OrderStatus; label: string; icon: any }[] = [
-    { status: "new", label: "Pedido recibido", icon: Clock },
+    { status: "new", label: "Recibido", icon: Clock },
     { status: "accepted", label: "Aceptado", icon: Check },
     { status: "preparing", label: "Preparando", icon: ChefHat },
-    { status: "ready", label: "Listo", icon: Package },
-    { status: "delivered", label: "Entregado", icon: Truck },
+    { status: "en_route", label: "En camino", icon: Truck },
+    { status: "delivered", label: "Entregado", icon: Check },
 ]
 
 const statusIndex: Record<string, number> = {
@@ -41,6 +41,7 @@ const statusIndex: Record<string, number> = {
     accepted: 1,
     preparing: 2,
     ready: 3,
+    en_route: 3,
     delivered: 4,
     cancelled: -1,
 }
@@ -85,13 +86,12 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
     const currentStepIndex = statusIndex[order.status] ?? 0
     const isCancelled = order.status === "cancelled"
 
-    // Show tracking when driver assigned AND order is being delivered (ready status = driver en camino)
     const hasCoordinates = order.addressLat != null && order.addressLng != null
     const showTracking =
         order.deliveryMethod === "delivery" &&
         driverId &&
         hasCoordinates &&
-        order.status === "ready"
+        order.status === "en_route"
 
     const destination = hasCoordinates
         ? { lat: order.addressLat!, lng: order.addressLng!, address: order.address }
@@ -184,12 +184,12 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                         </CardContent>
                     </Card>
 
-                    {/* Live Tracking Map - Show when driver assigned and has coordinates */}
+                    {/* Live Tracking Map - shows only when driver is specifically heading here */}
                     {showTracking && destination && (
                         <Card className="rounded-2xl bg-card border-border overflow-hidden">
                             <CardContent className="p-4">
                                 <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                                    Tu repartidor está en camino
+                                    ¡El repartidor viene hacia vos!
                                 </h2>
                                 <LiveTrackingMap
                                     orderId={order.id}

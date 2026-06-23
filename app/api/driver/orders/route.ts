@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
             .from("orders")
             .select("*")
             .eq("driver_id", driverId)
-            .in("status", ["ready", "delivered"])
+            .in("status", ["ready", "en_route", "delivered"])
             .order("driver_assigned_at", { ascending: false })
             .limit(20)
 
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
             deliveryFee: parseFloat(row.delivery_fee),
             total: parseFloat(row.total),
             status: row.status,
+            enRouteAt: row.en_route_at || null,
             createdAt: row.created_at,
             branchId: row.sucursal_id || "",
             addressLat: row.address_lat ? parseFloat(row.address_lat) : null,
