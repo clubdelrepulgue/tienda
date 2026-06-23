@@ -14,6 +14,7 @@ interface HeaderProps {
 
 export function Header({ branch, onCartOpen }: HeaderProps) {
   const totalItems = useCartStore((s) => s.totalItems())
+  const logoUrl = branch.logoUrl || "/assets/brand/logo.jpeg"
 
   return (
     <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
@@ -24,15 +25,23 @@ export function Header({ branch, onCartOpen }: HeaderProps) {
             style={{ fontFamily: "var(--font-heading)" }}
           >
             <Link href="/" className="flex items-center gap-3">
-              <Image
-                src="/assets/brand/logo.jpeg"
-                alt="El Club del Repulgue"
-                width={160}
-                height={32}
-                priority
-                className="h-7 w-auto sm:h-8"
-              />
-              <span className="hidden rounded-full border border-border bg-white px-2.5 py-1 text-xs font-semibold text-muted-foreground sm:inline">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-white">
+                <Image
+                  src={logoUrl}
+                  alt={branch.name}
+                  width={96}
+                  height={96}
+                  priority
+                  className="h-full w-full object-contain"
+                />
+              </span>
+              <span
+                className="hidden rounded-full border bg-white px-3 py-1.5 text-sm font-semibold sm:inline"
+                style={{
+                  borderColor: branch.brandColor || "var(--border)",
+                  color: branch.brandColor || "var(--foreground)",
+                }}
+              >
                 {branch.name}
               </span>
             </Link>

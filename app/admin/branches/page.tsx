@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useEffect } from "react"
 import useSWR from "swr"
 import {
     MapPin,
@@ -12,10 +12,13 @@ import {
     Clock,
     Eye,
     Building2,
+    Upload,
+    X,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
@@ -52,6 +55,7 @@ import {
 } from "@/app/actions"
 import { AddressSelector, GoogleMapsProvider, ZoneEditor } from "@/components/maps"
 import { formatZoneMeta, generateCirclePolygon } from "@/lib/delivery-zones"
+import { createClient } from "@/lib/supabase/client"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -116,6 +120,14 @@ export default function BranchesPage() {
     const [formSlug, setFormSlug] = useState("")
     const [formSlugTouched, setFormSlugTouched] = useState(false)
     const [formAddress, setFormAddress] = useState("")
+    const [formLogoUrl, setFormLogoUrl] = useState("")
+    const [formBannerUrl, setFormBannerUrl] = useState("")
+    const [formBrandColor, setFormBrandColor] = useState("#E86303")
+    const [formAccentColor, setFormAccentColor] = useState("#F97316")
+    const [formHeroTitle, setFormHeroTitle] = useState("")
+    const [formHeroSubtitle, setFormHeroSubtitle] = useState("")
+    const [uploadingLogo, setUploadingLogo] = useState(false)
+    const [uploadingBanner, setUploadingBanner] = useState(false)
     const [formIsOpen, setFormIsOpen] = useState(true)
     const [formLat, setFormLat] = useState<number | null>(null)
     const [formLng, setFormLng] = useState<number | null>(null)
@@ -157,6 +169,55 @@ export default function BranchesPage() {
         return undefined
     }
 
+    const uploadBranchAsset = async (file: File, kind: "logo" | "banner") => {
+        const supabase = createClient()
+        const fileExt = file.name.split(".").pop() || "webp"
+        const folder = editBranch?.id || slugify(formName || "nueva-sucursal")
+        const fileName = `branding/branches/${folder}/${kind}-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 9)}.${fileExt}`
+
+        const { error: uploadError } = await supabase.storage
+            .from("productos")
+            .upload(fileName, file)
+
+        if (uploadError) {
+            toast.error(`Error al subir ${kind === "logo" ? "el logo" : "el banner"}: ${uploadError.message}`)
+            return null
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from("productos")
+            .getPublicUrl(fileName)
+
+        return publicUrl
+    }
+
+    const handleBrandAssetUpload = async (
+        file: File | undefined,
+        kind: "logo" | "banner"
+    ) => {
+        if (!file) return
+        if (!file.type.startsWith("image/")) {
+            toast.error("Selecciona una imagen valida")
+            return
+        }
+
+        if (kind === "logo") setUploadingLogo(true)
+        if (kind === "banner") setUploadingBanner(true)
+
+        try {
+            const publicUrl = await uploadBranchAsset(file, kind)
+            if (!publicUrl) return
+            if (kind === "logo") setFormLogoUrl(publicUrl)
+            if (kind === "banner") setFormBannerUrl(publicUrl)
+            toast.success(`${kind === "logo" ? "Logo" : "Banner"} subido`)
+        } finally {
+            if (kind === "logo") setUploadingLogo(false)
+            if (kind === "banner") setUploadingBanner(false)
+        }
+    }
+
     // ── Branch CRUD ──
     const openCreateBranch = () => {
         setEditBranch(null)
@@ -164,6 +225,12 @@ export default function BranchesPage() {
         setFormSlug("")
         setFormSlugTouched(false)
         setFormAddress("")
+        setFormLogoUrl("")
+        setFormBannerUrl("")
+        setFormBrandColor("#E86303")
+        setFormAccentColor("#F97316")
+        setFormHeroTitle("")
+        setFormHeroSubtitle("")
         setFormIsOpen(true)
         setFormLat(null)
         setFormLng(null)
@@ -176,6 +243,12 @@ export default function BranchesPage() {
         setFormSlug(branch.slug)
         setFormSlugTouched(true)
         setFormAddress(branch.address)
+        setFormLogoUrl(branch.logoUrl)
+        setFormBannerUrl(branch.bannerUrl)
+        setFormBrandColor(branch.brandColor || "#E86303")
+        setFormAccentColor(branch.accentColor || "#F97316")
+        setFormHeroTitle(branch.heroTitle)
+        setFormHeroSubtitle(branch.heroSubtitle)
         setFormIsOpen(branch.isOpen)
         setFormLat(branch.lat)
         setFormLng(branch.lng)
@@ -194,6 +267,12 @@ export default function BranchesPage() {
                 nombre: formName,
                 slug: normalizedSlug,
                 direccion: formAddress,
+                logoUrl: formLogoUrl,
+                bannerUrl: formBannerUrl,
+                brandColor: formBrandColor,
+                accentColor: formAccentColor,
+                heroTitle: formHeroTitle,
+                heroSubtitle: formHeroSubtitle,
                 lat: formLat ?? undefined,
                 lng: formLng ?? undefined,
                 isOpen: formIsOpen,
@@ -464,8 +543,19 @@ export default function BranchesPage() {
                                     <CardContent className="p-4">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                                    <Building2 className="h-5 w-5 text-primary" />
+                                                <div
+                                                    className="h-10 w-10 overflow-hidden rounded-xl bg-primary/10 flex items-center justify-center"
+                                                    style={{ color: branch.brandColor }}
+                                                >
+                                                    {branch.logoUrl ? (
+                                                        <img
+                                                            src={branch.logoUrl}
+                                                            alt={branch.name}
+                                                            className="h-full w-full object-contain"
+                                                        />
+                                                    ) : (
+                                                        <Building2 className="h-5 w-5" />
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <h3 className="font-semibold">{branch.name}</h3>
@@ -696,6 +786,177 @@ export default function BranchesPage() {
                                 <p className="mt-1.5 text-xs text-muted-foreground">
                                     URL pública: /menu/{formSlug || slugify(formName)}
                                 </p>
+                            </div>
+                            <div className="rounded-2xl border border-border bg-white p-4">
+                                <div className="mb-4">
+                                    <h3 className="text-sm font-semibold text-foreground">Branding del menú</h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        Personaliza logo, banner, colores y textos para esta sucursal.
+                                    </p>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label className="text-sm text-muted-foreground">Logo</Label>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary">
+                                                {formLogoUrl ? (
+                                                    <img src={formLogoUrl} alt="Logo" className="h-full w-full object-contain" />
+                                                ) : (
+                                                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                                                )}
+                                            </div>
+                                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                                <Input
+                                                    value={formLogoUrl}
+                                                    onChange={(e) => setFormLogoUrl(e.target.value)}
+                                                    placeholder="https://..."
+                                                    className="rounded-xl bg-secondary border-0"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="relative rounded-xl"
+                                                        disabled={uploadingLogo}
+                                                    >
+                                                        {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                                                        Subir
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="absolute inset-0 cursor-pointer opacity-0"
+                                                            onChange={(e) => handleBrandAssetUpload(e.target.files?.[0], "logo")}
+                                                        />
+                                                    </Button>
+                                                    {formLogoUrl && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="rounded-xl"
+                                                            onClick={() => setFormLogoUrl("")}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-sm text-muted-foreground">Banner</Label>
+                                        <div className="overflow-hidden rounded-xl border border-border bg-secondary">
+                                            {formBannerUrl ? (
+                                                <img src={formBannerUrl} alt="Banner" className="aspect-[3/1] w-full object-cover" />
+                                            ) : (
+                                                <div className="flex aspect-[3/1] items-center justify-center text-xs text-muted-foreground">
+                                                    Sin banner personalizado
+                                                </div>
+                                            )}
+                                        </div>
+                                        <Input
+                                            value={formBannerUrl}
+                                            onChange={(e) => setFormBannerUrl(e.target.value)}
+                                            placeholder="https://..."
+                                            className="rounded-xl bg-secondary border-0"
+                                        />
+                                        <div className="flex gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="relative rounded-xl"
+                                                disabled={uploadingBanner}
+                                            >
+                                                {uploadingBanner ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                                                Subir banner
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="absolute inset-0 cursor-pointer opacity-0"
+                                                    onChange={(e) => handleBrandAssetUpload(e.target.files?.[0], "banner")}
+                                                />
+                                            </Button>
+                                            {formBannerUrl && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="rounded-xl"
+                                                    onClick={() => setFormBannerUrl("")}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <Label className="text-sm text-muted-foreground mb-1.5 block">
+                                            Color principal
+                                        </Label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                type="color"
+                                                value={/^#[0-9A-Fa-f]{6}$/.test(formBrandColor) ? formBrandColor : "#E86303"}
+                                                onChange={(e) => setFormBrandColor(e.target.value)}
+                                                className="h-10 w-14 rounded-xl bg-secondary p-1"
+                                            />
+                                            <Input
+                                                value={formBrandColor}
+                                                onChange={(e) => setFormBrandColor(e.target.value)}
+                                                className="rounded-xl bg-secondary border-0"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm text-muted-foreground mb-1.5 block">
+                                            Color acento
+                                        </Label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                type="color"
+                                                value={/^#[0-9A-Fa-f]{6}$/.test(formAccentColor) ? formAccentColor : "#F97316"}
+                                                onChange={(e) => setFormAccentColor(e.target.value)}
+                                                className="h-10 w-14 rounded-xl bg-secondary p-1"
+                                            />
+                                            <Input
+                                                value={formAccentColor}
+                                                onChange={(e) => setFormAccentColor(e.target.value)}
+                                                className="rounded-xl bg-secondary border-0"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <Label className="text-sm text-muted-foreground mb-1.5 block">
+                                            Título sobre banner
+                                        </Label>
+                                        <Input
+                                            value={formHeroTitle}
+                                            onChange={(e) => setFormHeroTitle(e.target.value)}
+                                            placeholder="Horneadas con amor"
+                                            className="rounded-xl bg-secondary border-0"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm text-muted-foreground mb-1.5 block">
+                                            Texto secundario
+                                        </Label>
+                                        <Textarea
+                                            value={formHeroSubtitle}
+                                            onChange={(e) => setFormHeroSubtitle(e.target.value)}
+                                            placeholder="Bienvenido al Club del Repulgue"
+                                            className="min-h-10 rounded-xl bg-secondary border-0"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                             <div>
                                 <Label className="text-sm text-muted-foreground mb-1.5 block">

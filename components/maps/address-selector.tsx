@@ -87,6 +87,7 @@ export function AddressSelector({
     )
     const [searchQuery, setSearchQuery] = useState("")
     const [isSearching, setIsSearching] = useState(false)
+    const [isLocating, setIsLocating] = useState(false)
     const [selectedZone, setSelectedZone] = useState<string | null>(null)
     const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null)
     const [mapVisible, setMapVisible] = useState(!lazyMap)
@@ -237,22 +238,30 @@ export function AddressSelector({
             return
         }
 
+        setIsLocating(true)
+
         navigator.geolocation.getCurrentPosition(
             async (position) => {
-                const { latitude, longitude } = position.coords
+                try {
+                    const { latitude, longitude } = position.coords
+                    const address = await reverseGeocode(latitude, longitude)
 
-                await selectPoint(latitude, longitude, "Mi ubicación actual")
+                    await selectPoint(latitude, longitude, address || undefined)
 
-                // Auto-open map so user sees their pin
-                if (!mapVisible) {
-                    pendingPanRef.current = { lat: latitude, lng: longitude, zoom: 16 }
-                    setMapVisible(true)
-                } else {
-                    mapInstance?.panTo({ lat: latitude, lng: longitude })
-                    mapInstance?.setZoom(16)
+                    // Auto-open map so user sees their pin
+                    if (!mapVisible) {
+                        pendingPanRef.current = { lat: latitude, lng: longitude, zoom: 16 }
+                        setMapVisible(true)
+                    } else {
+                        mapInstance?.panTo({ lat: latitude, lng: longitude })
+                        mapInstance?.setZoom(16)
+                    }
+                } finally {
+                    setIsLocating(false)
                 }
             },
             (error) => {
+                setIsLocating(false)
                 console.error("Geolocation error:", error)
                 const message =
                     error.code === error.PERMISSION_DENIED
@@ -262,7 +271,7 @@ export function AddressSelector({
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
         )
-    }, [mapInstance, mapVisible, selectPoint])
+    }, [mapInstance, mapVisible, reverseGeocode, selectPoint])
 
     const handleMapReady = useCallback((map: google.maps.Map) => {
         setMapInstance(map)
@@ -310,6 +319,7 @@ export function AddressSelector({
                     variant="outline"
                     size="icon"
                     onClick={handleUseCurrentLocation}
+                    disabled={isLocating}
                     className="rounded-xl"
                     title="Usar mi ubicación"
                 >

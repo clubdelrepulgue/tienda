@@ -53,10 +53,26 @@ export default async function BranchSelectorPage() {
               <article
                 key={branch.id}
                 className="flex min-h-48 flex-col justify-between rounded-2xl border border-border bg-white p-5 shadow-sm"
+                style={{ borderColor: branch.brandColor || undefined }}
               >
                 <div>
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                    <ShoppingBag className="h-6 w-6" />
+                  <div
+                    className="mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 text-primary"
+                    style={{
+                      color: branch.brandColor || undefined,
+                    }}
+                  >
+                    {branch.logoUrl ? (
+                      <Image
+                        src={branch.logoUrl}
+                        alt={branch.name}
+                        width={96}
+                        height={96}
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <ShoppingBag className="h-6 w-6" />
+                    )}
                   </div>
                   <h2
                     className="text-xl font-bold text-foreground"
@@ -71,7 +87,7 @@ export default async function BranchSelectorPage() {
                     </p>
                   )}
                 </div>
-                <Button asChild className="mt-5 rounded-xl">
+                <Button asChild className="mt-5 rounded-xl" style={{ backgroundColor: branch.brandColor || undefined }}>
                   <Link href={`/menu/${branch.slug}`}>Ver menu</Link>
                 </Button>
               </article>

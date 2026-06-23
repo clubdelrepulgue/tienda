@@ -12,6 +12,7 @@ import type { Branch, Product, Category, ModifierGroup } from "@/lib/types"
 import { toast } from "sonner"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import type { CSSProperties } from "react"
 
 interface StorefrontShellProps {
     branch: Branch
@@ -20,17 +21,41 @@ interface StorefrontShellProps {
     modifierGroups: ModifierGroup[]
 }
 
-function Banner() {
+function Banner({ branch }: { branch: Branch }) {
+    const bannerUrl = branch.bannerUrl || "/assets/BANNER 1  BLZR - 1.webp"
+    const hasHeroCopy = !!(branch.heroTitle || branch.heroSubtitle)
+
     return (
         <section className="border-b border-border px-4 py-[5px] sm:px-6">
-            <Image
-                src="/assets/BANNER 1  BLZR - 1.webp"
-                alt="El Club del Repulgue — Banner"
-                width={1920}
-                height={400}
-                className="mx-auto block h-auto w-full max-w-6xl rounded-2xl"
-                priority
-            />
+            <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-2xl">
+                <Image
+                    src={bannerUrl}
+                    alt={`${branch.name} — Banner`}
+                    width={1920}
+                    height={400}
+                    className="block h-auto w-full"
+                    priority
+                />
+                {hasHeroCopy && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/15 px-6 text-center text-white">
+                        <div className="max-w-3xl">
+                            {branch.heroSubtitle && (
+                                <p className="mb-2 inline-block rounded-sm bg-black/35 px-3 py-1 text-sm font-semibold sm:text-base">
+                                    {branch.heroSubtitle}
+                                </p>
+                            )}
+                            {branch.heroTitle && (
+                                <h2
+                                    className="text-3xl font-extrabold tracking-tight drop-shadow sm:text-5xl"
+                                    style={{ fontFamily: "var(--font-heading)" }}
+                                >
+                                    {branch.heroTitle}
+                                </h2>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
         </section>
     )
 }
@@ -85,10 +110,17 @@ export function StorefrontShell({
         toast.success(`${product.name} agregado al carrito`)
     }
 
+    const branchStyle = {
+        "--primary": branch.brandColor || "#E86303",
+        "--ring": branch.brandColor || "#E86303",
+        "--chart-1": branch.brandColor || "#E86303",
+        "--accent": branch.accentColor || "oklch(0.97 0 0)",
+    } as CSSProperties
+
     return (
-        <div className="flex min-h-dvh flex-col bg-[#F7F7F7]">
+        <div className="flex min-h-dvh flex-col bg-[#F7F7F7]" style={branchStyle}>
             <Header branch={branch} onCartOpen={() => setCartOpen(true)} />
-            <Banner />
+            <Banner branch={branch} />
             {branchBlocked && cartItems.length > 0 && cartBranchId !== branch.id && (
                 <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:px-6">
                     <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

@@ -878,6 +878,12 @@ export async function createBranch(data: {
     nombre: string
     slug?: string
     direccion?: string
+    logoUrl?: string
+    bannerUrl?: string
+    brandColor?: string
+    accentColor?: string
+    heroTitle?: string
+    heroSubtitle?: string
     lat?: number
     lng?: number
     isOpen?: boolean
@@ -891,6 +897,12 @@ export async function createBranch(data: {
         nombre: data.nombre,
         slug: data.slug || slugify(data.nombre),
         direccion: data.direccion || "",
+        logo_url: data.logoUrl || "",
+        banner_url: data.bannerUrl || "",
+        brand_color: data.brandColor || "#E86303",
+        accent_color: data.accentColor || "#F97316",
+        hero_title: data.heroTitle || "",
+        hero_subtitle: data.heroSubtitle || "",
         lat: data.lat,
         lng: data.lng,
         is_open: data.isOpen ?? true,
@@ -908,6 +920,12 @@ export async function updateBranch(
         nombre?: string
         slug?: string
         direccion?: string
+        logoUrl?: string
+        bannerUrl?: string
+        brandColor?: string
+        accentColor?: string
+        heroTitle?: string
+        heroSubtitle?: string
         lat?: number | null
         lng?: number | null
         isOpen?: boolean
@@ -922,6 +940,12 @@ export async function updateBranch(
     if (data.slug !== undefined) updateData.slug = data.slug
     if (data.slug === undefined && data.nombre !== undefined) updateData.slug = slugify(data.nombre)
     if (data.direccion !== undefined) updateData.direccion = data.direccion
+    if (data.logoUrl !== undefined) updateData.logo_url = data.logoUrl
+    if (data.bannerUrl !== undefined) updateData.banner_url = data.bannerUrl
+    if (data.brandColor !== undefined) updateData.brand_color = data.brandColor
+    if (data.accentColor !== undefined) updateData.accent_color = data.accentColor
+    if (data.heroTitle !== undefined) updateData.hero_title = data.heroTitle
+    if (data.heroSubtitle !== undefined) updateData.hero_subtitle = data.heroSubtitle
     if (data.lat !== undefined) updateData.lat = data.lat
     if (data.lng !== undefined) updateData.lng = data.lng
     if (data.isOpen !== undefined) updateData.is_open = data.isOpen

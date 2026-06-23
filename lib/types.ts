@@ -93,6 +93,12 @@ export interface Branch {
   slug: string
   name: string
   address: string
+  logoUrl: string
+  bannerUrl: string
+  brandColor: string
+  accentColor: string
+  heroTitle: string
+  heroSubtitle: string
   lat: number | null
   lng: number | null
   isOpen: boolean
