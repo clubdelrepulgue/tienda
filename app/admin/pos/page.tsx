@@ -21,6 +21,7 @@ import { cn, formatPrice } from "@/lib/utils"
 import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
 import { GoogleMapsProvider, AddressSelector } from "@/components/maps"
 import { findDeliveryZoneForPoint, formatZoneMeta, getZoneDeliveryFee } from "@/lib/delivery-zones"
+import { useActiveBranch } from "../branch-context"
 
 interface PosCartItem {
     tempId: string
@@ -35,9 +36,10 @@ interface PosCartItem {
 }
 
 export default function POSPage() {
+    const { activeBranchId, branches } = useActiveBranch()
+    const selectedBranch = activeBranchId ?? ""
     const [products, setProducts] = useState<Product[]>([])
     const [categories, setCategories] = useState<Category[]>([])
-    const [branches, setBranches] = useState<Branch[]>([])
     const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([])
     const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([])
     const [activeCategory, setActiveCategory] = useState<string>("all")
@@ -51,7 +53,6 @@ export default function POSPage() {
     const [customerName, setCustomerName] = useState("")
     const [orderType, setOrderType] = useState<"pickup" | "delivery">("pickup")
     const [paymentMethod, setPaymentMethod] = useState<"cash" | "mercadopago">("cash")
-    const [selectedBranch, setSelectedBranch] = useState("")
     const [deliveryAddress, setDeliveryAddress] = useState("")
     const [deliveryNotes, setDeliveryNotes] = useState("")
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
@@ -59,16 +60,6 @@ export default function POSPage() {
 
     useEffect(() => {
         unlockAudio()
-        fetch("/api/admin?type=session")
-            .then((r) => r.json())
-            .then((data) => {
-                const branchesData = data?.branches || []
-                setBranches(branchesData)
-                const activeBranch = branchesData.find((b: Branch) => b.id === data?.activeBranchId) ||
-                    branchesData.find((b: Branch) => b.isOpen)
-                if (activeBranch) setSelectedBranch(activeBranch.id)
-            })
-            .catch(() => toast.error("Error al cargar datos"))
     }, [])
 
     useEffect(() => {
@@ -567,18 +558,9 @@ export default function POSPage() {
 
                         <div>
                             <Label>Sucursal</Label>
-                            <select
-                                value={selectedBranch}
-                                onChange={(e) => setSelectedBranch(e.target.value)}
-                                className="w-full mt-1.5 rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                            >
-                                <option value="">Selecciona una sucursal</option>
-                                {branches.map((b) => (
-                                    <option key={b.id} value={b.id}>
-                                        {b.name}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-input bg-muted/40 px-3 py-2 text-sm font-medium text-foreground">
+                                {selectedBranchInfo?.name || "Sin sucursal seleccionada"}
+                            </div>
                         </div>
 
                         <div>

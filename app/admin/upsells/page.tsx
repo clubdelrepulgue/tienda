@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import useSWR from "swr"
 import { Plus, Sparkles, Trash2, Edit2, Percent } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -9,26 +9,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
 import { createUpsellRule, updateUpsellRule, deleteUpsellRule } from "@/app/actions"
-import type { Branch, UpsellRule, Product } from "@/lib/types"
+import type { UpsellRule, Product } from "@/lib/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useActiveBranch } from "../branch-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function UpsellsPage() {
-    const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
-        "/api/admin?type=session",
-        fetcher
-    )
-    const [selectedBranch, setSelectedBranch] = useState("")
+    const { activeBranchId } = useActiveBranch()
+    const selectedBranch = activeBranchId ?? ""
     const { data: rules, mutate } = useSWR<UpsellRule[]>(
         selectedBranch ? `/api/admin?type=upsells&branchId=${selectedBranch}` : null,
         fetcher
@@ -45,12 +36,6 @@ export default function UpsellsPage() {
     const [discountPercentage, setDiscountPercentage] = useState("")
     const [priority, setPriority] = useState("0")
     const [selectedProducts, setSelectedProducts] = useState<string[]>([])
-
-    useEffect(() => {
-        if (!selectedBranch && session?.activeBranchId) {
-            setSelectedBranch(session.activeBranchId)
-        }
-    }, [selectedBranch, session?.activeBranchId])
 
     const resetForm = () => {
         setName("")
@@ -142,18 +127,6 @@ export default function UpsellsPage() {
                     </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                        <SelectTrigger className="w-full rounded-xl bg-card sm:w-56">
-                            <SelectValue placeholder="Sucursal" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {(session?.branches || []).map((branch) => (
-                                <SelectItem key={branch.id} value={branch.id}>
-                                    {branch.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
                     <Button onClick={openNew} className="rounded-xl" disabled={!selectedBranch}>
                         <Plus className="h-4 w-4 mr-2" />
                         Nueva Regla

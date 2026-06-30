@@ -41,6 +41,7 @@ import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
 import { PrintReceiptButton } from "@/components/receipt/order-receipt"
 import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
+import { useActiveBranch } from "../branch-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -668,11 +669,8 @@ const COLUMNS: Column[] = [
 ]
 
 export default function OrdersPage() {
-  const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
-    "/api/admin?type=session",
-    fetcher
-  )
-  const [selectedBranch, setSelectedBranch] = useState("")
+  const { activeBranchId, branches } = useActiveBranch()
+  const selectedBranch = activeBranchId ?? ""
   const { data: dispatchData, mutate } = useSWR<{
     orders: Order[]
     zones: DeliveryZone[]
@@ -687,12 +685,6 @@ export default function OrdersPage() {
   const [assignSheetOpen, setAssignSheetOpen] = useState(false)
   const [assignOrderIds, setAssignOrderIds] = useState<string[]>([])
   const [now, setNow] = useState(Date.now())
-
-  useEffect(() => {
-    if (!selectedBranch && session?.activeBranchId) {
-      setSelectedBranch(session.activeBranchId)
-    }
-  }, [selectedBranch, session?.activeBranchId])
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000)
@@ -859,8 +851,8 @@ export default function OrdersPage() {
   }
 
   const selectedBranchInfo = useMemo(
-    () => (session?.branches || []).find((b) => b.id === selectedBranch) || null,
-    [session?.branches, selectedBranch]
+    () => branches.find((b) => b.id === selectedBranch) || null,
+    [branches, selectedBranch]
   )
 
   // Filter out delivered/cancelled/en_route from active view
@@ -894,18 +886,6 @@ export default function OrdersPage() {
           <span className="h-1.5 w-1.5 rounded-full bg-chart-3 shadow-[0_0_18px_rgba(34,197,94,0.7)]" />
           Actualizacion en vivo
         </div>
-        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-          <SelectTrigger className="h-11 w-full rounded-full border-border bg-card px-4 shadow-sm sm:w-56">
-            <SelectValue placeholder="Sucursal" />
-          </SelectTrigger>
-          <SelectContent>
-            {(session?.branches || []).map((branch) => (
-              <SelectItem key={branch.id} value={branch.id}>
-                {branch.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       <div className="grid min-h-0 grid-cols-[repeat(3,minmax(280px,1fr))] gap-4 overflow-x-auto pb-3 snap-x xl:gap-5">

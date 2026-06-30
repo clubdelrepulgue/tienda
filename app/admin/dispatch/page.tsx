@@ -30,15 +30,22 @@ import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
 import { formatZoneMeta } from "@/lib/delivery-zones"
+import { useActiveBranch } from "../branch-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function DispatchPage() {
+  const { activeBranchId } = useActiveBranch()
   const { data, mutate } = useSWR<{
     orders: Order[]
     zones: DeliveryZone[]
     drivers: Driver[]
-  }>("/api/admin?type=dispatch", fetcher)
+  }>(
+    activeBranchId
+      ? `/api/admin?type=dispatch&branchId=${activeBranchId}`
+      : "/api/admin?type=dispatch",
+    fetcher
+  )
 
   const [orders, setOrders] = useState<Order[]>([])
   const [zones, setZones] = useState<DeliveryZone[]>([])

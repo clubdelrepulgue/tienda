@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import useSWR from "swr"
 import { Plus, Pencil, Trash2, Search, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,13 +16,6 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
-import {
     Table,
     TableBody,
     TableCell,
@@ -30,18 +23,16 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import type { Branch, Category } from "@/lib/types"
+import type { Category } from "@/lib/types"
 import { toast } from "sonner"
 import { createCategory, updateCategory, deleteCategory } from "@/app/actions"
+import { useActiveBranch } from "../branch-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function CategoriesPage() {
-    const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
-        "/api/admin?type=session",
-        fetcher
-    )
-    const [selectedBranch, setSelectedBranch] = useState("")
+    const { activeBranchId } = useActiveBranch()
+    const selectedBranch = activeBranchId ?? ""
     const { data: categories, mutate: mutateCategories, isLoading } = useSWR<Category[]>(
         selectedBranch ? `/api/admin?type=categories&branchId=${selectedBranch}` : null,
         fetcher
@@ -55,12 +46,6 @@ export default function CategoriesPage() {
     const [formName, setFormName] = useState("")
     const [formSlug, setFormSlug] = useState("")
     const [formOrder, setFormOrder] = useState("")
-
-    useEffect(() => {
-        if (!selectedBranch && session?.activeBranchId) {
-            setSelectedBranch(session.activeBranchId)
-        }
-    }, [selectedBranch, session?.activeBranchId])
 
     const safeCategories = Array.isArray(categories) ? categories : []
     const filtered = safeCategories.filter((c) =>
@@ -193,18 +178,6 @@ export default function CategoriesPage() {
                     </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                        <SelectTrigger className="w-full rounded-xl bg-card sm:w-56">
-                            <SelectValue placeholder="Sucursal" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {(session?.branches || []).map((branch) => (
-                                <SelectItem key={branch.id} value={branch.id}>
-                                    {branch.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
                     <Button
                         className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
                         onClick={openCreate}

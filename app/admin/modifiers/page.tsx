@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import useSWR from "swr"
 import { Plus, Trash2, GripVertical, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,13 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
@@ -24,19 +17,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import type { Branch, ModifierGroup, ModifierOption } from "@/lib/types"
+import type { ModifierGroup, ModifierOption } from "@/lib/types"
 import { toast } from "sonner"
 import { createModifierGroup, updateModifierGroup } from "@/app/actions"
 import { formatPrice } from "@/lib/utils"
+import { useActiveBranch } from "../branch-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function ModifiersPage() {
-  const { data: session } = useSWR<{ branches: Branch[]; activeBranchId: string | null }>(
-    "/api/admin?type=session",
-    fetcher
-  )
-  const [selectedBranch, setSelectedBranch] = useState("")
+  const { activeBranchId } = useActiveBranch()
+  const selectedBranch = activeBranchId ?? ""
   const { data: groups, mutate, isLoading } = useSWR<ModifierGroup[]>(
     selectedBranch ? `/api/admin?type=modifiers&branchId=${selectedBranch}` : null,
     fetcher
@@ -52,12 +43,6 @@ export default function ModifiersPage() {
   const [formOptions, setFormOptions] = useState<
     { name: string; price: string }[]
   >([])
-
-  useEffect(() => {
-    if (!selectedBranch && session?.activeBranchId) {
-      setSelectedBranch(session.activeBranchId)
-    }
-  }, [selectedBranch, session?.activeBranchId])
 
   const openCreate = () => {
     if (!selectedBranch) {
@@ -189,18 +174,6 @@ export default function ModifiersPage() {
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="w-full rounded-xl bg-card sm:w-56">
-              <SelectValue placeholder="Sucursal" />
-            </SelectTrigger>
-            <SelectContent>
-              {(session?.branches || []).map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>
-                  {branch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button
             className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
             onClick={openCreate}

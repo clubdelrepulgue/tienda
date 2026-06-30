@@ -1,12 +1,14 @@
 "use client"
 
+import Image from "next/image"
 import useSWR from "swr"
-import { DollarSign, ShoppingBag, Clock, TrendingUp } from "lucide-react"
+import { DollarSign, ShoppingBag, Clock, TrendingUp, Building2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Order, OrderStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { useActiveBranch } from "./branch-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -18,13 +20,17 @@ const statusConfig: Record<
   accepted: { label: "Aceptado", className: "bg-chart-2/15 text-chart-2 border-chart-2/20" },
   preparing: { label: "Preparando", className: "bg-accent/15 text-accent border-accent/20" },
   ready: { label: "Listo", className: "bg-chart-3/15 text-chart-3 border-chart-3/20" },
+  en_route: { label: "En camino", className: "bg-chart-4/15 text-chart-4 border-chart-4/20" },
   delivered: { label: "Entregado", className: "bg-muted text-muted-foreground border-border" },
   cancelled: { label: "Cancelado", className: "bg-destructive/15 text-destructive border-destructive/20" },
 }
 
 export default function AdminDashboard() {
+  const { activeBranch, activeBranchId } = useActiveBranch()
   const { data: orders, isLoading } = useSWR<Order[]>(
-    "/api/admin?type=orders",
+    activeBranchId
+      ? `/api/admin?type=orders&branchId=${activeBranchId}`
+      : "/api/admin?type=orders",
     fetcher,
     { refreshInterval: 30000 }
   )
@@ -54,16 +60,33 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl">
-      <div>
-        <h1
-          className="text-2xl font-bold text-foreground"
-          style={{ fontFamily: "var(--font-heading)" }}
-        >
-          Panel
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Resumen de hoy
-        </p>
+      <div className="flex items-center gap-3">
+        {activeBranch?.logoUrl ? (
+          <Image
+            key={activeBranch.logoUrl}
+            src={activeBranch.logoUrl}
+            alt={activeBranch.name}
+            width={48}
+            height={48}
+            unoptimized
+            className="h-12 w-12 shrink-0 rounded-xl border border-border object-cover"
+          />
+        ) : (
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-border bg-secondary text-muted-foreground">
+            <Building2 className="h-5 w-5" />
+          </div>
+        )}
+        <div>
+          <h1
+            className="text-2xl font-bold text-foreground"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            Panel
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {activeBranch ? `${activeBranch.name} · Resumen de hoy` : "Resumen de hoy"}
+          </p>
+        </div>
       </div>
 
       {/* Stats Cards */}
