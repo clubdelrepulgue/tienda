@@ -32,6 +32,10 @@ interface AddressSelectorProps {
 
 const fallbackCenter = { lat: -34.6037, lng: -58.3816 }
 
+// Stable empty-zones reference so the default value doesn't create a new array
+// on every render (which would destabilize callbacks/effects that depend on it).
+const EMPTY_ZONES: NonNullable<AddressSelectorProps["zones"]> = []
+
 function MapInstanceSync({
     onMapReady,
 }: {
@@ -70,7 +74,7 @@ export function AddressSelector({
     value,
     onChange,
     onAddressChange,
-    zones = [],
+    zones = EMPTY_ZONES,
     height = "300px",
     placeholder = "Buscar dirección...",
     defaultCenter,
@@ -283,17 +287,32 @@ export function AddressSelector({
         }
     }, [])
 
+    // Sync the marker from the controlled `value`. We depend on primitive lat/lng/address
+    // (not the `value` object, which the parent recreates on every render) and guard with
+    // a ref so we only re-sync when the location actually changes. Without this guard the
+    // effect would fire on every render and call setMarker with a fresh object, causing an
+    // infinite render loop and snapping the pin back when the user picks a new point.
+    const valueLat = value?.lat ?? null
+    const valueLng = value?.lng ?? null
+    const valueAddress = value?.address ?? ""
+    const syncedKeyRef = useRef<string | null>(null)
+
     useEffect(() => {
-        if (!value) {
+        if (valueLat == null || valueLng == null) {
+            syncedKeyRef.current = null
             setMarker(null)
             setSelectedZone(null)
             return
         }
 
-        setMarker({ lat: value.lat, lng: value.lng })
-        setSearchQuery(value.address)
-        checkZone(value.lat, value.lng)
-    }, [checkZone, value])
+        const key = `${valueLat},${valueLng},${valueAddress}`
+        if (syncedKeyRef.current === key) return
+        syncedKeyRef.current = key
+
+        setMarker({ lat: valueLat, lng: valueLng })
+        setSearchQuery(valueAddress)
+        checkZone(valueLat, valueLng)
+    }, [checkZone, valueLat, valueLng, valueAddress])
 
     useEffect(() => {
         if (!mapInstance || !marker) return
