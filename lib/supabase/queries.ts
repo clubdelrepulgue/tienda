@@ -282,6 +282,7 @@ function mapOrderItems(items: any[], branchId: string): CartItem[] {
         quantity: item.qty,
         modifiers: (item.modifiers_json || []) as CartItemModifier[],
         variantName: item.variante_snapshot || undefined,
+        note: item.nota || undefined,
     }))
 }
 

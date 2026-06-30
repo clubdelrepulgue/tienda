@@ -63,6 +63,7 @@ export interface CartItem {
   modifiers: CartItemModifier[]
   variantId?: string
   variantName?: string
+  note?: string // optional free-text comment for this line
 }
 
 export type OrderStatus = "new" | "accepted" | "preparing" | "ready" | "en_route" | "delivered" | "cancelled"

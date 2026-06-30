@@ -171,6 +171,11 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
                             {item.modifiers.map((m) => m.optionName).join(", ")}
                           </p>
                         )}
+                        {item.note && (
+                          <p className="text-xs text-muted-foreground/90 italic mt-0.5 line-clamp-2">
+                            “{item.note}”
+                          </p>
+                        )}
                         <div className="flex items-center gap-2 mt-2">
                           <div className="flex items-center gap-1 bg-secondary rounded-lg border border-border">
                             <Button

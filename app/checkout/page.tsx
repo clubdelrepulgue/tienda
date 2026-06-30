@@ -540,6 +540,11 @@ export default function CheckoutPage() {
                               .join(", ")}
                           </p>
                         )}
+                        {item.note && (
+                          <p className="text-xs italic text-muted-foreground/90 truncate">
+                            “{item.note}”
+                          </p>
+                        )}
                       </div>
                       <span className="text-sm font-medium text-card-foreground shrink-0">
                         {formatPrice((item.price + modPrice) * item.quantity)}

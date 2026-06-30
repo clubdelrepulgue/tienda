@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { useCartStore } from "@/lib/store"
 import type { Branch, Product, CartItem, CartItemModifier, ModifierGroup } from "@/lib/types"
 import { toast } from "sonner"
@@ -40,6 +41,7 @@ export function ProductModal({
   const [quantity, setQuantity] = useState(1)
   const [selectedModifiers, setSelectedModifiers] = useState<CartItemModifier[]>([])
   const [selectedVariantId, setSelectedVariantId] = useState<string>("")
+  const [note, setNote] = useState("")
   const addItem = useCartStore((s) => s.addItem)
 
   const activeVariants = useMemo(
@@ -54,6 +56,7 @@ export function ProductModal({
     setSelectedVariantId(activeVariants[0]?.id || "")
     setSelectedModifiers([])
     setQuantity(1)
+    setNote("")
   }, [product, activeVariants])
 
   if (!product) return null
@@ -118,6 +121,7 @@ export function ProductModal({
       modifiers: selectedModifiers,
       variantId: selectedVariant?.id,
       variantName: selectedVariant?.name,
+      note: note.trim() || undefined,
     }
 
     if (onAddItem) {
@@ -134,6 +138,7 @@ export function ProductModal({
     setQuantity(1)
     setSelectedModifiers([])
     setSelectedVariantId(activeVariants[0]?.id || "")
+    setNote("")
     onClose()
   }
 
@@ -141,6 +146,7 @@ export function ProductModal({
     setQuantity(1)
     setSelectedModifiers([])
     setSelectedVariantId(activeVariants[0]?.id || "")
+    setNote("")
     onClose()
   }
 
@@ -322,6 +328,21 @@ export function ProductModal({
                 )}
               </div>
             ))}
+
+            {/* Optional per-item comment */}
+            <div>
+              <h4 className="font-bold text-foreground text-sm mb-3">
+                Comentario{" "}
+                <span className="font-normal text-muted-foreground">(opcional)</span>
+              </h4>
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Ej: sin cebolla, bien cocida, cortar al medio…"
+                maxLength={200}
+                className="min-h-16 resize-none rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
           </div>
         </div>
 

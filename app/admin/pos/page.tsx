@@ -33,6 +33,7 @@ interface PosCartItem {
     modifiers: CartItemModifier[]
     variantId?: string
     variantName?: string
+    note?: string
 }
 
 export default function POSPage() {
@@ -111,14 +112,16 @@ export default function POSPage() {
         product: Product,
         modifiers: CartItemModifier[] = [],
         quantity = 1,
-        opts?: { price?: number; variantId?: string; variantName?: string }
+        opts?: { price?: number; variantId?: string; variantName?: string; note?: string }
     ) => {
         const modifiersKey = getModifiersKey(modifiers)
         const variantId = opts?.variantId || ""
+        const note = (opts?.note || "").trim()
         const existingItem = cart.find(
             (item) =>
                 item.productId === product.id &&
                 (item.variantId || "") === variantId &&
+                (item.note || "").trim() === note &&
                 getModifiersKey(item.modifiers) === modifiersKey
         )
 
@@ -139,6 +142,7 @@ export default function POSPage() {
                 modifiers,
                 variantId: opts?.variantId,
                 variantName: opts?.variantName,
+                note: opts?.note?.trim() || undefined,
             }
             setCart([...cart, newItem])
         }
@@ -162,6 +166,7 @@ export default function POSPage() {
             price: item.price,
             variantId: item.variantId,
             variantName: item.variantName,
+            note: item.note,
         })
     }
 
@@ -288,6 +293,7 @@ export default function POSPage() {
                     modifiers: item.modifiers,
                     variantId: item.variantId,
                     variantName: item.variantName,
+                    note: item.note,
                 })),
                 subtotal,
                 deliveryFee,
@@ -327,6 +333,7 @@ export default function POSPage() {
                     modifiers: item.modifiers,
                     variantId: item.variantId,
                     variantName: item.variantName,
+                    note: item.note,
                 })),
                 subtotal,
                 deliveryFee,
@@ -470,6 +477,11 @@ export default function POSPage() {
                                             {item.modifiers.length > 0 && (
                                                 <p className="text-xs text-muted-foreground truncate">
                                                     {item.modifiers.map((modifier) => modifier.optionName).join(", ")}
+                                                </p>
+                                            )}
+                                            {item.note && (
+                                                <p className="text-xs italic text-muted-foreground/90 truncate">
+                                                    “{item.note}”
                                                 </p>
                                             )}
                                             <p className="text-xs text-muted-foreground">

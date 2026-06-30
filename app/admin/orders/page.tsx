@@ -182,6 +182,11 @@ function OrderCard({
                     {item.modifiers.map((m) => m.optionName).join(", ")}
                   </p>
                 )}
+                {item.note && (
+                  <p className="ml-5 mt-0.5 line-clamp-2 max-w-[calc(100%-1.25rem)] break-words text-xs italic leading-snug text-amber-700">
+                    ✎ {item.note}
+                  </p>
+                )}
               </div>
             </div>
           ))}

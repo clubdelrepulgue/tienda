@@ -70,9 +70,9 @@ function getModifiersKey(modifiers: CartItemModifier[]) {
     .join("|")
 }
 
-// Two cart lines are "the same" only if product, variant and modifiers all match
-function getCartLineKey(item: Pick<CartItem, "productId" | "variantId" | "modifiers">) {
-  return `${item.productId}#${item.variantId || ""}#${getModifiersKey(item.modifiers)}`
+// Two cart lines are "the same" only if product, variant, modifiers and note all match
+function getCartLineKey(item: Pick<CartItem, "productId" | "variantId" | "modifiers" | "note">) {
+  return `${item.productId}#${item.variantId || ""}#${getModifiersKey(item.modifiers)}#${(item.note || "").trim()}`
 }
 
 function branchMismatchMessage(branchName: string | null) {

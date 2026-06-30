@@ -229,6 +229,11 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                                                         {item.modifiers.map((m) => m.optionName).join(", ")}
                                                     </p>
                                                 )}
+                                                {item.note && (
+                                                    <p className="text-xs italic text-muted-foreground/90">
+                                                        “{item.note}”
+                                                    </p>
+                                                )}
                                             </div>
                                             <span className="text-sm font-medium text-card-foreground">
                                                 {formatPrice((item.price + modPrice) * item.quantity)}

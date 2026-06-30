@@ -461,6 +461,11 @@ function KitchenOrderCard({ order, column, onNextStatus, now, updating }: Kitche
                                     {item.modifiers.map((m) => m.optionName).join(", ")}
                                 </p>
                             )}
+                            {item.note && (
+                                <p className="mt-1.5 pl-6 text-sm font-semibold italic leading-relaxed text-amber-700">
+                                    ✎ {item.note}
+                                </p>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -562,6 +567,11 @@ function ReadyHistoryDialog({
                                                 {item.modifiers.length > 0 && (
                                                     <span className="text-sm text-muted-foreground">
                                                         {" "}({item.modifiers.map((m) => m.optionName).join(", ")})
+                                                    </span>
+                                                )}
+                                                {item.note && (
+                                                    <span className="text-sm italic text-amber-700">
+                                                        {" "}— ✎ {item.note}
                                                     </span>
                                                 )}
                                             </div>

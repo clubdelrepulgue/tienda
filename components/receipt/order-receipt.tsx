@@ -75,6 +75,9 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
               item.modifiers.map((m) => `+ ${m.optionName} (${formatPrice(m.price)})`).join(", ")
             )}</div>`
           : ""
+      const noteHTML = item.note
+        ? `<div style="font-size:10px;font-style:italic;color:#333;padding-left:12px;">&#9998; ${esc(item.note)}</div>`
+        : ""
       return `
         <div style="margin-bottom:4px;">
           <div style="display:flex;justify-content:space-between;">
@@ -82,6 +85,7 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
             <span style="white-space:nowrap;margin-left:4px;">${formatPrice(itemTotal)}</span>
           </div>
           ${modifiersHTML}
+          ${noteHTML}
         </div>`
     })
     .join("")

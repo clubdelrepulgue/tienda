@@ -338,6 +338,7 @@ export async function createOrder(formData: {
         qty: item.quantity,
         modifiers_json: item.modifiers,
         variante_snapshot: item.variantName || null,
+        nota: item.note?.trim() || null,
         total: (item.price + item.modifiers.reduce((s, m) => s + m.price, 0)) * item.quantity,
     }))
 
