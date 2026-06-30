@@ -529,6 +529,9 @@ export default function CheckoutPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-card-foreground truncate">
                           {item.quantity}x {item.name}
+                          {item.variantName && (
+                            <span className="text-muted-foreground"> · {item.variantName}</span>
+                          )}
                         </p>
                         {item.modifiers.length > 0 && (
                           <p className="text-xs text-muted-foreground truncate">

@@ -78,7 +78,9 @@ export function UpsellModal({ isOpen, onClose }: UpsellModalProps) {
         for (const rule of sortedRules.slice(0, 2)) { // Max 2 rules
             for (const productId of rule.suggestedProductIds.slice(0, 3)) { // Max 3 products per rule
                 const product = products.find((p) => p.id === productId)
-                if (product && product.active) {
+                // Products with variants require choosing a size, so they can't be quick-added as upsells
+                const productHasVariants = (product?.variants || []).some((v) => v.active)
+                if (product && product.active && !productHasVariants) {
                     const discountedPrice = rule.discountPercentage > 0
                         ? product.price * (1 - rule.discountPercentage / 100)
                         : product.price

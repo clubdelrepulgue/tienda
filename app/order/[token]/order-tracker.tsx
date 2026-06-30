@@ -220,6 +220,9 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                                             <div>
                                                 <p className="text-sm text-card-foreground">
                                                     {item.quantity}x {item.name}
+                                                    {item.variantName && (
+                                                        <span className="text-muted-foreground"> · {item.variantName}</span>
+                                                    )}
                                                 </p>
                                                 {item.modifiers.length > 0 && (
                                                     <p className="text-xs text-muted-foreground">

@@ -170,7 +170,12 @@ function OrderCard({
                 <span className="font-bold text-foreground">
                   {item.quantity}x
                 </span>{" "}
-                <span className="font-semibold text-foreground/80">{item.name}</span>
+                <span className="font-semibold text-foreground/80">
+                  {item.name}
+                  {item.variantName && (
+                    <span className="text-muted-foreground"> · {item.variantName}</span>
+                  )}
+                </span>
                 {item.modifiers?.length > 0 && (
                   <p className="ml-5 mt-0.5 line-clamp-2 max-w-[calc(100%-1.25rem)] break-words text-xs leading-snug text-muted-foreground">
                     {item.modifiers.map((m) => m.optionName).join(", ")}

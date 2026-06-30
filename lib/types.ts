@@ -12,6 +12,14 @@ export interface ModifierOption {
   price: number
 }
 
+export interface ProductVariant {
+  id: string
+  name: string
+  price: number
+  active: boolean
+  order: number
+}
+
 export interface ModifierGroup {
   id: string
   branchId: string
@@ -32,6 +40,8 @@ export interface Product {
   categoryId: string
   active: boolean
   modifierGroups: string[] // IDs of modifier groups
+  variantGroupLabel: string // label for the variant selector (e.g. "Tamaño", "Carnes")
+  variants: ProductVariant[] // size/options; when present, the chosen variant replaces `price`
 }
 
 export interface CartItemModifier {
@@ -48,9 +58,11 @@ export interface CartItem {
   branchId: string
   name: string
   image: string
-  price: number
+  price: number // unit price already resolved to the chosen variant (if any)
   quantity: number
   modifiers: CartItemModifier[]
+  variantId?: string
+  variantName?: string
 }
 
 export type OrderStatus = "new" | "accepted" | "preparing" | "ready" | "en_route" | "delivered" | "cancelled"

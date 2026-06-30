@@ -78,7 +78,7 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
       return `
         <div style="margin-bottom:4px;">
           <div style="display:flex;justify-content:space-between;">
-            <span style="max-width:55mm;word-break:break-word;">${item.quantity}x ${esc(item.name)}</span>
+            <span style="max-width:55mm;word-break:break-word;">${item.quantity}x ${esc(item.name)}${item.variantName ? ` (${esc(item.variantName)})` : ""}</span>
             <span style="white-space:nowrap;margin-left:4px;">${formatPrice(itemTotal)}</span>
           </div>
           ${modifiersHTML}

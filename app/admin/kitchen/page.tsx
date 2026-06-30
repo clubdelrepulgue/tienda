@@ -476,7 +476,12 @@ function KitchenOrderCard({ order, column, onNextStatus, now, updating }: Kitche
                         <div key={idx} className="rounded-xl border border-border/70 bg-muted/45 p-3">
                             <div className="flex items-baseline gap-2 text-[15px] leading-snug">
                                 <span className="font-black text-foreground">{item.quantity}x</span>
-                                <span className="font-semibold text-foreground/85">{item.name}</span>
+                                <span className="font-semibold text-foreground/85">
+                                    {item.name}
+                                    {item.variantName && (
+                                        <span className="font-bold text-primary"> · {item.variantName}</span>
+                                    )}
+                                </span>
                             </div>
                             {item.modifiers.length > 0 && (
                                 <p className="mt-1.5 pl-6 text-sm leading-relaxed text-muted-foreground">
@@ -578,6 +583,9 @@ function ReadyHistoryDialog({
                                             <div key={idx} className="text-[15px] leading-relaxed text-foreground/85">
                                                 <span className="font-black text-foreground">{item.quantity}x</span>{" "}
                                                 {item.name}
+                                                {item.variantName && (
+                                                    <span className="font-semibold text-primary"> · {item.variantName}</span>
+                                                )}
                                                 {item.modifiers.length > 0 && (
                                                     <span className="text-sm text-muted-foreground">
                                                         {" "}({item.modifiers.map((m) => m.optionName).join(", ")})

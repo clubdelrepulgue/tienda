@@ -70,6 +70,11 @@ function getModifiersKey(modifiers: CartItemModifier[]) {
     .join("|")
 }
 
+// Two cart lines are "the same" only if product, variant and modifiers all match
+function getCartLineKey(item: Pick<CartItem, "productId" | "variantId" | "modifiers">) {
+  return `${item.productId}#${item.variantId || ""}#${getModifiersKey(item.modifiers)}`
+}
+
 function branchMismatchMessage(branchName: string | null) {
   const current = branchName ? ` de ${branchName}` : ""
   return `Tu carrito actual${current} pertenece a otra sucursal. Vacialo para cambiar de menu.`
@@ -134,9 +139,7 @@ export const useCartStore = create<CartStore>()(
         }
 
         const existingItem = get().items.find(
-          (i) =>
-            i.productId === item.productId &&
-            getModifiersKey(i.modifiers) === getModifiersKey(item.modifiers)
+          (i) => getCartLineKey(i) === getCartLineKey(item)
         )
 
         if (existingItem) {
@@ -176,8 +179,7 @@ export const useCartStore = create<CartStore>()(
 
         const existingItem = get().items.find(
           (i) =>
-            i.productId === newItem.productId &&
-            getModifiersKey(i.modifiers) === getModifiersKey(newItem.modifiers) &&
+            getCartLineKey(i) === getCartLineKey(newItem) &&
             i.price === finalPrice // Also check price for upsells
         )
 

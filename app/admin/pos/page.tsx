@@ -30,6 +30,8 @@ interface PosCartItem {
     price: number
     quantity: number
     modifiers: CartItemModifier[]
+    variantId?: string
+    variantName?: string
 }
 
 export default function POSPage() {
@@ -111,15 +113,21 @@ export default function POSPage() {
                 group.options.length > 0
         )
 
+    const productHasVariants = (product: Product) =>
+        (product.variants || []).some((v) => v.active)
+
     const addToCart = (
         product: Product,
         modifiers: CartItemModifier[] = [],
-        quantity = 1
+        quantity = 1,
+        opts?: { price?: number; variantId?: string; variantName?: string }
     ) => {
         const modifiersKey = getModifiersKey(modifiers)
+        const variantId = opts?.variantId || ""
         const existingItem = cart.find(
             (item) =>
                 item.productId === product.id &&
+                (item.variantId || "") === variantId &&
                 getModifiersKey(item.modifiers) === modifiersKey
         )
 
@@ -135,16 +143,18 @@ export default function POSPage() {
                 productId: product.id,
                 name: product.name,
                 image: product.image,
-                price: product.price,
+                price: opts?.price ?? product.price,
                 quantity,
                 modifiers,
+                variantId: opts?.variantId,
+                variantName: opts?.variantName,
             }
             setCart([...cart, newItem])
         }
     }
 
     const handleProductClick = (product: Product) => {
-        if (productHasAvailableModifiers(product)) {
+        if (productHasVariants(product) || productHasAvailableModifiers(product)) {
             setSelectedProduct(product)
             setProductModalOpen(true)
             return
@@ -157,7 +167,11 @@ export default function POSPage() {
         const product = products.find((p) => p.id === item.productId)
         if (!product) return
 
-        addToCart(product, item.modifiers, item.quantity)
+        addToCart(product, item.modifiers, item.quantity, {
+            price: item.price,
+            variantId: item.variantId,
+            variantName: item.variantName,
+        })
     }
 
     const updateQuantity = (tempId: string, delta: number) => {
@@ -281,6 +295,8 @@ export default function POSPage() {
                     price: item.price,
                     quantity: item.quantity,
                     modifiers: item.modifiers,
+                    variantId: item.variantId,
+                    variantName: item.variantName,
                 })),
                 subtotal,
                 deliveryFee,
@@ -318,6 +334,8 @@ export default function POSPage() {
                     price: item.price,
                     quantity: item.quantity,
                     modifiers: item.modifiers,
+                    variantId: item.variantId,
+                    variantName: item.variantName,
                 })),
                 subtotal,
                 deliveryFee,
@@ -454,6 +472,9 @@ export default function POSPage() {
                                         <div className="flex-1 min-w-0">
                                             <p className="font-medium text-sm text-card-foreground truncate">
                                                 {item.name}
+                                                {item.variantName && (
+                                                    <span className="text-muted-foreground"> · {item.variantName}</span>
+                                                )}
                                             </p>
                                             {item.modifiers.length > 0 && (
                                                 <p className="text-xs text-muted-foreground truncate">

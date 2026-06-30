@@ -183,6 +183,42 @@ export async function createOrder(formData: {
         return { error: "El carrito contiene productos de otra sucursal o inactivos" }
     }
 
+    // Validate product variants: each product's active variants must be honored,
+    // the chosen variant must belong to the product and its price must match.
+    const { data: variantRows, error: variantsError } = await supabase
+        .from("producto_variantes")
+        .select("id, producto_id, nombre, precio, activo")
+        .in("producto_id", productIds)
+        .eq("activo", true)
+
+    if (variantsError) return { error: variantsError.message }
+
+    const variantsByProduct = new Map<string, { id: string; nombre: string; precio: number }[]>()
+    for (const variant of variantRows || []) {
+        const arr = variantsByProduct.get(variant.producto_id) || []
+        arr.push({ id: variant.id, nombre: variant.nombre, precio: Number(variant.precio) })
+        variantsByProduct.set(variant.producto_id, arr)
+    }
+
+    for (const item of formData.items) {
+        const productVariants = item.productId ? variantsByProduct.get(item.productId) : undefined
+
+        if (productVariants && productVariants.length > 0) {
+            if (!item.variantId) {
+                return { error: "Selecciona una opción para los productos con variantes" }
+            }
+            const chosen = productVariants.find((v) => v.id === item.variantId)
+            if (!chosen) {
+                return { error: "La variante seleccionada ya no está disponible" }
+            }
+            if (toCents(chosen.precio) !== toCents(item.price)) {
+                return { error: "El precio de la variante no coincide" }
+            }
+        } else if (item.variantId) {
+            return { error: "El producto no admite la variante seleccionada" }
+        }
+    }
+
     const modifierGroupIds = Array.from(
         new Set(
             formData.items
@@ -301,6 +337,7 @@ export async function createOrder(formData: {
         precio_unit: item.price,
         qty: item.quantity,
         modifiers_json: item.modifiers,
+        variante_snapshot: item.variantName || null,
         total: (item.price + item.modifiers.reduce((s, m) => s + m.price, 0)) * item.quantity,
     }))
 
@@ -578,6 +615,22 @@ export async function completeDriverOrder(orderId: string, driverId: string): Ac
 
 // ─── Products ──────────────────────────────────────────────────
 
+type ProductVariantInput = {
+    nombre: string
+    precio: number
+    activo?: boolean
+}
+
+function sanitizeVariants(variants: ProductVariantInput[] | undefined) {
+    return (variants || [])
+        .map((v) => ({
+            nombre: (v.nombre || "").trim(),
+            precio: Number(v.precio),
+            activo: v.activo ?? true,
+        }))
+        .filter((v) => v.nombre.length > 0 && Number.isFinite(v.precio) && v.precio >= 0)
+}
+
 export async function createProduct(data: {
     nombre: string
     descripcion?: string
@@ -588,6 +641,8 @@ export async function createProduct(data: {
     categoriaId: string
     activo?: boolean
     modifierGroupIds?: string[]
+    variantGroupLabel?: string
+    variants?: ProductVariantInput[]
 }): ActionResult<{ id?: string }> {
     const supabase = await createClient()
 
@@ -630,6 +685,7 @@ export async function createProduct(data: {
             images: data.images || [],
             categoria_id: data.categoriaId,
             activo: data.activo ?? true,
+            variant_group_label: data.variantGroupLabel?.trim() || "Tamaño",
         })
         .select("id")
         .single()
@@ -643,6 +699,20 @@ export async function createProduct(data: {
             group_id: gid,
         }))
         await supabase.from("producto_modifier_groups").insert(links)
+    }
+
+    // Insert variants
+    const variants = sanitizeVariants(data.variants)
+    if (variants.length > 0) {
+        const variantRows = variants.map((v, index) => ({
+            producto_id: product.id,
+            nombre: v.nombre,
+            precio: v.precio,
+            activo: v.activo,
+            orden: index,
+        }))
+        const { error: variantErr } = await supabase.from("producto_variantes").insert(variantRows)
+        if (variantErr) return { error: variantErr.message }
     }
 
     revalidatePath("/admin/products")
@@ -661,6 +731,8 @@ export async function updateProduct(
         categoriaId?: string
         activo?: boolean
         modifierGroupIds?: string[]
+        variantGroupLabel?: string
+        variants?: ProductVariantInput[]
     }
 ): ActionResult {
     const supabase = await createClient()
@@ -712,6 +784,9 @@ export async function updateProduct(
     if (data.images !== undefined) updateData.images = data.images
     if (data.categoriaId !== undefined) updateData.categoria_id = data.categoriaId
     if (data.activo !== undefined) updateData.activo = data.activo
+    if (data.variantGroupLabel !== undefined) {
+        updateData.variant_group_label = data.variantGroupLabel.trim() || "Tamaño"
+    }
 
     if (Object.keys(updateData).length > 0) {
         const { error } = await supabase
@@ -732,6 +807,24 @@ export async function updateProduct(
             }))
             const { error: linkErr } = await supabase.from("producto_modifier_groups").insert(links)
             if (linkErr) return { error: linkErr.message }
+        }
+    }
+
+    // Replace variants wholesale (they are referenced only by name snapshots on orders)
+    if (data.variants !== undefined) {
+        await supabase.from("producto_variantes").delete().eq("producto_id", id)
+
+        const variants = sanitizeVariants(data.variants)
+        if (variants.length > 0) {
+            const variantRows = variants.map((v, index) => ({
+                producto_id: id,
+                nombre: v.nombre,
+                precio: v.precio,
+                activo: v.activo,
+                orden: index,
+            }))
+            const { error: variantErr } = await supabase.from("producto_variantes").insert(variantRows)
+            if (variantErr) return { error: variantErr.message }
         }
     }
 

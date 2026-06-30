@@ -63,7 +63,8 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
       .flatMap((rule) =>
         rule.suggestedProductIds.map((productId) => {
           const product = productsById.get(productId)
-          if (!product || !product.active || cartProductIds.has(productId) || seenSuggestions.has(productId)) {
+          const productHasVariants = (product?.variants || []).some((v) => v.active)
+          if (!product || !product.active || productHasVariants || cartProductIds.has(productId) || seenSuggestions.has(productId)) {
             return null
           }
 
@@ -157,6 +158,9 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="font-semibold text-sm text-foreground truncate">
                             {item.name}
+                            {item.variantName && (
+                              <span className="text-muted-foreground font-normal"> · {item.variantName}</span>
+                            )}
                           </h4>
                           <span className="text-sm font-bold text-primary shrink-0">
                             ${lineTotal.toFixed(2)}

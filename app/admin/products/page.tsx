@@ -73,6 +73,8 @@ export default function ProductsPage() {
   const [formCategory, setFormCategory] = useState("")
   const [formActive, setFormActive] = useState(true)
   const [formModifierGroups, setFormModifierGroups] = useState<string[]>([])
+  const [formVariantLabel, setFormVariantLabel] = useState("Tamaño")
+  const [formVariants, setFormVariants] = useState<{ nombre: string; precio: string; activo: boolean }[]>([])
 
   // Multiple images state
   const [existingImages, setExistingImages] = useState<string[]>([])
@@ -102,6 +104,8 @@ export default function ProductsPage() {
     setFormCategory(safeCategories?.[0]?.id || "")
     setFormActive(true)
     setFormModifierGroups([])
+    setFormVariantLabel("Tamaño")
+    setFormVariants([])
     setExistingImages([])
     setNewImageFiles([])
     setDialogOpen(true)
@@ -115,6 +119,14 @@ export default function ProductsPage() {
     setFormCategory(product.categoryId)
     setFormActive(product.active)
     setFormModifierGroups(product.modifierGroups || [])
+    setFormVariantLabel(product.variantGroupLabel || "Tamaño")
+    setFormVariants(
+      (product.variants || []).map((v) => ({
+        nombre: v.name,
+        precio: v.price.toString(),
+        activo: v.active,
+      }))
+    )
     setExistingImages(product.images || [])
     setNewImageFiles([])
     setDialogOpen(true)
@@ -139,9 +151,25 @@ export default function ProductsPage() {
     setNewImageFiles(prev => prev.filter((_, i) => i !== index))
   }
 
+  const cleanedVariants = formVariants
+    .map((v) => ({ nombre: v.nombre.trim(), precio: parseFloat(v.precio), activo: v.activo }))
+    .filter((v) => v.nombre.length > 0 && Number.isFinite(v.precio) && v.precio >= 0)
+  const hasVariants = cleanedVariants.length > 0
+
   const handleSave = async () => {
-    if (!formName || !formPrice || !formCategory) {
+    if (!formName || !formCategory) {
       toast.error("Completa todos los campos obligatorios")
+      return
+    }
+
+    // Base price is only required when the product has no variants
+    if (!hasVariants && !formPrice) {
+      toast.error("Ingresa el precio o agrega al menos una variante")
+      return
+    }
+
+    if (formVariants.length > 0 && !hasVariants) {
+      toast.error("Cada variante necesita nombre y precio válidos")
       return
     }
 
@@ -179,11 +207,13 @@ export default function ProductsPage() {
           branchId: selectedBranch,
           nombre: formName,
           descripcion: formDescription,
-          precio: parseFloat(formPrice),
+          precio: parseFloat(formPrice) || 0,
           images: allImages,
           categoriaId: formCategory,
           activo: formActive,
           modifierGroupIds: formModifierGroups,
+          variantGroupLabel: formVariantLabel,
+          variants: cleanedVariants,
         })
         if (result.error) {
           toast.error(result.error)
@@ -196,11 +226,13 @@ export default function ProductsPage() {
           branchId: selectedBranch,
           nombre: formName,
           descripcion: formDescription,
-          precio: parseFloat(formPrice),
+          precio: parseFloat(formPrice) || 0,
           images: allImages,
           categoriaId: formCategory,
           activo: formActive,
           modifierGroupIds: formModifierGroups,
+          variantGroupLabel: formVariantLabel,
+          variants: cleanedVariants,
         })
         if (result.error) {
           toast.error(result.error)
@@ -356,7 +388,19 @@ export default function ProductsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium text-foreground">
-                      {formatPrice(product.price)}
+                      {(() => {
+                        const activeVariants = (product.variants || []).filter((v) => v.active)
+                        if (activeVariants.length > 0) {
+                          const min = Math.min(...activeVariants.map((v) => v.price))
+                          return (
+                            <span>
+                              <span className="text-xs text-muted-foreground mr-1">Desde</span>
+                              {formatPrice(min)}
+                            </span>
+                          )
+                        }
+                        return formatPrice(product.price)
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Switch
@@ -467,7 +511,7 @@ export default function ProductsPage() {
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">
-                Precio
+                Precio {hasVariants && <span className="text-xs">(ignorado, usa variantes)</span>}
               </Label>
               <Input
                 type="number"
@@ -475,8 +519,90 @@ export default function ProductsPage() {
                 value={formPrice}
                 onChange={(e) => setFormPrice(e.target.value)}
                 placeholder="0.00"
-                className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                disabled={hasVariants}
+                className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground disabled:opacity-50"
               />
+            </div>
+
+            {/* Variantes / Tamaños */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label className="text-sm text-muted-foreground">
+                  Variantes (tamaños / opciones con precio propio)
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Si agregás variantes, cada una define su propio precio y el precio base se ignora.
+                Ej: Simple / Doble, 32cm / 50cm.
+              </p>
+
+              {formVariants.length > 0 && (
+                <div className="mb-2">
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Título del selector
+                  </Label>
+                  <Input
+                    value={formVariantLabel}
+                    onChange={(e) => setFormVariantLabel(e.target.value)}
+                    placeholder="Ej: Tamaño, Carnes"
+                    className="rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2">
+                {formVariants.map((variant, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      value={variant.nombre}
+                      onChange={(e) =>
+                        setFormVariants((prev) =>
+                          prev.map((v, i) => (i === index ? { ...v, nombre: e.target.value } : v))
+                        )
+                      }
+                      placeholder="Nombre (ej: Doble)"
+                      className="flex-1 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={variant.precio}
+                      onChange={(e) =>
+                        setFormVariants((prev) =>
+                          prev.map((v, i) => (i === index ? { ...v, precio: e.target.value } : v))
+                        )
+                      }
+                      placeholder="0.00"
+                      className="w-24 rounded-xl bg-secondary border-0 text-foreground placeholder:text-muted-foreground"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() =>
+                        setFormVariants((prev) => prev.filter((_, i) => i !== index))
+                      }
+                      aria-label="Eliminar variante"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 rounded-xl gap-2"
+                onClick={() =>
+                  setFormVariants((prev) => [...prev, { nombre: "", precio: "", activo: true }])
+                }
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Agregar variante
+              </Button>
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">

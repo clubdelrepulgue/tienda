@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import { Minus, Plus, X } from "lucide-react"
 import {
@@ -39,7 +39,22 @@ export function ProductModal({
 }: ProductModalProps) {
   const [quantity, setQuantity] = useState(1)
   const [selectedModifiers, setSelectedModifiers] = useState<CartItemModifier[]>([])
+  const [selectedVariantId, setSelectedVariantId] = useState<string>("")
   const addItem = useCartStore((s) => s.addItem)
+
+  const activeVariants = useMemo(
+    () => (product?.variants || []).filter((v) => v.active),
+    [product]
+  )
+  const hasVariants = activeVariants.length > 0
+
+  // Pick a sensible default variant whenever the product changes
+  useEffect(() => {
+    if (!product) return
+    setSelectedVariantId(activeVariants[0]?.id || "")
+    setSelectedModifiers([])
+    setQuantity(1)
+  }, [product, activeVariants])
 
   if (!product) return null
 
@@ -47,8 +62,13 @@ export function ProductModal({
     product.modifierGroups.includes(g.id)
   )
 
+  const selectedVariant = activeVariants.find((v) => v.id === selectedVariantId)
+  const basePrice = hasVariants
+    ? (selectedVariant?.price ?? activeVariants[0]?.price ?? product.price)
+    : product.price
+
   const modifiersTotal = selectedModifiers.reduce((sum, m) => sum + m.price, 0)
-  const itemTotal = (product.price + modifiersTotal) * quantity
+  const itemTotal = (basePrice + modifiersTotal) * quantity
 
   const handleToggleModifier = (
     groupId: string,
@@ -83,14 +103,21 @@ export function ProductModal({
   }
 
   const handleAddToCart = () => {
+    if (hasVariants && !selectedVariant) {
+      toast.error(`Elegí ${product.variantGroupLabel.toLowerCase()}`)
+      return
+    }
+
     const item = {
       productId: product.id,
       branchId: branch.id,
       name: product.name,
       image: product.image,
-      price: product.price,
+      price: basePrice,
       quantity,
       modifiers: selectedModifiers,
+      variantId: selectedVariant?.id,
+      variantName: selectedVariant?.name,
     }
 
     if (onAddItem) {
@@ -106,12 +133,14 @@ export function ProductModal({
     toast.success(successMessage ? successMessage(product) : `${product.name} agregado al carrito`)
     setQuantity(1)
     setSelectedModifiers([])
+    setSelectedVariantId(activeVariants[0]?.id || "")
     onClose()
   }
 
   const handleClose = () => {
     setQuantity(1)
     setSelectedModifiers([])
+    setSelectedVariantId(activeVariants[0]?.id || "")
     onClose()
   }
 
@@ -141,7 +170,7 @@ export function ProductModal({
               </p>
             )}
             <p className="text-xl font-extrabold text-white sm:text-2xl">
-              ${product.price.toFixed(2)}
+              ${basePrice.toFixed(2)}
             </p>
           </div>
           <Button
@@ -158,6 +187,42 @@ export function ProductModal({
         {/* Modifiers */}
         <div className="product-modal-scroll min-h-0 overflow-y-auto bg-white">
           <div className="flex flex-col gap-5 p-5 pr-6">
+            {hasVariants && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-bold text-foreground text-sm">
+                    {product.variantGroupLabel}
+                  </h4>
+                  <span className="text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-semibold">
+                    Requerido
+                  </span>
+                </div>
+                <RadioGroup
+                  value={selectedVariantId}
+                  onValueChange={setSelectedVariantId}
+                >
+                  <div className="flex flex-col gap-2">
+                    {activeVariants.map((variant) => (
+                      <Label
+                        key={variant.id}
+                        htmlFor={`variant-${variant.id}`}
+                        className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3 cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <RadioGroupItem value={variant.id} id={`variant-${variant.id}`} />
+                          <span className="text-sm font-medium text-foreground">
+                            {variant.name}
+                          </span>
+                        </div>
+                        <span className="text-sm font-semibold text-primary">
+                          ${variant.price.toFixed(2)}
+                        </span>
+                      </Label>
+                    ))}
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
             {productModifierGroups.map((group) => (
               <div key={group.id}>
                 <div className="flex items-center justify-between mb-3">

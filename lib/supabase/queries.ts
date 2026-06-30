@@ -1,5 +1,5 @@
 import { createClient } from "./server"
-import type { Category, Product, ModifierGroup, ModifierOption, Order, Branch, CartItem, CartItemModifier, Coupon, DeliveryZone, Driver, UpsellRule } from "../types"
+import type { Category, Product, ProductVariant, ModifierGroup, ModifierOption, Order, Branch, CartItem, CartItemModifier, Coupon, DeliveryZone, Driver, UpsellRule } from "../types"
 
 // ─── Catalog Queries ───────────────────────────────────────────
 
@@ -77,6 +77,13 @@ export async function getProducts(branchId?: string): Promise<Product[]> {
         linksByProduct.set(link.producto_id, arr)
     }
 
+    // Storefront only shows active variants
+    const variantsByProduct = await getVariantsByProduct(
+        supabase,
+        productos.map((p) => p.id),
+        true
+    )
+
     return productos.map((row) => ({
         id: row.id,
         branchId: row.sucursal_id || "",
@@ -88,7 +95,44 @@ export async function getProducts(branchId?: string): Promise<Product[]> {
         categoryId: row.categoria_id,
         active: row.activo,
         modifierGroups: linksByProduct.get(row.id) || [],
+        variantGroupLabel: row.variant_group_label || "Tamaño",
+        variants: variantsByProduct.get(row.id) || [],
     }))
+}
+
+async function getVariantsByProduct(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    productIds: string[],
+    activeOnly: boolean
+): Promise<Map<string, ProductVariant[]>> {
+    const byProduct = new Map<string, ProductVariant[]>()
+    if (productIds.length === 0) return byProduct
+
+    let query = supabase
+        .from("producto_variantes")
+        .select("*")
+        .in("producto_id", productIds)
+
+    if (activeOnly) {
+        query = query.eq("activo", true)
+    }
+
+    const { data, error } = await query.order("orden", { ascending: true })
+    if (error) throw error
+
+    for (const row of data || []) {
+        const arr = byProduct.get(row.producto_id) || []
+        arr.push({
+            id: row.id,
+            name: row.nombre,
+            price: parseFloat(row.precio),
+            active: row.activo,
+            order: row.orden ?? 0,
+        })
+        byProduct.set(row.producto_id, arr)
+    }
+
+    return byProduct
 }
 
 export async function getAllProducts(branchId?: string): Promise<Product[]> {
@@ -120,6 +164,13 @@ export async function getAllProducts(branchId?: string): Promise<Product[]> {
         linksByProduct.set(link.producto_id, arr)
     }
 
+    // Admin needs every variant, including inactive ones
+    const variantsByProduct = await getVariantsByProduct(
+        supabase,
+        productos.map((p) => p.id),
+        false
+    )
+
     return productos.map((row) => ({
         id: row.id,
         branchId: row.sucursal_id || "",
@@ -131,6 +182,8 @@ export async function getAllProducts(branchId?: string): Promise<Product[]> {
         categoryId: row.categoria_id,
         active: row.activo,
         modifierGroups: linksByProduct.get(row.id) || [],
+        variantGroupLabel: row.variant_group_label || "Tamaño",
+        variants: variantsByProduct.get(row.id) || [],
     }))
 }
 
@@ -228,6 +281,7 @@ function mapOrderItems(items: any[], branchId: string): CartItem[] {
         price: parseFloat(item.precio_unit),
         quantity: item.qty,
         modifiers: (item.modifiers_json || []) as CartItemModifier[],
+        variantName: item.variante_snapshot || undefined,
     }))
 }
 
