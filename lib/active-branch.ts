@@ -40,6 +40,7 @@ export function branchThemeStyle(
     "--sidebar-primary": brand,
     "--sidebar-ring": brand,
     "--ring": brand,
+    "--chart-1": brand,
   } as CSSProperties
 }
 
@@ -50,6 +51,7 @@ export const BRANCH_THEME_VARS = [
   "--sidebar-primary",
   "--sidebar-ring",
   "--ring",
+  "--chart-1",
 ] as const
 
 export function applyBranchThemeVars(

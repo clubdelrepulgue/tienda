@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { DEFAULT_PRODUCT_IMAGE } from "@/lib/product-image"
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
                 productId: item.producto_id || "",
                 branchId: row.sucursal_id || "",
                 name: item.nombre_snapshot,
-                image: "/images/classic-burger.jpg",
+                image: DEFAULT_PRODUCT_IMAGE,
                 price: parseFloat(item.precio_unit),
                 quantity: item.qty,
                 modifiers: (item.modifiers_json || []) as any[],

@@ -16,15 +16,15 @@ export function CategoryTabs({
   onCategoryChange,
 }: CategoryTabsProps) {
   return (
-    <div className="sticky top-[57px] z-40 border-b border-border bg-background/85 backdrop-blur-xl">
+    <div className="sticky top-[var(--storefront-header-height)] z-40 bg-[#F7F7F7]/88 backdrop-blur-xl">
       <ScrollArea className="mx-auto max-w-6xl">
-        <div className="flex items-center gap-2.5 px-4 py-2 sm:px-5 lg:px-6">
+        <div className="flex items-center gap-2.5 px-4 pb-3 pt-4 sm:px-5 lg:px-6">
           <button
             onClick={() => onCategoryChange("all")}
             className={cn(
-              "shrink-0 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
+              "title-case shrink-0 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
               activeCategory === "all"
-                ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(232,99,3,0.22)]"
+                ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                 : "border-border bg-background text-foreground/75 hover:border-primary/20 hover:bg-primary/5 hover:text-foreground"
             )}
           >
@@ -35,9 +35,9 @@ export function CategoryTabs({
               key={cat.id}
               onClick={() => onCategoryChange(cat.id)}
               className={cn(
-                "shrink-0 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
+                "title-case shrink-0 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
                 activeCategory === cat.id
-                  ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(232,99,3,0.22)]"
+                  ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                   : "border-border bg-background text-foreground/75 hover:border-primary/20 hover:bg-primary/5 hover:text-foreground"
               )}
             >

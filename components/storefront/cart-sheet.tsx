@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useCartStore } from "@/lib/store"
 import type { Product, UpsellRule } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 
 type CartSuggestion = {
@@ -156,14 +157,14 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <h4 className="font-semibold text-sm text-foreground truncate">
+                          <h4 className="title-case truncate text-sm font-semibold text-foreground">
                             {item.name}
                             {item.variantName && (
                               <span className="text-muted-foreground font-normal"> · {item.variantName}</span>
                             )}
                           </h4>
                           <span className="text-sm font-bold text-primary shrink-0">
-                            ${lineTotal.toFixed(2)}
+                            {formatPrice(lineTotal)}
                           </span>
                         </div>
                         {item.modifiers.length > 0 && (
@@ -252,7 +253,7 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start gap-2">
-                                <p className="truncate text-sm font-bold text-foreground">
+                                <p className="title-case truncate text-sm font-bold text-foreground">
                                   {product.name}
                                 </p>
                                 {hasDiscount && (
@@ -263,11 +264,11 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
                               </div>
                               <div className="mt-1 flex items-center gap-2">
                                 <span className="text-sm font-extrabold text-primary">
-                                  ${discountedPrice.toFixed(2)}
+                                  {formatPrice(discountedPrice)}
                                 </span>
                                 {hasDiscount && (
                                   <span className="text-xs text-muted-foreground line-through">
-                                    ${product.price.toFixed(2)}
+                                    {formatPrice(product.price)}
                                   </span>
                                 )}
                               </div>
@@ -293,7 +294,7 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground text-sm">Subtotal</span>
                 <span className="text-xl font-extrabold text-foreground">
-                  ${totalPrice.toFixed(2)}
+                  {formatPrice(totalPrice)}
                 </span>
               </div>
               <Separator />

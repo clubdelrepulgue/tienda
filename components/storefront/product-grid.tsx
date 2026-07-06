@@ -35,7 +35,7 @@ export function ProductGrid({
       {groupedByCategory.map(({ category, items }, idx) => (
         <section key={category.id} id={`category-${category.slug}`}>
           <h2
-            className="text-xl font-extrabold text-foreground mb-5"
+            className="title-case mb-5 text-xl font-extrabold text-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
             {category.name}

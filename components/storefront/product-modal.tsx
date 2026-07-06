@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useCartStore } from "@/lib/store"
 import type { Branch, Product, CartItem, CartItemModifier, ModifierGroup } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface ProductModalProps {
@@ -165,7 +166,7 @@ export function ProductModal({
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1 p-5">
             <DialogTitle
-              className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl"
+              className="title-case text-2xl font-extrabold tracking-tight text-white sm:text-3xl"
               style={{ fontFamily: "var(--font-heading)" }}
             >
               {product.name}
@@ -176,7 +177,7 @@ export function ProductModal({
               </p>
             )}
             <p className="text-xl font-extrabold text-white sm:text-2xl">
-              ${basePrice.toFixed(2)}
+              {formatPrice(basePrice)}
             </p>
           </div>
           <Button
@@ -221,7 +222,7 @@ export function ProductModal({
                           </span>
                         </div>
                         <span className="text-sm font-semibold text-primary">
-                          ${variant.price.toFixed(2)}
+                          {formatPrice(variant.price)}
                         </span>
                       </Label>
                     ))}
@@ -277,7 +278,7 @@ export function ProductModal({
                           </div>
                           {option.price > 0 && (
                             <span className="text-sm font-semibold text-primary">
-                              +${option.price.toFixed(2)}
+                              +{formatPrice(option.price)}
                             </span>
                           )}
                         </Label>
@@ -318,7 +319,7 @@ export function ProductModal({
                           </div>
                           {option.price > 0 && (
                             <span className="text-sm font-semibold text-primary">
-                              +${option.price.toFixed(2)}
+                              +{formatPrice(option.price)}
                             </span>
                           )}
                         </Label>
@@ -375,7 +376,7 @@ export function ProductModal({
             className="flex-1 h-11 rounded-xl bg-primary text-white hover:bg-primary/90 font-bold shadow-sm"
             onClick={handleAddToCart}
           >
-            {addButtonLabel} — ${itemTotal.toFixed(2)}
+            {addButtonLabel} — {formatPrice(itemTotal)}
           </Button>
         </div>
       </DialogContent>

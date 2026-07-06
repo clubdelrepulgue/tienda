@@ -4,6 +4,7 @@ import Image from "next/image"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Product } from "@/lib/types"
+import { formatPrice } from "@/lib/utils"
 
 interface ProductCardProps {
   product: Product
@@ -30,7 +31,7 @@ export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps)
           onSelect(product)
         }
       }}
-      aria-label={`Ver ${product.name}, ${hasVariants ? "desde " : ""}$${displayPrice.toFixed(2)}`}
+      aria-label={`Ver ${product.name}, ${hasVariants ? "desde " : ""}${formatPrice(displayPrice)}`}
     >
       {/* Square image area with orange background */}
       <div className="relative aspect-square overflow-hidden bg-primary/10">
@@ -45,19 +46,19 @@ export function ProductCard({ product, onSelect, onQuickAdd }: ProductCardProps)
 
       <div className="p-3.5 flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-foreground text-sm leading-snug truncate">
+          <h3 className="title-case truncate text-sm font-bold leading-snug text-foreground">
             {product.name}
           </h3>
           {product.description && (
-            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+            <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">
               {product.description}
             </p>
           )}
           <p className="text-base font-extrabold text-primary mt-1.5">
             {hasVariants && (
-              <span className="text-xs font-semibold text-muted-foreground mr-1">Desde</span>
+              <span className="mr-1 text-[11px] font-medium text-muted-foreground/70">Desde</span>
             )}
-            ${displayPrice.toFixed(2)}
+            {formatPrice(displayPrice)}
           </p>
         </div>
         <Button

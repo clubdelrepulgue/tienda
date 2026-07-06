@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Order, OrderStatus } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatPrice } from "@/lib/utils"
 import { useActiveBranch } from "./branch-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -100,7 +100,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-card-foreground">
-              ${revenue.toFixed(2)}
+              {formatPrice(revenue)}
             </p>
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
               <TrendingUp className="h-3 w-3 text-chart-3" />
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-card-foreground">
-              ${todayOrders.length > 0 ? (revenue / todayOrders.length).toFixed(2) : "0.00"}
+              {formatPrice(todayOrders.length > 0 ? revenue / todayOrders.length : 0)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Por pedido</p>
           </CardContent>
@@ -205,7 +205,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-semibold text-sm text-card-foreground">
-                        ${order.total.toFixed(2)}
+                        {formatPrice(order.total)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(order.createdAt).toLocaleTimeString([], {

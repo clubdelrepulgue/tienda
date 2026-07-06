@@ -9,6 +9,7 @@ import { CartSheet } from "@/components/storefront/cart-sheet"
 import { FloatingCart } from "@/components/storefront/floating-cart"
 import { useCartStore } from "@/lib/store"
 import type { Branch, Product, Category, ModifierGroup, UpsellRule } from "@/lib/types"
+import { applyBranchThemeVars, DEFAULT_BRAND_COLOR } from "@/lib/active-branch"
 import { toast } from "sonner"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -27,7 +28,7 @@ function Banner({ branch }: { branch: Branch }) {
     const hasHeroCopy = !!(branch.heroTitle || branch.heroSubtitle)
 
     return (
-        <section className="border-b border-border px-4 py-[5px] sm:px-6">
+        <section className="px-4 py-[5px] sm:px-6">
             <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-2xl">
                 <Image
                     src={bannerUrl}
@@ -85,6 +86,10 @@ export function StorefrontShell({
         setBranchBlocked(!result.success)
     }, [branch, setBranchContext])
 
+    useEffect(() => {
+        applyBranchThemeVars(document.documentElement, branch)
+    }, [branch])
+
     const handleSelectProduct = (product: Product) => {
         if (branchBlocked) {
             toast.error("Vacia el carrito para cambiar de sucursal")
@@ -113,14 +118,17 @@ export function StorefrontShell({
     }
 
     const branchStyle = {
-        "--primary": branch.brandColor || "#E86303",
-        "--ring": branch.brandColor || "#E86303",
-        "--chart-1": branch.brandColor || "#E86303",
+        "--primary": branch.brandColor || DEFAULT_BRAND_COLOR,
+        "--ring": branch.brandColor || DEFAULT_BRAND_COLOR,
+        "--chart-1": branch.brandColor || DEFAULT_BRAND_COLOR,
         "--accent": branch.accentColor || "oklch(0.97 0 0)",
     } as CSSProperties
 
     return (
-        <div className="flex min-h-dvh flex-col bg-[#F7F7F7]" style={branchStyle}>
+        <div
+            className="flex min-h-dvh flex-col bg-[#F7F7F7] [--storefront-header-height:73px]"
+            style={branchStyle}
+        >
             <Header branch={branch} onCartOpen={() => setCartOpen(true)} />
             <Banner branch={branch} />
             {branchBlocked && cartItems.length > 0 && cartBranchId !== branch.id && (

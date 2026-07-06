@@ -18,6 +18,7 @@ import { createOrder } from "@/app/actions"
 import { CouponInput } from "@/components/storefront/coupon-input"
 import { GoogleMapsProvider, AddressSelector } from "@/components/maps"
 import { findDeliveryZoneForPoint, formatZoneMeta, getZoneDeliveryFee } from "@/lib/delivery-zones"
+import { applyBranchThemeVars } from "@/lib/active-branch"
 
 function getBranchCity(address: string) {
   const parts = address
@@ -147,6 +148,11 @@ export default function CheckoutPage() {
   const subtotalAfterDiscount = Math.max(0, totalPrice - couponDiscount)
   const deliveryFee = getDeliveryFee()
   const grandTotal = subtotalAfterDiscount + deliveryFee
+
+  useEffect(() => {
+    if (!selectedBranchInfo) return
+    applyBranchThemeVars(document.documentElement, selectedBranchInfo)
+  }, [selectedBranchInfo])
 
   const handlePlaceOrder = async () => {
     if (!cartBranchId) {

@@ -103,10 +103,48 @@
   background: #F7F7F7;
 }
 
+.home-branch-card {
+  animation: home-branch-zoom 4.8s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.home-branch-card:nth-child(2n) {
+  animation-delay: 0.45s;
+}
+
+.title-case {
+  text-transform: lowercase;
+}
+
+.title-case::first-letter {
+  text-transform: uppercase;
+}
+
+.home-branch-card:hover,
+.home-branch-card:focus-visible {
+  animation: none;
+  transform: translateY(-0.5rem) scale(1.018);
+}
+
+@keyframes home-branch-zoom {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.014);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-shell,
   .blazr-app-shell {
     transition: none;
+  }
+
+  .home-branch-card {
+    animation: none;
   }
 }
 

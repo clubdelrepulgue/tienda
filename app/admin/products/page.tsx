@@ -340,19 +340,13 @@ export default function ProductsPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="relative h-10 w-10 rounded-lg overflow-hidden shrink-0 bg-secondary">
-                          {product.images && product.images.length > 0 ? (
-                            <Image
-                              src={product.images[0]}
-                              alt={product.name}
-                              fill
-                              className="object-cover"
-                              sizes="40px"
-                            />
-                          ) : (
-                            <div className="flex items-center justify-center h-full w-full">
-                              <Upload className="h-4 w-4 text-muted-foreground/50" />
-                            </div>
-                          )}
+                          <Image
+                            src={product.image}
+                            alt={product.name}
+                            fill
+                            className="object-cover"
+                            sizes="40px"
+                          />
                         </div>
                         <span className="font-medium text-sm text-foreground">
                           {product.name}

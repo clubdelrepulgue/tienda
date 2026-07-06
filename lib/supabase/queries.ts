@@ -1,5 +1,6 @@
 import { createClient } from "./server"
 import type { Category, Product, ProductVariant, ModifierGroup, ModifierOption, Order, Branch, CartItem, CartItemModifier, Coupon, DeliveryZone, Driver, UpsellRule } from "../types"
+import { DEFAULT_PRODUCT_IMAGE, getProductImage } from "../product-image"
 
 // ─── Catalog Queries ───────────────────────────────────────────
 
@@ -90,7 +91,7 @@ export async function getProducts(branchId?: string): Promise<Product[]> {
         name: row.nombre,
         description: row.descripcion || "",
         price: parseFloat(row.precio),
-        image: (row.images && row.images.length > 0) ? row.images[0] : (row.image_url || "/images/classic-burger.jpg"),
+        image: getProductImage(row.images, row.image_url),
         images: row.images && row.images.length > 0 ? row.images : (row.image_url ? [row.image_url] : []),
         categoryId: row.categoria_id,
         active: row.activo,
@@ -177,7 +178,7 @@ export async function getAllProducts(branchId?: string): Promise<Product[]> {
         name: row.nombre,
         description: row.descripcion || "",
         price: parseFloat(row.precio),
-        image: (row.images && row.images.length > 0) ? row.images[0] : (row.image_url || "/images/classic-burger.jpg"),
+        image: getProductImage(row.images, row.image_url),
         images: row.images && row.images.length > 0 ? row.images : (row.image_url ? [row.image_url] : []),
         categoryId: row.categoria_id,
         active: row.activo,
@@ -277,7 +278,7 @@ function mapOrderItems(items: any[], branchId: string): CartItem[] {
         productId: item.producto_id || "",
         branchId,
         name: item.nombre_snapshot,
-        image: "/images/classic-burger.jpg",
+        image: DEFAULT_PRODUCT_IMAGE,
         price: parseFloat(item.precio_unit),
         quantity: item.qty,
         modifiers: (item.modifiers_json || []) as CartItemModifier[],
