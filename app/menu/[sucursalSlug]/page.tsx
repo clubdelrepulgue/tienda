@@ -1,6 +1,19 @@
 import { notFound } from "next/navigation"
 import { StorefrontShell } from "@/components/storefront/storefront-shell"
+
+// Cache each branch menu and refresh it in background at most every 60s
+export const revalidate = 60
+
+export async function generateStaticParams() {
+  try {
+    const branches = await getBranches()
+    return branches.map((branch) => ({ sucursalSlug: branch.slug }))
+  } catch {
+    return []
+  }
+}
 import {
+  getBranches,
   getBranchBySlug,
   getCategories,
   getModifierGroups,

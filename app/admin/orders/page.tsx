@@ -67,6 +67,7 @@ function OrderCard({
   now,
   updating,
   onNext,
+  onReject,
   showAssign,
   driver,
   deliveryDrivers = [],
@@ -80,6 +81,7 @@ function OrderCard({
   now: number
   updating: boolean
   onNext?: () => void
+  onReject?: () => void
   showAssign?: boolean
   driver?: Driver | null
   deliveryDrivers?: Driver[]
@@ -271,15 +273,29 @@ function OrderCard({
 
           <PrintReceiptButton order={order} branch={branch} variant="ghost" label="" />
 
-          {onNext && nextStatus && (
-            <Button
-              size="sm"
-              className="ml-auto h-9 max-w-full shrink-0 rounded-full bg-primary px-3 text-sm font-bold text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.24)] hover:bg-primary/90 active:scale-95 max-[420px]:basis-full"
-              onClick={onNext}
-            >
-              <span className="truncate">{buttonText}</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
+          {(onReject || (onNext && nextStatus)) && (
+            <div className="ml-auto flex min-w-0 items-center gap-2 max-[420px]:w-full">
+              {onReject && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 shrink-0 rounded-full border-destructive/30 px-3 text-sm font-bold text-destructive hover:bg-destructive/10 active:scale-95 max-[420px]:flex-1"
+                  onClick={onReject}
+                >
+                  Rechazar
+                </Button>
+              )}
+              {onNext && nextStatus && (
+                <Button
+                  size="sm"
+                  className="h-9 max-w-full shrink-0 rounded-full bg-primary px-3 text-sm font-bold text-primary-foreground shadow-[0_10px_24px_rgba(255,56,56,0.24)] hover:bg-primary/90 active:scale-95 max-[420px]:flex-1"
+                  onClick={onNext}
+                >
+                  <span className="truncate">{buttonText}</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           )}
 
           {showAssign && !isDeliveryDispatch && !nextStatus && !driver && (
@@ -432,7 +448,7 @@ function ReadyColumn({
                       className={cn(
                         "w-full min-w-0 overflow-hidden rounded-2xl border-border bg-card shadow-sm transition-all duration-200",
                         updatingId === order.id && "pointer-events-none opacity-50",
-                        isSelected && "border-primary ring-2 ring-primary"
+                        isSelected && "border-primary bg-primary/[0.04]"
                       )}
                     >
                       <CardContent className="p-3.5">
@@ -509,6 +525,7 @@ function ReadyColumn({
               updating={updatingId === order.id}
               departing={false}
               nextStatus="delivered"
+              buttonText="Entregado"
               onNext={() => onMarkDelivered(order.id)}
               branch={branch}
             />
@@ -661,6 +678,8 @@ const COLUMNS: Column[] = [
     headerTint: "from-amber-50",
     iconClassName: "border-amber-200 bg-amber-50 text-amber-700",
     statuses: ["accepted", "preparing"],
+    nextStatus: "ready",
+    buttonText: "Listo",
   },
   {
     id: "ready",
@@ -791,6 +810,11 @@ export default function OrdersPage() {
 
   const handleMarkDelivered = async (orderId: string) => {
     await handleNextStatus(orderId, "delivered")
+  }
+
+  const handleReject = async (orderId: string, orderNumber?: number) => {
+    if (!window.confirm(`¿Rechazar el pedido #${orderNumber}?`)) return
+    await handleNextStatus(orderId, "cancelled")
   }
 
   const handleToggleSelect = (orderId: string, checked: boolean) => {
@@ -982,6 +1006,12 @@ export default function OrdersPage() {
                             col.nextStatus
                               ? () =>
                                   handleNextStatus(order.id, col.nextStatus!)
+                              : undefined
+                          }
+                          onReject={
+                            col.id === "new"
+                              ? () =>
+                                  handleReject(order.id, order.orderNumber)
                               : undefined
                           }
                           branch={selectedBranchInfo}

@@ -207,10 +207,10 @@
     transform: scale(0.95);
   }
   
-  /* Soporte para notch en iPhone */
-  @supports (padding-top: env(safe-area-inset-top)) {
-    .min-h-screen {
-      min-height: -webkit-fill-available;
-    }
+  /* Soporte para notch en iPhone — usa dvh (dynamic viewport) en vez de
+     -webkit-fill-available, que colapsaba dentro del flex-column .app-shell
+     y dejaba una franja gris debajo del contenido. */
+  .min-h-screen {
+    min-height: 100dvh;
   }
 }

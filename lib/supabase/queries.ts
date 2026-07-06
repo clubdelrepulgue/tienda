@@ -1,4 +1,5 @@
 import { createClient } from "./server"
+import { createPublicClient } from "./public"
 import type { Category, Product, ProductVariant, ModifierGroup, ModifierOption, Order, Branch, CartItem, CartItemModifier, Coupon, DeliveryZone, Driver, UpsellRule } from "../types"
 import { DEFAULT_PRODUCT_IMAGE, getProductImage } from "../product-image"
 
@@ -23,7 +24,7 @@ function mapBranch(row: any): Branch {
 }
 
 export async function getCategories(branchId?: string): Promise<Category[]> {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
     let query = supabase
         .from("categorias")
         .select("*")
@@ -47,7 +48,7 @@ export async function getCategories(branchId?: string): Promise<Category[]> {
 }
 
 export async function getProducts(branchId?: string): Promise<Product[]> {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
 
     // Get products
     let productQuery = supabase
@@ -64,26 +65,26 @@ export async function getProducts(branchId?: string): Promise<Product[]> {
     if (pErr) throw pErr
     if (!productos) return []
 
-    // Get modifier group links
-    const { data: links, error: lErr } = await supabase
-        .from("producto_modifier_groups")
-        .select("*")
+    const productIds = productos.map((p) => p.id)
 
-    if (lErr) throw lErr
+    // Modifier links and variants don't depend on each other — fetch in parallel
+    const [linksResult, variantsByProduct] = await Promise.all([
+        supabase
+            .from("producto_modifier_groups")
+            .select("producto_id, group_id")
+            .in("producto_id", productIds),
+        // Storefront only shows active variants
+        getVariantsByProduct(supabase, productIds, true),
+    ])
+
+    if (linksResult.error) throw linksResult.error
 
     const linksByProduct = new Map<string, string[]>()
-    for (const link of links || []) {
+    for (const link of linksResult.data || []) {
         const arr = linksByProduct.get(link.producto_id) || []
         arr.push(link.group_id)
         linksByProduct.set(link.producto_id, arr)
     }
-
-    // Storefront only shows active variants
-    const variantsByProduct = await getVariantsByProduct(
-        supabase,
-        productos.map((p) => p.id),
-        true
-    )
 
     return productos.map((row) => ({
         id: row.id,
@@ -102,7 +103,7 @@ export async function getProducts(branchId?: string): Promise<Product[]> {
 }
 
 async function getVariantsByProduct(
-    supabase: Awaited<ReturnType<typeof createClient>>,
+    supabase: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createPublicClient>,
     productIds: string[],
     activeOnly: boolean
 ): Promise<Map<string, ProductVariant[]>> {
@@ -152,25 +153,25 @@ export async function getAllProducts(branchId?: string): Promise<Product[]> {
     if (pErr) throw pErr
     if (!productos) return []
 
-    const { data: links, error: lErr } = await supabase
-        .from("producto_modifier_groups")
-        .select("*")
+    const productIds = productos.map((p) => p.id)
 
-    if (lErr) throw lErr
+    const [linksResult, variantsByProduct] = await Promise.all([
+        supabase
+            .from("producto_modifier_groups")
+            .select("producto_id, group_id")
+            .in("producto_id", productIds),
+        // Admin needs every variant, including inactive ones
+        getVariantsByProduct(supabase, productIds, false),
+    ])
+
+    if (linksResult.error) throw linksResult.error
 
     const linksByProduct = new Map<string, string[]>()
-    for (const link of links || []) {
+    for (const link of linksResult.data || []) {
         const arr = linksByProduct.get(link.producto_id) || []
         arr.push(link.group_id)
         linksByProduct.set(link.producto_id, arr)
     }
-
-    // Admin needs every variant, including inactive ones
-    const variantsByProduct = await getVariantsByProduct(
-        supabase,
-        productos.map((p) => p.id),
-        false
-    )
 
     return productos.map((row) => ({
         id: row.id,
@@ -189,7 +190,7 @@ export async function getAllProducts(branchId?: string): Promise<Product[]> {
 }
 
 export async function getModifierGroups(branchId?: string): Promise<ModifierGroup[]> {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
 
     let groupsQuery = supabase
         .from("modifier_groups")
@@ -202,12 +203,13 @@ export async function getModifierGroups(branchId?: string): Promise<ModifierGrou
     const { data: groups, error: gErr } = await groupsQuery.order("orden", { ascending: true })
 
     if (gErr) throw gErr
-    if (!groups) return []
+    if (!groups || groups.length === 0) return []
 
     const { data: options, error: oErr } = await supabase
         .from("modifier_options")
         .select("*")
         .eq("activo", true)
+        .in("group_id", groups.map((g) => g.id))
         .order("orden", { ascending: true })
 
     if (oErr) throw oErr
@@ -234,7 +236,7 @@ export async function getModifierGroups(branchId?: string): Promise<ModifierGrou
 }
 
 export async function getBranches(): Promise<Branch[]> {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
     const { data, error } = await supabase
         .from("sucursales")
         .select("*")
@@ -247,7 +249,7 @@ export async function getBranches(): Promise<Branch[]> {
 }
 
 export async function getBranchBySlug(slug: string): Promise<Branch | null> {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
     const { data, error } = await supabase
         .from("sucursales")
         .select("*")
@@ -259,7 +261,7 @@ export async function getBranchBySlug(slug: string): Promise<Branch | null> {
 }
 
 export async function getBranchById(id: string): Promise<Branch | null> {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
     const { data, error } = await supabase
         .from("sucursales")
         .select("*")
@@ -441,7 +443,7 @@ export async function getCoupons(): Promise<Coupon[]> {
 // ─── Delivery Zones ────────────────────────────────────────────
 
 export async function getDeliveryZones(branchId?: string): Promise<DeliveryZone[]> {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
 
     let query = supabase
         .from("delivery_zones")
@@ -610,7 +612,7 @@ export async function getDriverDeliveries(driverId: string): Promise<Order[]> {
 // ─── Upsells ───────────────────────────────────────────────────
 
 export async function getUpsellRules(branchId?: string): Promise<UpsellRule[]> {
-    const supabase = await createClient()
+    const supabase = createPublicClient()
 
     let query = supabase
         .from("upsell_rules")

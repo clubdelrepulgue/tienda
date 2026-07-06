@@ -16,10 +16,18 @@ export async function GET(request: Request) {
         const openBranchIds = new Set(openBranches.map((branch) => branch.id))
         const activeZones = zones.filter((zone) => openBranchIds.has(zone.branchId))
 
-        return NextResponse.json({
-            branches: openBranches,
-            deliveryZones: activeZones,
-        })
+        return NextResponse.json(
+            {
+                branches: openBranches,
+                deliveryZones: activeZones,
+            },
+            {
+                headers: {
+                    // Branches/zones change rarely: cache at the CDN per branchId
+                    "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+                },
+            }
+        )
     } catch (error: any) {
         return NextResponse.json(
             { error: error.message || "No se pudieron cargar los datos de checkout" },

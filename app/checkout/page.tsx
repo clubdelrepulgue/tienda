@@ -50,6 +50,7 @@ export default function CheckoutPage() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(false)
+  const [redirecting, setRedirecting] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranch, setSelectedBranch] = useState("")
   const [allDeliveryZones, setAllDeliveryZones] = useState<DeliveryZone[]>([])
@@ -208,15 +209,25 @@ export default function CheckoutPage() {
         return
       }
 
-      clearCart()
-      clearCheckoutDraft()
+      setRedirecting(true)
       toast.success(`¡Pedido #${result.orderNumber} realizado!`)
       router.push(`/order/${result.trackingToken}`)
+      clearCart()
+      clearCheckoutDraft()
     } catch {
       toast.error("Algo salió mal. Por favor intentá de nuevo.")
     } finally {
       setLoading(false)
     }
+  }
+
+  if (redirecting) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-secondary p-6">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <p className="text-muted-foreground">Redirigiendo a tu pedido…</p>
+      </div>
+    )
   }
 
   if (items.length === 0) {

@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
-import { Map, AdvancedMarker, Marker, Pin, useMap } from "@vis.gl/react-google-maps"
+import { Map, AdvancedMarker, Marker, useMap } from "@vis.gl/react-google-maps"
 import { Card, CardContent } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
-import { Navigation, Clock, Bike, MapPin, Gauge } from "lucide-react"
+import { Navigation, Clock, Bike, Home, Store, Gauge } from "lucide-react"
 
 interface LiveTrackingMapProps {
     orderId: string
@@ -20,6 +20,12 @@ interface LiveTrackingMapProps {
         speed?: number | null
     } | null
     height?: string
+    /**
+     * Increment this value to (re)fit the map viewport to the full route
+     * (driver → destination → branch). Used by the "Navegar" action so the
+     * driver stays inside the app instead of jumping to an external maps tab.
+     */
+    focusSignal?: number
 }
 
 interface DriverLocation {
@@ -40,6 +46,43 @@ interface RouteInfo {
 const routeCache = new globalThis.Map<string, { route: RouteInfo; cachedAt: number }>()
 const ROUTE_CACHE_MS = 60_000
 const ROUTE_MIN_DISTANCE_KM = 0.15
+
+// --- Distinct pin icons (SVG data URIs) for the classic <Marker> fallback ---
+// These are used when there's no Map ID (AdvancedMarker unavailable), so each
+// point — destination, driver, restaurant — is clearly distinguishable.
+function pinDataUri(color: string, glyph: string): string {
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='52' viewBox='0 0 40 52'>
+  <defs><filter id='s' x='-30%' y='-20%' width='160%' height='150%'>
+    <feDropShadow dx='0' dy='1.5' stdDeviation='1.5' flood-opacity='0.35'/></filter></defs>
+  <path filter='url(#s)' fill='${color}' stroke='#ffffff' stroke-width='2.5'
+    d='M20 3C11.7 3 5 9.7 5 18c0 10.5 15 29 15 29s15-18.5 15-29C35 9.7 28.3 3 20 3z'/>
+  <g transform='translate(20 18)'>${glyph}</g>
+</svg>`
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+}
+
+// Glyphs centered around (0,0)
+const GLYPH_HOME =
+    "<path fill='#fff' d='M0 -8 L-8 -0.5 H-5.3 V8 H-1.7 V1.5 H1.7 V8 H5.3 V-0.5 H8 Z'/>"
+const GLYPH_BIKE =
+    "<g fill='none' stroke='#fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='-5.5' cy='3.5' r='3.6'/><circle cx='5.5' cy='3.5' r='3.6'/><path d='M-5.5 3.5 L-1.5 -4.5 L5.5 3.5 M-1.5 -4.5 L2 -4.5'/></g>"
+const GLYPH_STORE =
+    "<g fill='#fff'><path d='M-8 -6 h16 l-1.8 4.5 h-12.4 z'/><path d='M-6 0 h12 v7.5 h-4 v-4.5 h-4 v4.5 h-4 z'/></g>"
+
+const ICON_DESTINATION = pinDataUri("#ef4444", GLYPH_HOME)
+const ICON_DRIVER = pinDataUri("#16a34a", GLYPH_BIKE)
+const ICON_BRANCH = pinDataUri("#f97316", GLYPH_STORE)
+
+// Wrap a data URI as a google.maps icon with proper size/anchor once the API is
+// loaded; falls back to the bare URL string before then.
+function markerIcon(dataUri: string) {
+    if (typeof google === "undefined" || !google.maps) return dataUri
+    return {
+        url: dataUri,
+        scaledSize: new google.maps.Size(40, 52),
+        anchor: new google.maps.Point(20, 50),
+    }
+}
 
 // Decode Google encoded polyline into LatLng array
 function decodePolyline(encoded: string): google.maps.LatLngLiteral[] {
@@ -108,6 +151,39 @@ function RoutePolyline({ encodedPath }: { encodedPath: string }) {
     return null
 }
 
+// Fits the map viewport to the given points whenever `signal` changes.
+// Points are read from a ref so the effect only re-runs on an explicit signal,
+// not on every driver-location update.
+function MapFocuser({
+    signal,
+    points,
+}: {
+    signal: number
+    points: google.maps.LatLngLiteral[]
+}) {
+    const map = useMap()
+    const pointsRef = useRef(points)
+    pointsRef.current = points
+
+    useEffect(() => {
+        if (!map || signal === 0) return
+        const pts = pointsRef.current
+        if (pts.length === 0) return
+
+        if (pts.length === 1) {
+            map.setCenter(pts[0])
+            map.setZoom(16)
+            return
+        }
+
+        const bounds = new google.maps.LatLngBounds()
+        pts.forEach((p) => bounds.extend(p))
+        map.fitBounds(bounds, 56)
+    }, [map, signal])
+
+    return null
+}
+
 // Haversine fallback when Directions API is unavailable
 function haversineDistance(
     lat1: number,
@@ -127,6 +203,17 @@ function haversineDistance(
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+// Human-friendly relative time in Spanish (e.g. "hace 5 s", "hace 3 min")
+function formatRelative(from: Date, nowMs: number): string {
+    const seconds = Math.max(0, Math.round((nowMs - from.getTime()) / 1000))
+    if (seconds < 10) return "ahora mismo"
+    if (seconds < 60) return `hace ${seconds} s`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `hace ${minutes} min`
+    const hours = Math.floor(minutes / 60)
+    return `hace ${hours} h`
+}
+
 export function LiveTrackingMap({
     orderId,
     driverId,
@@ -135,9 +222,11 @@ export function LiveTrackingMap({
     branchLocation,
     initialDriverLocation,
     height = "350px",
+    focusSignal = 0,
 }: LiveTrackingMapProps) {
     const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null)
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+    const [now, setNow] = useState(() => Date.now())
     const [route, setRoute] = useState<RouteInfo | null>(null)
     const [routeLoading, setRouteLoading] = useState(false)
     const hasMapId = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID
@@ -241,6 +330,13 @@ export function LiveTrackingMap({
         fetchRoute(branchLocation.lat, branchLocation.lng)
     }, [branchLocation, driverLocation, fetchRoute])
 
+    // Ticking clock so the "last updated" label stays fresh without a new fetch
+    useEffect(() => {
+        if (!lastUpdated) return
+        const interval = window.setInterval(() => setNow(Date.now()), 1000)
+        return () => window.clearInterval(interval)
+    }, [lastUpdated])
+
     // Subscribe to driver location updates
     useEffect(() => {
         if (!driverId) return
@@ -311,7 +407,7 @@ export function LiveTrackingMap({
                     if (loc) {
                         const location = parseLocation(loc)
                         setDriverLocation(location)
-                        setLastUpdated(new Date())
+                        setLastUpdated(location.updatedAt ? new Date(location.updatedAt) : new Date())
                         fetchRoute(location.lat, location.lng)
                     }
                 }
@@ -329,6 +425,12 @@ export function LiveTrackingMap({
               lng: (driverLocation.lng + destination.lng) / 2,
           }
         : destination
+
+    // Points the "Navegar" action fits the viewport to
+    const focusPoints: google.maps.LatLngLiteral[] = []
+    if (driverLocation) focusPoints.push({ lat: driverLocation.lat, lng: driverLocation.lng })
+    focusPoints.push({ lat: destination.lat, lng: destination.lng })
+    if (branchLocation) focusPoints.push(branchLocation)
 
     // Format speed for display
     const speedDisplay =
@@ -392,6 +494,9 @@ export function LiveTrackingMap({
                     disableDefaultUI={false}
                     mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || undefined}
                 >
+                    {/* Fit-to-route on "Navegar" */}
+                    <MapFocuser signal={focusSignal} points={focusPoints} />
+
                     {/* Route polyline */}
                     {route?.polyline && <RoutePolyline encodedPath={route.polyline} />}
 
@@ -437,6 +542,8 @@ export function LiveTrackingMap({
                         <Marker
                             position={{ lat: driverLocation.lat, lng: driverLocation.lng }}
                             title="Repartidor"
+                            icon={markerIcon(ICON_DRIVER)}
+                            zIndex={3}
                         />
                     )}
 
@@ -444,16 +551,18 @@ export function LiveTrackingMap({
                     {hasMapId ? (
                         <AdvancedMarker
                             position={{ lat: destination.lat, lng: destination.lng }}
-                            title="Destino"
+                            title="Destino de entrega"
                         >
                             <div className="h-10 w-10 rounded-full bg-red-500 flex items-center justify-center shadow-lg border-2 border-white">
-                                <MapPin className="h-5 w-5 text-white" />
+                                <Home className="h-5 w-5 text-white" />
                             </div>
                         </AdvancedMarker>
                     ) : (
                         <Marker
                             position={{ lat: destination.lat, lng: destination.lng }}
-                            title="Destino"
+                            title="Destino de entrega"
+                            icon={markerIcon(ICON_DESTINATION)}
+                            zIndex={2}
                         />
                     )}
 
@@ -461,32 +570,41 @@ export function LiveTrackingMap({
                     {branchLocation && hasMapId && (
                         <AdvancedMarker
                             position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
-                            title="Restaurante"
+                            title="Local"
                         >
-                            <Pin
-                                background="#1f2937"
-                                borderColor="#000000"
-                                glyphColor="#ffffff"
-                                scale={1.2}
-                            />
+                            <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg border-2 border-white">
+                                <Store className="h-5 w-5 text-white" />
+                            </div>
                         </AdvancedMarker>
                     )}
                     {branchLocation && !hasMapId && (
-                        <Marker position={{ lat: branchLocation.lat, lng: branchLocation.lng }} title="Restaurante" />
+                        <Marker
+                            position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
+                            title="Local"
+                            icon={markerIcon(ICON_BRANCH)}
+                            zIndex={1}
+                        />
                     )}
                 </Map>
             </div>
 
             {/* Last updated */}
             {lastUpdated && (
-                <div className="flex items-center justify-center gap-2">
-                    <p className="text-xs text-muted-foreground">
-                        Última actualización: {lastUpdated.toLocaleTimeString()}
-                    </p>
-                    {driverLocation?.accuracy != null && (
-                        <span className="text-xs text-muted-foreground">
-                            (±{Math.round(driverLocation.accuracy)}m)
-                        </span>
+                <div className="flex flex-col items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                            Ubicación actualizada {formatRelative(lastUpdated, now)}
+                        </p>
+                        {driverLocation?.accuracy != null && (
+                            <span className="text-xs text-muted-foreground">
+                                (±{Math.round(driverLocation.accuracy)}m)
+                            </span>
+                        )}
+                    </div>
+                    {now - lastUpdated.getTime() > 90000 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-500">
+                            Esperando señal del repartidor…
+                        </p>
                     )}
                 </div>
             )}

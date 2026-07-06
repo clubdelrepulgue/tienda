@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -29,6 +29,8 @@ export default function DriverDashboardPage() {
     const [deliveryZones, setDeliveryZones] = useState<Record<string, DeliveryZone>>({})
     const [enRoutingId, setEnRoutingId] = useState<string | null>(null)
     const [deliveringId, setDeliveringId] = useState<string | null>(null)
+    const [navFocus, setNavFocus] = useState(0)
+    const mapSectionRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
 
     const { lastLocation, error, locationStatus } = useDriverLocation({
@@ -157,8 +159,11 @@ export default function DriverDashboardPage() {
 
     const handleNavigate = (order: Order) => {
         if (order.addressLat && order.addressLng) {
-            window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.addressLat},${order.addressLng}`, "_blank")
+            // Navigate in-app: focus the embedded map and fit it to the full route
+            mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+            setNavFocus((n) => n + 1)
         } else {
+            // No GPS coordinates — fall back to external maps using the address
             window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.address || "")}`, "_blank")
         }
     }
@@ -244,7 +249,7 @@ export default function DriverDashboardPage() {
                                 </h2>
                             </div>
 
-                            <Card className="rounded-2xl overflow-hidden border-primary/30 ring-2 ring-primary/20 shadow-md">
+                            <Card ref={mapSectionRef} className="rounded-2xl overflow-hidden border-primary/30 ring-2 ring-primary/20 shadow-md scroll-mt-20">
                                 {/* Map */}
                                 {enRouteOrder.addressLat && enRouteOrder.addressLng ? (
                                     <LiveTrackingMap
@@ -258,6 +263,7 @@ export default function DriverDashboardPage() {
                                         }}
                                         branchLocation={branchLocations[enRouteOrder.branchId]}
                                         height="220px"
+                                        focusSignal={navFocus}
                                     />
                                 ) : (
                                     <div className="h-32 bg-muted flex items-center justify-center">

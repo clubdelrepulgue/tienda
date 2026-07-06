@@ -1,5 +1,8 @@
 import Image from "next/image"
 import Link from "next/link"
+
+// Cache the rendered page and refresh it in background at most every 60s
+export const revalidate = 60
 import { ArrowRight, Instagram, ShoppingBag } from "lucide-react"
 import { getBranches } from "@/lib/supabase/queries"
 import type { Branch } from "@/lib/types"

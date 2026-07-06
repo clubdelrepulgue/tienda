@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import {
     Check,
@@ -40,7 +41,7 @@ const statusIndex: Record<string, number> = {
     new: 0,
     accepted: 1,
     preparing: 2,
-    ready: 3,
+    ready: 2,
     en_route: 3,
     delivered: 4,
     cancelled: -1,
@@ -50,20 +51,23 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
     const [order, setOrder] = useState<Order>(initialOrder)
     const [driverId, setDriverId] = useState<string | undefined>(initialOrder.driverId ?? undefined)
     const [branchLocation, setBranchLocation] = useState<{ lat: number; lng: number } | null>(null)
+    const [branch, setBranch] = useState<{ name: string; logoUrl: string } | null>(null)
 
-    // Fetch branch coordinates
+    // Fetch branch coordinates + brand info
     useEffect(() => {
         if (!order.branchId) return
         const supabase = createClient()
         supabase
             .from("sucursales")
-            .select("lat, lng")
+            .select("lat, lng, nombre, logo_url")
             .eq("id", order.branchId)
             .single()
             .then(({ data }) => {
-                if (data?.lat && data?.lng) {
+                if (!data) return
+                if (data.lat && data.lng) {
                     setBranchLocation({ lat: parseFloat(data.lat), lng: parseFloat(data.lng) })
                 }
+                setBranch({ name: data.nombre ?? "", logoUrl: data.logo_url || "" })
             })
     }, [order.branchId])
 
@@ -99,24 +103,36 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
 
     return (
         <GoogleMapsProvider>
-            <div className="min-h-screen bg-background">
+            <div className="flex min-h-dvh flex-1 flex-col bg-background">
                 <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
                     <div className="mx-auto max-w-2xl flex items-center gap-3 px-4 py-3">
-                        <Button variant="ghost" size="icon" className="rounded-full" asChild>
+                        <Button variant="ghost" size="icon" className="rounded-full shrink-0" asChild>
                             <Link href="/" aria-label="Volver al menú">
                                 <ArrowLeft className="h-5 w-5" />
                             </Link>
                         </Button>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                             <h1
                                 className="text-lg font-bold text-foreground"
                                 style={{ fontFamily: "var(--font-heading)" }}
                             >
                                 Pedido #{order.orderNumber}
                             </h1>
-                            <p className="text-xs text-muted-foreground">
-                                Seguí tu pedido en tiempo real
+                            <p className="text-xs text-muted-foreground truncate">
+                                {branch?.name
+                                    ? `${branch.name} · Seguí tu pedido en tiempo real`
+                                    : "Seguí tu pedido en tiempo real"}
                             </p>
+                        </div>
+                        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border bg-secondary">
+                            <Image
+                                src={branch?.logoUrl || "/assets/brand/logo.jpeg"}
+                                alt={branch?.name || "El Club del Repulgue"}
+                                fill
+                                sizes="40px"
+                                unoptimized
+                                className="object-cover"
+                            />
                         </div>
                     </div>
                 </header>
@@ -189,7 +205,7 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                         <Card className="rounded-2xl bg-card border-border overflow-hidden">
                             <CardContent className="p-4">
                                 <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
-                                    ¡El repartidor viene hacia vos!
+                                    ¡Tu pedido ya va en camino! 🛵
                                 </h2>
                                 <LiveTrackingMap
                                     orderId={order.id}

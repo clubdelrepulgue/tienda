@@ -7,8 +7,13 @@ import { formatPrice } from "@/lib/utils"
 
 const RECEIPT_CONFIG = {
   fallbackBusinessName: "El Club del Repulgue",
-  thankYouMessage: "¡Gracias por tu pedido!",
-  footer: "Volvé pronto",
+  // Footer copy — casual, confident, on-brand. Kept as plain text (no emoji)
+  // so it prints cleanly on monochrome thermal printers.
+  thankYouMessage: "¡GRACIAS POR TU COMPRA!",
+  // Punchy tagline under the thank-you line.
+  tagline: "Hecho al momento, con la mejor onda.",
+  // Small call-to-action / social prompt at the very bottom.
+  footer: "Seguinos en redes y volvé cuando quieras.",
   // Number of identical copies to print per job.
   copies: 2,
 }
@@ -34,6 +39,23 @@ const PAYMENT_LABELS: Record<string, string> = {
   cash: "Efectivo",
 }
 
+/**
+ * Trims noise from a formatted address for the compact receipt: drops the
+ * "Departamento de …" and country segments, strips leading postal codes, and
+ * keeps street + city.
+ * "Zorrilla de San Martín 965, 60000 Paysandú, Departamento de Paysandú, Uruguay"
+ *   → "Zorrilla de San Martín 965, Paysandú"
+ */
+function shortenAddress(address: string): string {
+  return address
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part && !/departamento|uruguay/i.test(part))
+    // Remove a leading postal code (4+ digits) while keeping street numbers.
+    .map((part) => part.replace(/^\d{4,}\s+/, "").trim())
+    .join(", ")
+}
+
 function row(label: string, value: string): string {
   return `
     <div style="display:flex;justify-content:space-between;margin-bottom:2px;font-size:12px;">
@@ -51,7 +73,8 @@ const DASHED_DIVIDER = `<div style="border-top:1px dashed #888;margin:5px 0;"></
  */
 export function renderReceiptHTML(order: Order, branch?: Branch | null): string {
   const businessName = branch?.name || RECEIPT_CONFIG.fallbackBusinessName
-  const branchAddress = branch?.address || ""
+  const branchAddress = shortenAddress(branch?.address || "")
+  const logoUrl = branch?.logoUrl || ""
 
   const deliveryMethodLabel = DELIVERY_METHOD_LABELS[order.deliveryMethod] || order.deliveryMethod
   const paymentLabel = PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod
@@ -95,20 +118,31 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
   const deliveryRow = order.deliveryFee > 0 ? row("Envío", formatPrice(order.deliveryFee)) : ""
   const addressBlock =
     order.deliveryMethod === "delivery" && order.address
-      ? `<div style="margin-bottom:2px;"><span style="font-size:11px;color:#444;">Dir: ${esc(order.address)}</span></div>`
+      ? `<div style="margin-bottom:2px;"><span style="font-size:11px;color:#444;">Dir: ${esc(shortenAddress(order.address))}</span></div>`
       : ""
   const phoneRow = order.customerPhone ? row("Tel", order.customerPhone) : ""
 
   return `
     <div class="receipt-content" style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#000;background:#fff;width:80mm;padding:4mm 6mm;box-sizing:border-box;line-height:1.4;">
       <div style="text-align:center;margin-bottom:6px;">
-        <div style="font-weight:bold;font-size:14px;letter-spacing:1px;text-transform:uppercase;">${esc(businessName)}</div>
+        ${
+          logoUrl
+            ? `<img src="${esc(logoUrl)}" alt="${esc(businessName)}" style="max-width:38mm;max-height:18mm;object-fit:contain;margin:0 auto 2px;display:block;filter:grayscale(100%) contrast(1.2);" />`
+            : `<div style="font-weight:bold;font-size:14px;letter-spacing:1px;text-transform:uppercase;">${esc(businessName)}</div>`
+        }
         ${branchAddress ? `<div style="font-size:11px;color:#444;">${esc(branchAddress)}</div>` : ""}
       </div>
 
       ${SOLID_DIVIDER}
 
-      ${row(`Pedido #${orderRef}`, dateStr)}
+      <div style="text-align:center;margin:2px 0 6px;">
+        <div style="font-size:10px;letter-spacing:1px;color:#555;text-transform:uppercase;">Pedido</div>
+        <div style="font-weight:bold;font-size:26px;line-height:1;letter-spacing:1px;">#${esc(orderRef)}</div>
+        <div style="font-size:11px;color:#444;margin-top:2px;">${esc(dateStr)}</div>
+      </div>
+
+      ${SOLID_DIVIDER}
+
       ${row("Cliente", order.customerName)}
       ${phoneRow}
       ${row("Tipo", deliveryMethodLabel)}
@@ -131,9 +165,10 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
 
       ${SOLID_DIVIDER}
 
-      <div style="text-align:center;margin-top:6px;">
-        <div style="font-weight:bold;margin-bottom:2px;">${esc(RECEIPT_CONFIG.thankYouMessage)}</div>
-        <div style="font-size:11px;color:#444;">${esc(RECEIPT_CONFIG.footer)}</div>
+      <div style="text-align:center;margin-top:8px;">
+        <div style="font-weight:bold;font-size:13px;letter-spacing:1.5px;margin-bottom:4px;">${esc(RECEIPT_CONFIG.thankYouMessage)}</div>
+        <div style="font-size:11px;color:#222;margin-bottom:5px;line-height:1.35;">${esc(RECEIPT_CONFIG.tagline)}</div>
+        <div style="font-size:10px;color:#666;letter-spacing:0.5px;line-height:1.35;">${esc(RECEIPT_CONFIG.footer)}</div>
       </div>
 
       <div style="margin-top:8px;text-align:center;font-size:10px;color:#bbb;letter-spacing:4px;">- - - - - - - - - - - -</div>
@@ -158,11 +193,14 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
 
   const iframe = document.createElement("iframe")
   iframe.setAttribute("aria-hidden", "true")
+  // Keep the iframe off-screen but give it a real size. A 0×0 iframe is not
+  // laid out by Chrome, so the @page size rule is dropped and printing falls
+  // back to A4. An 80mm-wide, positive-height frame forces proper layout.
   iframe.style.position = "fixed"
-  iframe.style.right = "0"
-  iframe.style.bottom = "0"
-  iframe.style.width = "0"
-  iframe.style.height = "0"
+  iframe.style.left = "-9999px"
+  iframe.style.top = "0"
+  iframe.style.width = "80mm"
+  iframe.style.height = "100vh"
   iframe.style.border = "0"
   document.body.appendChild(iframe)
 
@@ -190,27 +228,77 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
         <title>Recibo #${esc(orderRef)}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { background: #fff; }
-          @media print {
-            @page { margin: 0; size: 80mm auto; }
-          }
+          /* Force the printable area to a thermal-roll width (80mm) so the
+             browser doesn't fall back to A4. Must live at the top level —
+             some engines ignore @page nested inside @media print. */
+          @page { size: 80mm auto; margin: 0; }
+          html, body { width: 80mm; background: #fff; }
+          .receipt-content { width: 80mm !important; }
         </style>
       </head>
       <body>${copies}</body>
     </html>`)
   doc.close()
 
+  // Measures the real rendered height of one receipt and pins the @page size to
+  // exactly that, so each copy always lands on a single page instead of being
+  // split across two when the browser assumes a fixed (A4/Letter) page height.
+  const pinPageHeight = () => {
+    const el = doc.querySelector<HTMLElement>(".receipt-content")
+    if (!el) return
+    const heightPx = el.getBoundingClientRect().height
+    if (!heightPx) return
+    // px → mm at 96dpi, rounded up with a small buffer so content never spills.
+    const heightMm = Math.ceil((heightPx * 25.4) / 96) + 4
+    const style = doc.createElement("style")
+    // Appended last, so this @page rule overrides the "auto" one above.
+    style.textContent = `@page { size: 80mm ${heightMm}mm; margin: 0; }`
+    doc.head.appendChild(style)
+  }
+
+  let printed = false
   const triggerPrint = () => {
-    win.focus()
-    win.print()
-    cleanup()
+    if (printed) return
+    printed = true
+    // Wait for a paint frame so Chrome has laid the receipt out; printing too
+    // early makes it ignore @page and fall back to A4.
+    win.requestAnimationFrame(() => {
+      setTimeout(() => {
+        pinPageHeight()
+        win.focus()
+        win.print()
+        cleanup()
+      }, 50)
+    })
+  }
+
+  // Wait for the branch logo (remote image) to finish loading, otherwise it
+  // prints blank. Fall back to a timeout so a broken/slow image never blocks.
+  const waitForImagesThenPrint = () => {
+    const images = Array.from(doc.images || [])
+    const pending = images.filter((img) => !img.complete)
+    if (pending.length === 0) {
+      triggerPrint()
+      return
+    }
+    let remaining = pending.length
+    const done = () => {
+      remaining -= 1
+      if (remaining <= 0) triggerPrint()
+    }
+    pending.forEach((img) => {
+      img.addEventListener("load", done, { once: true })
+      img.addEventListener("error", done, { once: true })
+    })
+    // Safety net: never wait more than 2s for images.
+    setTimeout(triggerPrint, 2000)
   }
 
   win.onafterprint = cleanup
   if (doc.readyState === "complete") {
-    triggerPrint()
+    waitForImagesThenPrint()
   } else {
-    win.onload = triggerPrint
+    win.onload = waitForImagesThenPrint
   }
 }
 
