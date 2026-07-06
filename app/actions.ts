@@ -300,7 +300,13 @@ export async function createOrder(formData: {
         return { error: "El total del pedido no coincide con el subtotal y el envío" }
     }
 
-    const { data: order, error: orderError } = await supabase
+    // Writes go through the service-role client: guest checkout can INSERT via
+    // RLS, but the anon SELECT policy (post multi-branch migration) hides the
+    // just-created row, so `.insert().select()` RETURNING would return 0 rows
+    // and fail with PGRST116. All validation above already ran server-side.
+    const adminSupabase = createAdminClient()
+
+    const { data: order, error: orderError } = await adminSupabase
         .from("orders")
         .insert({
             customer_name: formData.customerName,
@@ -342,7 +348,7 @@ export async function createOrder(formData: {
         total: (item.price + item.modifiers.reduce((s, m) => s + m.price, 0)) * item.quantity,
     }))
 
-    const { error: itemsError } = await supabase
+    const { error: itemsError } = await adminSupabase
         .from("order_items")
         .insert(orderItems)
 
