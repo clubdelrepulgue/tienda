@@ -126,23 +126,46 @@ function isMissingTableError(error: any) {
     return error?.code === "42P01"
 }
 
-async function upsertCustomerOnOrder(adminSupabase: any, phone: string, name: string) {
+async function upsertCustomerOnOrder(
+    adminSupabase: any,
+    phone: string,
+    name: string,
+    authUserId?: string | null
+): Promise<string | null> {
     const normalized = normalizeCustomerPhone(phone)
-    if (!normalized) return
+    if (!normalized) return null
 
     try {
-        const { error } = await adminSupabase
+        const { data, error } = await adminSupabase
             .from("customers")
             .upsert(
                 { phone: normalized, name: name || null, last_order_at: new Date().toISOString() },
                 { onConflict: "phone" }
             )
+            .select("id, auth_user_id")
+            .single()
 
-        if (error && !isMissingTableError(error)) {
-            console.error("Error upserting customer:", error.message)
+        if (error) {
+            if (!isMissingTableError(error)) {
+                console.error("Error upserting customer:", error.message)
+            }
+            return null
         }
+
+        // Link the Google account to this customer, but never steal a phone
+        // that's already linked to a different account.
+        if (authUserId && !data.auth_user_id) {
+            await adminSupabase
+                .from("customers")
+                .update({ auth_user_id: authUserId })
+                .eq("id", data.id)
+                .is("auth_user_id", null)
+        }
+
+        return data.id as string
     } catch (error) {
         console.error("Error upserting customer:", error)
+        return null
     }
 }
 
@@ -488,8 +511,28 @@ export async function createOrder(formData: {
         return { error: itemsError.message }
     }
 
-    // Post-order bookkeeping (best-effort, never fails the order)
-    await upsertCustomerOnOrder(adminSupabase, formData.customerPhone, formData.customerName)
+    // Post-order bookkeeping (best-effort, never fails the order).
+    // Only online orders link the session's Google account: POS/phone orders
+    // are placed by staff and must never link the admin to the customer.
+    const authUserId = (formData.orderType || "online") === "online" ? user?.id || null : null
+    const customerId = await upsertCustomerOnOrder(
+        adminSupabase,
+        formData.customerPhone,
+        formData.customerName,
+        authUserId
+    )
+
+    if (customerId) {
+        // Column exists after scripts/013; ignore the error until then
+        const { error: linkError } = await adminSupabase
+            .from("orders")
+            .update({ customer_id: customerId })
+            .eq("id", order.id)
+
+        if (linkError && linkError.code !== "42703") {
+            console.error("Error linking order to customer:", linkError.message)
+        }
+    }
 
     if (redeemedCoupon && normalizedCustomerPhone) {
         try {

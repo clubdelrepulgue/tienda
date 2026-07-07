@@ -8,5 +8,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   // Only routes that need auth: the storefront stays middleware-free so
   // public pages skip the Supabase auth round-trips on every navigation.
-  matcher: ['/admin/:path*', '/api/admin/:path*'],
+  // /cuenta needs the session refreshed server-side for logged-in customers.
+  matcher: ['/admin/:path*', '/api/admin/:path*', '/cuenta/:path*', '/api/account/:path*'],
 }

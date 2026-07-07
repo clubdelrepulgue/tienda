@@ -36,9 +36,16 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  const isApiAdmin = request.nextUrl.pathname.startsWith('/api/admin')
+  const isAdminRoute =
+    request.nextUrl.pathname.startsWith('/admin') &&
+    !request.nextUrl.pathname.startsWith('/admin/login')
+  const needsAdminCheck =
+    isApiAdmin || request.nextUrl.pathname.startsWith('/admin')
+
   let isAdmin = false
   let adminRole: string | null = null
-  if (user) {
+  if (user && needsAdminCheck) {
     const { data: adminUser } = await supabase
       .from('admin_users')
       .select('role')
@@ -50,11 +57,6 @@ export async function updateSession(request: NextRequest) {
       adminRole = adminUser.role
     }
   }
-
-  const isApiAdmin = request.nextUrl.pathname.startsWith('/api/admin')
-  const isAdminRoute =
-    request.nextUrl.pathname.startsWith('/admin') &&
-    !request.nextUrl.pathname.startsWith('/admin/login')
 
   if (isAdminRoute || isApiAdmin) {
     if (!user || !isAdmin) {

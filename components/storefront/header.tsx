@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/lib/store"
+import { LoginButton } from "@/components/account/login-button"
 import type { Branch } from "@/lib/types"
 
 interface HeaderProps {
@@ -45,21 +46,24 @@ export function Header({ branch, onCartOpen }: HeaderProps) {
             </span>
           </Link>
         </h1>
-        <Button
-          variant="outline"
-          size="sm"
-          className="relative h-9 w-9 shrink-0 rounded-xl p-0 sm:w-auto sm:gap-2 sm:px-3"
-          onClick={onCartOpen}
-          aria-label={`Abrir carrito con ${totalItems} productos`}
-        >
-          <ShoppingBag className="h-4 w-4" />
-          <span className="hidden sm:inline">Carrito</span>
-          {totalItems > 0 && (
-            <span className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-semibold">
-              {totalItems}
-            </span>
-          )}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <LoginButton />
+          <Button
+            variant="outline"
+            size="sm"
+            className="relative h-9 w-9 shrink-0 rounded-xl p-0 sm:w-auto sm:gap-2 sm:px-3"
+            onClick={onCartOpen}
+            aria-label={`Abrir carrito con ${totalItems} productos`}
+          >
+            <ShoppingBag className="h-4 w-4" />
+            <span className="hidden sm:inline">Carrito</span>
+            {totalItems > 0 && (
+              <span className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-semibold">
+                {totalItems}
+              </span>
+            )}
+          </Button>
+        </div>
       </div>
     </header>
   )
