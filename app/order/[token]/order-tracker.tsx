@@ -14,19 +14,23 @@ import {
     MapPin,
     CreditCard,
     Banknote,
+    Gift,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 import type { Order, OrderStatus } from "@/lib/types"
+import type { CustomerLoyalty } from "@/lib/loyalty"
 import { cn, formatPrice } from "@/lib/utils"
 import { GoogleMapsProvider, LiveTrackingMap } from "@/components/maps"
 
 interface OrderTrackerProps {
     initialOrder: Order
     token: string
+    loyalty?: CustomerLoyalty | null
 }
 
 const steps: { status: OrderStatus; label: string; icon: any }[] = [
@@ -47,7 +51,7 @@ const statusIndex: Record<string, number> = {
     cancelled: -1,
 }
 
-export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
+export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps) {
     const [order, setOrder] = useState<Order>(initialOrder)
     const [driverId, setDriverId] = useState<string | undefined>(initialOrder.driverId ?? undefined)
     const [branchLocation, setBranchLocation] = useState<{ lat: number; lng: number } | null>(null)
@@ -319,6 +323,64 @@ export function OrderTracker({ initialOrder, token }: OrderTrackerProps) {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* Loyalty progress */}
+                    {loyalty && (
+                        <Card className="rounded-2xl border-primary/25 bg-primary/5">
+                            <CardContent className="p-5">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Gift className="h-4 w-4 text-primary" />
+                                    <h2 className="font-semibold text-card-foreground text-sm uppercase tracking-wide">
+                                        Club de fidelidad
+                                    </h2>
+                                </div>
+                                {loyalty.rewardCouponCode ? (
+                                    <div className="flex flex-col gap-2">
+                                        <p className="text-sm text-foreground">
+                                            🎉 ¡Completaste {loyalty.target} pedidos! Tenés un cupón de descuento para tu próximo pedido:
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard?.writeText(loyalty.rewardCouponCode!)
+                                                toast.success("Código copiado")
+                                            }}
+                                            className="w-fit rounded-lg border border-dashed border-primary/50 bg-white px-4 py-2 font-mono text-base font-bold tracking-wider text-primary"
+                                        >
+                                            {loyalty.rewardCouponCode}
+                                        </button>
+                                        <p className="text-xs text-muted-foreground">
+                                            Tocá el código para copiarlo. Se aplica en el checkout.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-2.5">
+                                        <div className="flex items-center gap-1.5">
+                                            {Array.from({ length: loyalty.target }).map((_, i) => (
+                                                <span
+                                                    key={i}
+                                                    className={cn(
+                                                        "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
+                                                        i < loyalty.progress
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "border border-dashed border-primary/40 text-primary/50"
+                                                    )}
+                                                >
+                                                    {i < loyalty.progress ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">
+                                            {loyalty.target - loyalty.progress === 1
+                                                ? "¡Te falta 1 pedido para ganar un cupón de descuento!"
+                                                : `Te faltan ${loyalty.target - loyalty.progress} pedidos para ganar un cupón de descuento.`}
+                                            {" "}Los pedidos suman al ser entregados.
+                                        </p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
 
                     <div className="text-center">
                         <Button asChild variant="outline" className="rounded-xl">

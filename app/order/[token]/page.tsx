@@ -1,4 +1,5 @@
 import { getOrderByToken } from "@/lib/supabase/queries"
+import { getCustomerLoyalty } from "@/lib/loyalty"
 import { notFound } from "next/navigation"
 import { OrderTracker } from "./order-tracker"
 
@@ -14,5 +15,9 @@ export default async function OrderPage({ params }: OrderPageProps) {
         notFound()
     }
 
-    return <OrderTracker initialOrder={order} token={token} />
+    // The tracking token is the credential: whoever can see this order can
+    // see the loyalty status of the phone that placed it.
+    const loyalty = await getCustomerLoyalty(order.customerPhone)
+
+    return <OrderTracker initialOrder={order} token={token} loyalty={loyalty} />
 }

@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache"
 import type { AdminRole, CartItem, DeliveryZone } from "@/lib/types"
 import { formatPrice, slugify } from "@/lib/utils"
 import { findDeliveryZoneForPoint, getZoneDeliveryFee } from "@/lib/delivery-zones"
+import { normalizePhone as normalizeCustomerPhone } from "@/lib/customer"
+import { LOYALTY_TARGET, LOYALTY_DISCOUNT_PERCENT, LOYALTY_REWARD_VALID_DAYS } from "@/lib/loyalty"
 
 type ActionResult<T extends object = {}> = Promise<
     T & {
@@ -113,6 +115,104 @@ async function releaseDriverIfIdle(supabase: any, driverId: string) {
 
     if (!activeOrders || activeOrders.length === 0) {
         await setDriverAvailability(supabase, driverId, true)
+    }
+}
+
+// ─── Customers & Loyalty ───────────────────────────────────────
+// Everything here is best-effort: if scripts/012 hasn't been applied yet
+// (customers / coupon_redemptions missing), orders must still go through.
+
+function isMissingTableError(error: any) {
+    return error?.code === "42P01"
+}
+
+async function upsertCustomerOnOrder(adminSupabase: any, phone: string, name: string) {
+    const normalized = normalizeCustomerPhone(phone)
+    if (!normalized) return
+
+    try {
+        const { error } = await adminSupabase
+            .from("customers")
+            .upsert(
+                { phone: normalized, name: name || null, last_order_at: new Date().toISOString() },
+                { onConflict: "phone" }
+            )
+
+        if (error && !isMissingTableError(error)) {
+            console.error("Error upserting customer:", error.message)
+        }
+    } catch (error) {
+        console.error("Error upserting customer:", error)
+    }
+}
+
+async function createLoyaltyRewardCoupon(adminSupabase: any, phone: string): Promise<string | null> {
+    const code = `FIDE-${Math.random().toString(36).slice(2, 7).toUpperCase()}`
+    const now = Date.now()
+
+    const { error } = await adminSupabase.from("coupons").insert({
+        code,
+        description: `Premio fidelidad (${LOYALTY_TARGET} pedidos) — cliente ${phone}`,
+        discount_type: "percentage",
+        discount_value: LOYALTY_DISCOUNT_PERCENT,
+        min_order_amount: 0,
+        usage_limit: 1,
+        per_user_limit: 1,
+        valid_from: new Date(now).toISOString(),
+        valid_until: new Date(now + LOYALTY_REWARD_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+        is_active: true,
+    })
+
+    if (error) {
+        console.error("Error creating loyalty coupon:", error.message)
+        return null
+    }
+
+    return code
+}
+
+// Called when an order transitions to "delivered" for the first time.
+async function creditLoyaltyForDelivery(adminSupabase: any, phone: string | null) {
+    const normalized = normalizeCustomerPhone(phone || "")
+    if (!normalized) return
+
+    try {
+        const { data: customer, error } = await adminSupabase
+            .from("customers")
+            .select("id, orders_count, loyalty_progress, reward_coupon_code")
+            .eq("phone", normalized)
+            .maybeSingle()
+
+        if (error) {
+            if (!isMissingTableError(error)) {
+                console.error("Error reading customer loyalty:", error.message)
+            }
+            return
+        }
+
+        const ordersCount = (customer?.orders_count ?? 0) + 1
+        let progress = (customer?.loyalty_progress ?? 0) + 1
+        let rewardCode = customer?.reward_coupon_code ?? null
+
+        if (progress >= LOYALTY_TARGET) {
+            progress = 0
+            const code = await createLoyaltyRewardCoupon(adminSupabase, normalized)
+            if (code) rewardCode = code
+        }
+
+        const values = {
+            orders_count: ordersCount,
+            loyalty_progress: progress,
+            reward_coupon_code: rewardCode,
+        }
+
+        if (customer) {
+            await adminSupabase.from("customers").update(values).eq("id", customer.id)
+        } else {
+            await adminSupabase.from("customers").insert({ phone: normalized, ...values })
+        }
+    } catch (error) {
+        console.error("Error crediting loyalty:", error)
     }
 }
 
@@ -306,6 +406,38 @@ export async function createOrder(formData: {
     // and fail with PGRST116. All validation above already ran server-side.
     const adminSupabase = createAdminClient()
 
+    // Per-customer coupon limit: a coupon can only be redeemed per_user_limit
+    // times by the same phone. Enforced here (server-side), not just in the UI.
+    let redeemedCoupon: { id: string; code: string; usageCount: number } | null = null
+    const normalizedCustomerPhone = normalizeCustomerPhone(formData.customerPhone)
+
+    if (formData.couponCode && (formData.couponDiscount || 0) > 0) {
+        const { data: coupon } = await adminSupabase
+            .from("coupons")
+            .select("id, code, per_user_limit, usage_count")
+            .eq("code", formData.couponCode.toUpperCase())
+            .maybeSingle()
+
+        if (coupon && normalizedCustomerPhone) {
+            const { count, error: redemptionsError } = await adminSupabase
+                .from("coupon_redemptions")
+                .select("id", { count: "exact", head: true })
+                .eq("coupon_id", coupon.id)
+                .eq("customer_phone", normalizedCustomerPhone)
+
+            if (redemptionsError) {
+                // Table not migrated yet → skip enforcement instead of blocking orders
+                if (!isMissingTableError(redemptionsError)) {
+                    return { error: redemptionsError.message }
+                }
+            } else if ((count ?? 0) >= (coupon.per_user_limit || 1)) {
+                return { error: "Ya usaste este cupón el máximo de veces permitido" }
+            } else {
+                redeemedCoupon = { id: coupon.id, code: coupon.code, usageCount: coupon.usage_count || 0 }
+            }
+        }
+    }
+
     const { data: order, error: orderError } = await adminSupabase
         .from("orders")
         .insert({
@@ -356,6 +488,33 @@ export async function createOrder(formData: {
         return { error: itemsError.message }
     }
 
+    // Post-order bookkeeping (best-effort, never fails the order)
+    await upsertCustomerOnOrder(adminSupabase, formData.customerPhone, formData.customerName)
+
+    if (redeemedCoupon && normalizedCustomerPhone) {
+        try {
+            await adminSupabase.from("coupon_redemptions").insert({
+                coupon_id: redeemedCoupon.id,
+                customer_phone: normalizedCustomerPhone,
+                order_id: order.id,
+            })
+
+            await adminSupabase
+                .from("coupons")
+                .update({ usage_count: redeemedCoupon.usageCount + 1 })
+                .eq("id", redeemedCoupon.id)
+
+            // If the customer just spent their loyalty reward, clear it
+            await adminSupabase
+                .from("customers")
+                .update({ reward_coupon_code: null })
+                .eq("phone", normalizedCustomerPhone)
+                .eq("reward_coupon_code", redeemedCoupon.code)
+        } catch (redemptionError) {
+            console.error("Error recording coupon redemption:", redemptionError)
+        }
+    }
+
     revalidatePath("/admin/orders")
     revalidatePath("/admin")
     revalidatePath("/admin/kitchen")
@@ -393,7 +552,7 @@ export async function updateOrderStatus(
 
     const { data: existingOrder, error: existingOrderError } = await adminSupabase
         .from("orders")
-        .select("sucursal_id, driver_id")
+        .select("sucursal_id, driver_id, status, customer_phone")
         .eq("id", orderId)
         .single()
 
@@ -457,6 +616,11 @@ export async function updateOrderStatus(
             (driverId && driverId !== existingOrder.driver_id))
     ) {
         await releaseDriverIfIdle(adminSupabase, existingOrder.driver_id)
+    }
+
+    // Loyalty counts delivered orders once (guard against re-marking delivered)
+    if (newStatus === "delivered" && existingOrder.status !== "delivered") {
+        await creditLoyaltyForDelivery(adminSupabase, existingOrder.customer_phone)
     }
 
     revalidatePath("/admin/orders")
@@ -589,7 +753,7 @@ export async function completeDriverOrder(orderId: string, driverId: string): Ac
     const supabase = createAdminClient()
     const { data: order, error: orderError } = await supabase
         .from("orders")
-        .select("id, driver_id, status")
+        .select("id, driver_id, status, customer_phone")
         .eq("id", orderId)
         .maybeSingle()
 
@@ -613,6 +777,7 @@ export async function completeDriverOrder(orderId: string, driverId: string): Ac
     if (error) return { error: error.message }
 
     await releaseDriverIfIdle(supabase, driverId)
+    await creditLoyaltyForDelivery(supabase, order.customer_phone)
 
     revalidatePath("/admin/orders")
     revalidatePath("/admin/dispatch")
@@ -1307,7 +1472,7 @@ export async function removeAdminUserAccess(userId: string): ActionResult {
 
 // ─── Coupons ───────────────────────────────────────────────────
 
-export async function validateCoupon(code: string, cartTotal: number) {
+export async function validateCoupon(code: string, cartTotal: number, customerPhone?: string) {
     const supabase = await createClient()
 
     const { data: coupon, error } = await supabase
@@ -1337,6 +1502,25 @@ export async function validateCoupon(code: string, cartTotal: number) {
     // Check usage limit
     if (coupon.usage_limit && coupon.usage_count >= coupon.usage_limit) {
         return { error: "Este cupón ha alcanzado su límite de uso" }
+    }
+
+    // Per-customer limit (early feedback; createOrder re-enforces this)
+    const normalizedPhone = normalizeCustomerPhone(customerPhone || "")
+    if (normalizedPhone) {
+        try {
+            const adminSupabase = createAdminClient()
+            const { count, error: redemptionsError } = await adminSupabase
+                .from("coupon_redemptions")
+                .select("id", { count: "exact", head: true })
+                .eq("coupon_id", coupon.id)
+                .eq("customer_phone", normalizedPhone)
+
+            if (!redemptionsError && (count ?? 0) >= (coupon.per_user_limit || 1)) {
+                return { error: "Ya usaste este cupón el máximo de veces permitido" }
+            }
+        } catch {
+            // Table not migrated yet — createOrder will handle it
+        }
     }
 
     // Calculate discount

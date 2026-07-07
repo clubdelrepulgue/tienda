@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { useCartStore, useCheckoutDraftStore } from "@/lib/store"
+import { useCartStore, useCheckoutDraftStore, useCustomerStore, useOrderHistoryStore } from "@/lib/store"
 import type { PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
 import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
@@ -40,13 +40,18 @@ export default function CheckoutPage() {
   const draftBranchId = useCheckoutDraftStore((s) => s.branchId)
   const deliveryMethod = useCheckoutDraftStore((s) => s.deliveryMethod)
   const paymentMethod = useCheckoutDraftStore((s) => s.paymentMethod)
-  const name = useCheckoutDraftStore((s) => s.name)
-  const phone = useCheckoutDraftStore((s) => s.phone)
-  const address = useCheckoutDraftStore((s) => s.address)
   const notes = useCheckoutDraftStore((s) => s.notes)
-  const selectedLocation = useCheckoutDraftStore((s) => s.selectedLocation)
   const setCheckoutDraft = useCheckoutDraftStore((s) => s.setDraft)
   const clearCheckoutDraft = useCheckoutDraftStore((s) => s.clearDraft)
+  // Identity lives in the long-lived customer profile, not the 48h draft:
+  // repeat customers land here with everything already filled in.
+  const name = useCustomerStore((s) => s.name)
+  const phone = useCustomerStore((s) => s.phone)
+  const address = useCustomerStore((s) => s.address)
+  const selectedLocation = useCustomerStore((s) => s.selectedLocation)
+  const setCustomer = useCustomerStore((s) => s.setCustomer)
+  const addOrderToHistory = useOrderHistoryStore((s) => s.addOrder)
+  const totalItems = useCartStore((s) => s.totalItems())
   const router = useRouter()
 
   const [loading, setLoading] = useState(false)
@@ -67,12 +72,12 @@ export default function CheckoutPage() {
     setCheckoutDraft({ deliveryMethod: value })
   const setPaymentMethod = (value: PaymentMethod) =>
     setCheckoutDraft({ paymentMethod: value })
-  const setName = (value: string) => setCheckoutDraft({ name: value })
-  const setPhone = (value: string) => setCheckoutDraft({ phone: value })
-  const setAddress = (value: string) => setCheckoutDraft({ address: value })
+  const setName = (value: string) => setCustomer({ name: value })
+  const setPhone = (value: string) => setCustomer({ phone: value })
+  const setAddress = (value: string) => setCustomer({ address: value })
   const setNotes = (value: string) => setCheckoutDraft({ notes: value })
   const setSelectedLocation = (value: { lat: number; lng: number; address: string }) =>
-    setCheckoutDraft({ selectedLocation: value })
+    setCustomer({ selectedLocation: value })
 
   useEffect(() => {
     if (!cartBranchId) return
@@ -211,6 +216,18 @@ export default function CheckoutPage() {
 
       setRedirecting(true)
       toast.success(`¡Pedido #${result.orderNumber} realizado!`)
+      // Local order history powers "pedir de nuevo" (the tracking token is
+      // the access credential — no login needed, no phone lookup exposed)
+      addOrderToHistory({
+        token: result.trackingToken,
+        orderNumber: result.orderNumber,
+        branchId: cartBranchId,
+        branchSlug: cartBranchSlug,
+        branchName: cartBranchName,
+        total: grandTotal,
+        itemCount: totalItems,
+        createdAt: Date.now(),
+      })
       router.push(`/order/${result.trackingToken}`)
       clearCart()
       clearCheckoutDraft()
@@ -578,6 +595,7 @@ export default function CheckoutPage() {
                 cartTotal={totalPrice}
                 onCouponApplied={setAppliedCoupon}
                 appliedCoupon={appliedCoupon}
+                customerPhone={phone}
               />
 
               <Separator />

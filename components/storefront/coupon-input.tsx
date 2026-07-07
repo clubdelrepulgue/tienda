@@ -12,18 +12,19 @@ interface CouponInputProps {
     cartTotal: number
     onCouponApplied: (coupon: { code: string; discount: number; discountType: string; discountValue: number } | null) => void
     appliedCoupon: { code: string; discount: number; discountType: string; discountValue: number } | null
+    customerPhone?: string
 }
 
-export function CouponInput({ cartTotal, onCouponApplied, appliedCoupon }: CouponInputProps) {
+export function CouponInput({ cartTotal, onCouponApplied, appliedCoupon, customerPhone }: CouponInputProps) {
     const [code, setCode] = useState("")
     const [loading, setLoading] = useState(false)
 
     const handleApply = async () => {
         if (!code.trim()) return
-        
+
         setLoading(true)
         try {
-            const result = await validateCoupon(code, cartTotal)
+            const result = await validateCoupon(code, cartTotal, customerPhone)
             
             if ("error" in result) {
                 toast.error(result.error)

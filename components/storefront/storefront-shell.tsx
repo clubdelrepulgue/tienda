@@ -7,6 +7,7 @@ import { ProductGrid } from "@/components/storefront/product-grid"
 import { ProductModal } from "@/components/storefront/product-modal"
 import { CartSheet } from "@/components/storefront/cart-sheet"
 import { FloatingCart } from "@/components/storefront/floating-cart"
+import { ReorderBanner } from "@/components/storefront/reorder-banner"
 import { useCartStore } from "@/lib/store"
 import type { Branch, Product, Category, ModifierGroup, UpsellRule } from "@/lib/types"
 import { applyBranchThemeVars, DEFAULT_BRAND_COLOR } from "@/lib/active-branch"
@@ -131,6 +132,12 @@ export function StorefrontShell({
         >
             <Header branch={branch} onCartOpen={() => setCartOpen(true)} />
             <Banner branch={branch} />
+            <ReorderBanner
+                branch={branch}
+                products={products}
+                modifierGroups={modifierGroups}
+                onReordered={() => setCartOpen(true)}
+            />
             {branchBlocked && cartItems.length > 0 && cartBranchId !== branch.id && (
                 <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:px-6">
                     <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
