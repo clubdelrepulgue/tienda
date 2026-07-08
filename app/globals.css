@@ -127,6 +127,18 @@
   transform: translateY(-0.5rem) scale(1.018);
 }
 
+.home-banner-slide {
+  animation: home-banner-slide 14s ease-in-out infinite;
+  opacity: 0;
+  transform: translateX(100%);
+  visibility: hidden;
+  z-index: 0;
+}
+
+.home-banner-slide:nth-child(2) {
+  animation-delay: 7s;
+}
+
 @keyframes home-branch-zoom {
   0%,
   100% {
@@ -137,14 +149,51 @@
   }
 }
 
+@keyframes home-banner-slide {
+  0%,
+  42% {
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible;
+    z-index: 1;
+  }
+  50% {
+    opacity: 0;
+    transform: translateX(-100%);
+    visibility: hidden;
+    z-index: 0;
+  }
+  50.01%,
+  92% {
+    opacity: 0;
+    transform: translateX(100%);
+    visibility: hidden;
+    z-index: 0;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible;
+    z-index: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-shell,
   .blazr-app-shell {
     transition: none;
   }
 
-  .home-branch-card {
+  .home-branch-card,
+  .home-banner-slide {
     animation: none;
+  }
+
+  .home-banner-slide:first-child {
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible;
+    z-index: 1;
   }
 }
 
