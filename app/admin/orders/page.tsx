@@ -746,7 +746,7 @@ const COLUMNS: Column[] = [
     headerTint: "from-orange-50",
     iconClassName: "border-orange-200 bg-orange-50 text-orange-700",
     statuses: ["new"],
-    nextStatus: "ready",
+    nextStatus: "accepted",
     buttonText: "Aceptar",
   },
   {
@@ -883,7 +883,7 @@ export default function OrdersPage() {
     if (result.error) {
       toast.error(result.error)
       mutate()
-    } else if (nextStatus === "ready" && orderToUpdate) {
+    } else if (nextStatus === "accepted" && orderToUpdate) {
       setTimeout(() => {
         const printButton = document.querySelector(
           `[data-order-id="${orderId}"] [data-print-button]`

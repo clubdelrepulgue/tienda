@@ -12,7 +12,7 @@ interface LiveTrackingMapProps {
     driverId?: string
     trackingToken?: string
     destination: { lat: number; lng: number; address: string }
-    branchLocation?: { lat: number; lng: number }
+    branchLocation?: { lat: number; lng: number; logo?: string; accentColor?: string }
     initialDriverLocation?: {
         lat: number
         lng: number
@@ -224,7 +224,8 @@ export function LiveTrackingMap({
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
     const [now, setNow] = useState(() => Date.now())
     const [route, setRoute] = useState<RouteInfo | null>(null)
-    const [routeLoading, setRouteLoading] = useState(false)
+    const [branchLogo, setBranchLogo] = useState<string | null>(null)
+    const [branchAccentColor, setBranchAccentColor] = useState<string | null>(null)
     const hasMapId = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID
     const lastRouteRequestRef = useRef<{ key: string; requestedAt: number } | null>(null)
     // Tracks origin of the last route actually fetched from the API (for distance threshold)
@@ -301,6 +302,31 @@ export function LiveTrackingMap({
         },
         [destination.lat, destination.lng]
     )
+
+    // Load branch branding if not provided in props
+    useEffect(() => {
+        if (branchLocation?.logo && branchLocation?.accentColor) {
+            setBranchLogo(branchLocation.logo)
+            setBranchAccentColor(branchLocation.accentColor)
+            return
+        }
+
+        const supabase = createClient()
+        const loadBranchBranding = async () => {
+            const { data } = await supabase
+                .from("sucursales")
+                .select("logo_url, accent_color")
+                .limit(1)
+                .single()
+
+            if (data) {
+                setBranchLogo(data.logo_url || "/assets/brand/logo.jpeg")
+                setBranchAccentColor(data.accent_color || "#f97316")
+            }
+        }
+
+        loadBranchBranding()
+    }, [branchLocation])
 
     // Subscribe to driver location updates
     useEffect(() => {
@@ -563,13 +589,13 @@ export function LiveTrackingMap({
                     )}
 
                     {/* Branch marker with logo */}
-                    {branchLocation && (
+                    {branchLocation && branchLogo && (
                         <BranchLogoMarker
                             position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
                             title="El Club del Repulge"
-                            logoUrl="/assets/brand/logo.jpeg"
+                            logoUrl={branchLogo}
                             size={60}
-                            accentColor="#f97316"
+                            accentColor={branchAccentColor || "#f97316"}
                             zIndex={1}
                         />
                     )}

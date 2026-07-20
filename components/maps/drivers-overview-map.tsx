@@ -120,7 +120,7 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
     const [drivers, setDrivers] = useState<DriverWithLocation[]>([])
     const [selectedDriver, setSelectedDriver] = useState<DriverWithLocation | null>(null)
     const [loading, setLoading] = useState(true)
-    const [branchLocation, setBranchLocation] = useState<{ lat: number; lng: number } | null>(null)
+    const [branchLocation, setBranchLocation] = useState<{ lat: number; lng: number; logo?: string; accentColor?: string } | null>(null)
 
     useEffect(() => {
         const supabase = createClient()
@@ -181,8 +181,8 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
 
         const fetchBranchLocation = async () => {
             const { data } = await supabase
-                .from("branches")
-                .select("location")
+                .from("sucursales")
+                .select("location, logo_url, accent_color")
                 .limit(1)
                 .single()
 
@@ -190,6 +190,8 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
                 setBranchLocation({
                     lat: parseFloat(data.location.lat),
                     lng: parseFloat(data.location.lng),
+                    logo: data.logo_url || "/assets/brand/logo.jpeg",
+                    accentColor: data.accent_color || "#f97316",
                 })
             }
         }
@@ -323,11 +325,11 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
                         {/* Branch logo marker */}
                         {branchLocation && (
                             <BranchLogoMarker
-                                position={branchLocation}
+                                position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
                                 title="El Club del Repulge"
-                                logoUrl="/assets/brand/logo.jpeg"
+                                logoUrl={branchLocation.logo || "/assets/brand/logo.jpeg"}
                                 size={60}
-                                accentColor="#f97316"
+                                accentColor={branchLocation.accentColor || "#f97316"}
                                 zIndex={10}
                             />
                         )}

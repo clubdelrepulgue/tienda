@@ -8,6 +8,7 @@ import { MapPin, Search, Navigation } from "lucide-react"
 import { toast } from "sonner"
 import { Polygon } from "./polygon"
 import { BranchLogoMarker } from "./branch-logo-marker"
+import { createClient } from "@/lib/supabase/client"
 
 interface AddressSelectorProps {
     value?: { lat: number; lng: number; address: string }
@@ -24,7 +25,7 @@ interface AddressSelectorProps {
     defaultCenter?: { lat: number; lng: number }
     searchCenter?: { lat: number; lng: number }
     searchRadiusKm?: number
-    branchMarker?: { lat: number; lng: number; title?: string }
+    branchMarker?: { lat: number; lng: number; title?: string; logo?: string; accentColor?: string }
     showInstructions?: boolean
     simpleMap?: boolean
     reverseGeocodeOnSelect?: boolean
@@ -96,10 +97,37 @@ export function AddressSelector({
     const [selectedZone, setSelectedZone] = useState<string | null>(null)
     const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null)
     const [mapVisible, setMapVisible] = useState(!lazyMap)
+    const [branchLogo, setBranchLogo] = useState<string | null>(null)
+    const [branchAccentColor, setBranchAccentColor] = useState<string | null>(null)
     // Pending pan/zoom to apply once the map mounts (used when lazyMap triggers map open)
     const pendingPanRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null)
     const mapCenter = defaultCenter || branchMarker || fallbackCenter
     const geocodeCenter = searchCenter || mapCenter
+
+    // Load branch branding if not provided in props
+    useEffect(() => {
+        if (branchMarker?.logo && branchMarker?.accentColor) {
+            setBranchLogo(branchMarker.logo)
+            setBranchAccentColor(branchMarker.accentColor)
+            return
+        }
+
+        const supabase = createClient()
+        const loadBranchBranding = async () => {
+            const { data } = await supabase
+                .from("sucursales")
+                .select("logo_url, accent_color")
+                .limit(1)
+                .single()
+
+            if (data) {
+                setBranchLogo(data.logo_url || "/assets/brand/logo.jpeg")
+                setBranchAccentColor(data.accent_color || "#f97316")
+            }
+        }
+
+        loadBranchBranding()
+    }, [branchMarker])
 
     // Geocodificación inversa para obtener dirección
     const reverseGeocode = useCallback(async (lat: number, lng: number): Promise<string> => {
@@ -396,13 +424,13 @@ export function AddressSelector({
                             ))}
 
                             {/* Branch marker with logo */}
-                            {branchMarker && (
+                            {branchMarker && branchLogo && (
                                 <BranchLogoMarker
                                     position={{ lat: branchMarker.lat, lng: branchMarker.lng }}
                                     title={branchMarker.title || "El Club del Repulge"}
-                                    logoUrl="/assets/brand/logo.jpeg"
+                                    logoUrl={branchLogo}
                                     size={60}
-                                    accentColor="#f97316"
+                                    accentColor={branchAccentColor || "#f97316"}
                                     zIndex={20}
                                 />
                             )}
