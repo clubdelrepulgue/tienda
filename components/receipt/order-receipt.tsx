@@ -315,6 +315,7 @@ export function PrintReceiptButton({
 }) {
   return (
     <Button
+      data-print-button
       size="sm"
       variant={variant}
       className="h-8 rounded-lg gap-1.5"

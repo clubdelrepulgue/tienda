@@ -116,6 +116,7 @@ function OrderCard({
 
   return (
     <Card
+      data-order-id={order.id}
       className={cn(
         "group w-full min-w-0 overflow-hidden rounded-2xl border-border bg-card py-0 shadow-sm transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-background hover:shadow-md",
         updating && "opacity-50 pointer-events-none",
@@ -667,7 +668,7 @@ const COLUMNS: Column[] = [
     headerTint: "from-orange-50",
     iconClassName: "border-orange-200 bg-orange-50 text-orange-700",
     statuses: ["new"],
-    nextStatus: "accepted",
+    nextStatus: "ready",
     buttonText: "Aceptar",
   },
   {
@@ -783,6 +784,7 @@ export default function OrdersPage() {
     const changedAt = new Date().toISOString()
 
     setUpdatingId(orderId)
+    const orderToUpdate = orders.find((o) => o.id === orderId)
     setOrders((current) =>
       current.map((order) =>
         order.id === orderId
@@ -803,6 +805,13 @@ export default function OrdersPage() {
     if (result.error) {
       toast.error(result.error)
       mutate()
+    } else if (nextStatus === "ready" && orderToUpdate) {
+      setTimeout(() => {
+        const printButton = document.querySelector(
+          `[data-order-id="${orderId}"] [data-print-button]`
+        ) as HTMLButtonElement
+        if (printButton) printButton.click()
+      }, 500)
     }
 
     setUpdatingId(null)
