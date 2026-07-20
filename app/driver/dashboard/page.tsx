@@ -119,6 +119,38 @@ export default function DriverDashboardPage() {
         return () => document.removeEventListener("contextmenu", handleContextMenu as EventListener)
     }, [])
 
+    // Disable pinch-to-zoom and double-tap zoom on mobile
+    useEffect(() => {
+        let lastTouchEnd = 0
+        const handleTouchStart = (e: TouchEvent) => {
+            if (e.touches.length > 1) {
+                e.preventDefault()
+            }
+        }
+        const handleWheel = (e: WheelEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault()
+            }
+        }
+        const handleTouchEnd = (e: TouchEvent) => {
+            const now = Date.now()
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault()
+            }
+            lastTouchEnd = now
+        }
+
+        document.addEventListener("touchstart", handleTouchStart, false)
+        document.addEventListener("touchend", handleTouchEnd, false)
+        document.addEventListener("wheel", handleWheel, { passive: false })
+
+        return () => {
+            document.removeEventListener("touchstart", handleTouchStart)
+            document.removeEventListener("touchend", handleTouchEnd)
+            document.removeEventListener("wheel", handleWheel)
+        }
+    }, [])
+
     const loadOrders = async (id: string) => {
         try {
             const response = await fetch(`/api/driver/orders?driverId=${id}`)
