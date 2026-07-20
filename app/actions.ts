@@ -1993,6 +1993,21 @@ export async function createUpsellRule(data: {
         }
     }
 
+    if (data.triggerCategoryIds && data.triggerCategoryIds.length > 0) {
+        const { data: categories, error: categoriesError } = await supabase
+            .from("categorias")
+            .select("id, sucursal_id")
+            .in("id", data.triggerCategoryIds)
+
+        if (categoriesError) return { error: categoriesError.message }
+        if (!categories || categories.length !== data.triggerCategoryIds.length) {
+            return { error: "Hay categorías no encontradas" }
+        }
+        if (categories.some((category) => category.sucursal_id !== data.branchId)) {
+            return { error: "Los disparadores deben pertenecer a la misma sucursal" }
+        }
+    }
+
     const { error } = await supabase.from("upsell_rules").insert({
         sucursal_id: data.branchId,
         name: data.name,
@@ -2049,6 +2064,21 @@ export async function updateUpsellRule(
         }
         if (products.some((product) => product.sucursal_id !== targetBranchId)) {
             return { error: "Las sugerencias deben usar productos de la misma sucursal" }
+        }
+    }
+
+    if (data.triggerCategoryIds && data.triggerCategoryIds.length > 0) {
+        const { data: categories, error: categoriesError } = await supabase
+            .from("categorias")
+            .select("id, sucursal_id")
+            .in("id", data.triggerCategoryIds)
+
+        if (categoriesError) return { error: categoriesError.message }
+        if (!categories || categories.length !== data.triggerCategoryIds.length) {
+            return { error: "Hay categorías no encontradas" }
+        }
+        if (categories.some((category) => category.sucursal_id !== targetBranchId)) {
+            return { error: "Los disparadores deben pertenecer a la misma sucursal" }
         }
     }
 

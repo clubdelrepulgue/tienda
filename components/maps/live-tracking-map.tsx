@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { Map, AdvancedMarker, Marker, useMap } from "@vis.gl/react-google-maps"
 import { Card, CardContent } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
-import { Navigation, Clock, Bike, Home, Store, Gauge } from "lucide-react"
+import { Navigation, Clock, Bike, Home, Gauge } from "lucide-react"
+import { BranchLogoMarker } from "./branch-logo-marker"
 
 interface LiveTrackingMapProps {
     orderId: string
@@ -61,17 +62,12 @@ function pinDataUri(color: string, glyph: string): string {
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
 }
 
-// Glyphs centered around (0,0)
 const GLYPH_HOME =
     "<path fill='#fff' d='M0 -8 L-8 -0.5 H-5.3 V8 H-1.7 V1.5 H1.7 V8 H5.3 V-0.5 H8 Z'/>"
 const GLYPH_BIKE =
     "<g fill='none' stroke='#fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='-5.5' cy='3.5' r='3.6'/><circle cx='5.5' cy='3.5' r='3.6'/><path d='M-5.5 3.5 L-1.5 -4.5 L5.5 3.5 M-1.5 -4.5 L2 -4.5'/></g>"
-const GLYPH_STORE =
-    "<g fill='#fff'><path d='M-8 -6 h16 l-1.8 4.5 h-12.4 z'/><path d='M-6 0 h12 v7.5 h-4 v-4.5 h-4 v4.5 h-4 z'/></g>"
-
 const ICON_DESTINATION = pinDataUri("#ef4444", GLYPH_HOME)
 const ICON_DRIVER = pinDataUri("#16a34a", GLYPH_BIKE)
-const ICON_BRANCH = pinDataUri("#f97316", GLYPH_STORE)
 
 // Wrap a data URI as a google.maps icon with proper size/anchor once the API is
 // loaded; falls back to the bare URL string before then.
@@ -566,22 +562,14 @@ export function LiveTrackingMap({
                         />
                     )}
 
-                    {/* Branch marker */}
-                    {branchLocation && hasMapId && (
-                        <AdvancedMarker
+                    {/* Branch marker with logo */}
+                    {branchLocation && (
+                        <BranchLogoMarker
                             position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
-                            title="Local"
-                        >
-                            <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg border-2 border-white">
-                                <Store className="h-5 w-5 text-white" />
-                            </div>
-                        </AdvancedMarker>
-                    )}
-                    {branchLocation && !hasMapId && (
-                        <Marker
-                            position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
-                            title="Local"
-                            icon={markerIcon(ICON_BRANCH)}
+                            title="El Club del Repulge"
+                            logoUrl="/assets/brand/logo.jpeg"
+                            size={60}
+                            accentColor="#f97316"
                             zIndex={1}
                         />
                     )}

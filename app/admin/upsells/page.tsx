@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { createUpsellRule, updateUpsellRule, deleteUpsellRule } from "@/app/actions"
-import type { UpsellRule, Product } from "@/lib/types"
+import type { Category, UpsellRule, Product } from "@/lib/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { useActiveBranch } from "../branch-context"
@@ -28,6 +28,10 @@ export default function UpsellsPage() {
         selectedBranch ? `/api/admin?type=products&branchId=${selectedBranch}` : null,
         fetcher
     )
+    const { data: categories } = useSWR<Category[]>(
+        selectedBranch ? `/api/admin?type=categories&branchId=${selectedBranch}` : null,
+        fetcher
+    )
     const [isOpen, setIsOpen] = useState(false)
     const [editing, setEditing] = useState<UpsellRule | null>(null)
 
@@ -35,6 +39,8 @@ export default function UpsellsPage() {
     const [message, setMessage] = useState("¿Te gustaría agregar esto?")
     const [discountPercentage, setDiscountPercentage] = useState("")
     const [priority, setPriority] = useState("0")
+    const [selectedTriggerProducts, setSelectedTriggerProducts] = useState<string[]>([])
+    const [selectedTriggerCategories, setSelectedTriggerCategories] = useState<string[]>([])
     const [selectedProducts, setSelectedProducts] = useState<string[]>([])
 
     const resetForm = () => {
@@ -42,6 +48,8 @@ export default function UpsellsPage() {
         setMessage("¿Te gustaría agregar esto?")
         setDiscountPercentage("")
         setPriority("0")
+        setSelectedTriggerProducts([])
+        setSelectedTriggerCategories([])
         setSelectedProducts([])
         setEditing(null)
     }
@@ -61,6 +69,8 @@ export default function UpsellsPage() {
         setMessage(rule.message)
         setDiscountPercentage(rule.discountPercentage.toString())
         setPriority(rule.priority.toString())
+        setSelectedTriggerProducts(rule.triggerProductIds)
+        setSelectedTriggerCategories(rule.triggerCategoryIds)
         setSelectedProducts(rule.suggestedProductIds)
         setIsOpen(true)
     }
@@ -72,6 +82,8 @@ export default function UpsellsPage() {
             message,
             discountPercentage: parseFloat(discountPercentage) || 0,
             priority: parseInt(priority) || 0,
+            triggerProductIds: selectedTriggerProducts,
+            triggerCategoryIds: selectedTriggerCategories,
             suggestedProductIds: selectedProducts,
         }
 
@@ -112,6 +124,18 @@ export default function UpsellsPage() {
     const toggleProduct = (id: string) => {
         setSelectedProducts((prev) =>
             prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+        )
+    }
+
+    const toggleTriggerProduct = (id: string) => {
+        setSelectedTriggerProducts((prev) =>
+            prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+        )
+    }
+
+    const toggleTriggerCategory = (id: string) => {
+        setSelectedTriggerCategories((prev) =>
+            prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
         )
     }
 
@@ -216,6 +240,42 @@ export default function UpsellsPage() {
                             <div>
                                 <Label>Prioridad</Label>
                                 <Input type="number" value={priority} onChange={(e) => setPriority(e.target.value)} className="rounded-xl mt-1.5" />
+                            </div>
+                        </div>
+                        <div>
+                            <Label>Se activa cuando el carrito contiene</Label>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Si no seleccionás nada, la regla se mostrará en cualquier carrito con productos.
+                            </p>
+                            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                                <div className="max-h-36 overflow-y-auto rounded-xl border p-2">
+                                    <p className="mb-1 px-1 text-xs font-semibold text-muted-foreground">Productos</p>
+                                    {products?.filter((p) => p.active).map((product) => (
+                                        <label key={product.id} className="flex cursor-pointer items-center gap-2 rounded-lg p-1.5 hover:bg-secondary">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedTriggerProducts.includes(product.id)}
+                                                onChange={() => toggleTriggerProduct(product.id)}
+                                                className="rounded"
+                                            />
+                                            <span className="text-sm">{product.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="max-h-36 overflow-y-auto rounded-xl border p-2">
+                                    <p className="mb-1 px-1 text-xs font-semibold text-muted-foreground">Categorías</p>
+                                    {categories?.map((category) => (
+                                        <label key={category.id} className="flex cursor-pointer items-center gap-2 rounded-lg p-1.5 hover:bg-secondary">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedTriggerCategories.includes(category.id)}
+                                                onChange={() => toggleTriggerCategory(category.id)}
+                                                className="rounded"
+                                            />
+                                            <span className="text-sm">{category.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                         <div>

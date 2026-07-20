@@ -32,8 +32,9 @@ export async function playNewOrderSound() {
     const ctx = getCtx()
     if (ctx.state === "suspended") await ctx.resume()
     const now = ctx.currentTime
-    for (let i = 0; i < 3; i++) {
-      scheduleBeep(ctx, 880, now + i * 0.32, 0.25, 1.0, "square")
+    // Sonido persistente y fuerte: 6 beeps con volumen máximo, más rápidos y duraderos
+    for (let i = 0; i < 6; i++) {
+      scheduleBeep(ctx, 880, now + i * 0.25, 0.4, 1.0, "square")
     }
   } catch { /* autoplay blocked */ }
 }

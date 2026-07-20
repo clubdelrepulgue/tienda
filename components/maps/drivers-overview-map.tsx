@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Bike, Package, Clock, Navigation, Gauge, Signal } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
+import { BranchLogoMarker } from "./branch-logo-marker"
 
 interface DriversOverviewMapProps {
     height?: string
@@ -119,6 +120,7 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
     const [drivers, setDrivers] = useState<DriverWithLocation[]>([])
     const [selectedDriver, setSelectedDriver] = useState<DriverWithLocation | null>(null)
     const [loading, setLoading] = useState(true)
+    const [branchLocation, setBranchLocation] = useState<{ lat: number; lng: number } | null>(null)
 
     useEffect(() => {
         const supabase = createClient()
@@ -176,6 +178,23 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
         }
 
         fetchDrivers()
+
+        const fetchBranchLocation = async () => {
+            const { data } = await supabase
+                .from("branches")
+                .select("location")
+                .limit(1)
+                .single()
+
+            if (data?.location) {
+                setBranchLocation({
+                    lat: parseFloat(data.location.lat),
+                    lng: parseFloat(data.location.lng),
+                })
+            }
+        }
+
+        fetchBranchLocation()
 
         const channel = supabase
             .channel("drivers-overview")
@@ -301,6 +320,18 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
                         disableDefaultUI={false}
                         mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || "DEMO_MAP_ID"}
                     >
+                        {/* Branch logo marker */}
+                        {branchLocation && (
+                            <BranchLogoMarker
+                                position={branchLocation}
+                                title="El Club del Repulge"
+                                logoUrl="/assets/brand/logo.jpeg"
+                                size={60}
+                                accentColor="#f97316"
+                                zIndex={10}
+                            />
+                        )}
+
                         {driversWithLocation.map((driver) => (
                             <DriverMarker
                                 key={driver.id}

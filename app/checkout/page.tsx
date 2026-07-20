@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { useCartStore, useCheckoutDraftStore, useCustomerStore, useOrderHistoryStore } from "@/lib/store"
 import type { PaymentMethod, Branch, DeliveryZone } from "@/lib/types"
-import { cn, formatPrice } from "@/lib/utils"
+import { cn, formatPrice, MINIMUM_ORDER_VALUE } from "@/lib/utils"
 import { toast } from "sonner"
 import { createOrder } from "@/app/actions"
 import { CouponInput } from "@/components/storefront/coupon-input"
@@ -184,6 +184,10 @@ export default function CheckoutPage() {
     }
     if (items.length === 0) {
       toast.error("Tu carrito está vacío")
+      return
+    }
+    if (subtotalAfterDiscount < MINIMUM_ORDER_VALUE) {
+      toast.error(`El mínimo de envío es de ${formatPrice(MINIMUM_ORDER_VALUE)}`)
       return
     }
 

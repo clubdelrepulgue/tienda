@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { MapPin, Search, Navigation } from "lucide-react"
 import { toast } from "sonner"
 import { Polygon } from "./polygon"
+import { BranchLogoMarker } from "./branch-logo-marker"
 
 interface AddressSelectorProps {
     value?: { lat: number; lng: number; address: string }
@@ -394,11 +395,14 @@ export function AddressSelector({
                                 />
                             ))}
 
-                            {/* Branch marker */}
+                            {/* Branch marker with logo */}
                             {branchMarker && (
-                                <Marker
+                                <BranchLogoMarker
                                     position={{ lat: branchMarker.lat, lng: branchMarker.lng }}
-                                    title={branchMarker.title || "Sucursal"}
+                                    title={branchMarker.title || "El Club del Repulge"}
+                                    logoUrl="/assets/brand/logo.jpeg"
+                                    size={60}
+                                    accentColor="#f97316"
                                     zIndex={20}
                                 />
                             )}

@@ -58,6 +58,80 @@ function formatElapsedTime(createdAt: string, now: number, readyAt?: string): st
   return `${minutes}:${seconds.toString().padStart(2, "0")}`
 }
 
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000 // Earth's radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+function formatDistance(meters: number): string {
+  if (meters < 1000) {
+    return `${Math.round(meters)}m`
+  }
+  return `${(meters / 1000).toFixed(1)}km`
+}
+
+function clusterOrders(
+  orders: Order[],
+  maxDistance: number = 1500
+): Map<string, Order[]> {
+  if (orders.length === 0) return new Map()
+
+  const clusters = new Map<string, Order[]>()
+  const assigned = new Set<string>()
+  let clusterCount = 0
+
+  orders.forEach((order) => {
+    if (
+      assigned.has(order.id) ||
+      order.addressLat === null ||
+      order.addressLat === undefined ||
+      order.addressLng === null ||
+      order.addressLng === undefined
+    )
+      return
+
+    const clusterId = `cluster-${clusterCount++}`
+    const cluster: Order[] = [order]
+    assigned.add(order.id)
+
+    orders.forEach((otherOrder) => {
+      if (
+        assigned.has(otherOrder.id) ||
+        otherOrder.addressLat === null ||
+        otherOrder.addressLat === undefined ||
+        otherOrder.addressLng === null ||
+        otherOrder.addressLng === undefined
+      )
+        return
+
+      const distance = calculateDistance(
+        order.addressLat as number,
+        order.addressLng as number,
+        otherOrder.addressLat as number,
+        otherOrder.addressLng as number
+      )
+
+      if (distance <= maxDistance) {
+        cluster.push(otherOrder)
+        assigned.add(otherOrder.id)
+      }
+    })
+
+    clusters.set(clusterId, cluster)
+  })
+
+  return clusters
+}
+
 // ─── Order Card ────────────────────────────────────────────────
 
 function OrderCard({
@@ -340,12 +414,6 @@ function ReadyColumn({
   onSelectZone: (zoneId: string, orderIds: string[]) => void
   onOpenAssign: (orderIds: string[]) => void
 }) {
-  const zoneMap = useMemo(() => {
-    const map = new Map<string, DeliveryZone>()
-    zones.forEach((z) => map.set(z.id, z))
-    return map
-  }, [zones])
-
   const driverMap = useMemo(() => {
     const map = new Map<string, Driver>()
     drivers.forEach((d) => map.set(d.id, d))
@@ -357,15 +425,22 @@ function ReadyColumn({
     (o) => o.deliveryMethod === "pickup" || o.deliveryMethod === "dine_in"
   )
 
-  const ordersByZone = useMemo(() => {
-    const groups = new Map<string, Order[]>()
-    deliveryOrders.forEach((order) => {
-      const key = order.deliveryZoneId || "sin-zona"
-      const arr = groups.get(key) || []
-      arr.push(order)
-      groups.set(key, arr)
-    })
-    return groups
+  const ordersByCluster = useMemo(() => {
+    const ordersWithCoords = deliveryOrders.filter(
+      (o) => o.addressLat && o.addressLng
+    )
+    const ordersWithoutCoords = deliveryOrders.filter(
+      (o) => !o.addressLat || !o.addressLng
+    )
+
+    const clusters = clusterOrders(ordersWithCoords, 1500)
+
+    // Add orders without coordinates to a special group
+    if (ordersWithoutCoords.length > 0) {
+      clusters.set("sin-coordenadas", ordersWithoutCoords)
+    }
+
+    return clusters
   }, [deliveryOrders])
 
   const selectedDeliveryIds = deliveryOrders
@@ -385,7 +460,7 @@ function ReadyColumn({
 
   return (
     <div className="flex min-w-0 flex-col gap-4 overflow-hidden">
-      {/* ── Delivery orders grouped by zone ── */}
+      {/* ── Delivery orders grouped by proximity ── */}
       {deliveryOrders.length > 0 && (
         <div className="min-w-0 space-y-3 overflow-hidden">
           <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-2">
@@ -408,38 +483,41 @@ function ReadyColumn({
             )}
           </div>
 
-          {Array.from(ordersByZone.entries()).map(([zoneId, zoneOrders]) => {
-            const zone = zoneMap.get(zoneId)
-            const zoneOrderIds = zoneOrders.map((o) => o.id)
-            const allZoneSelected = zoneOrderIds.every((id) => selectedOrders.has(id))
+          {Array.from(ordersByCluster.entries()).map(([clusterId, clusterOrders]) => {
+            const clusterOrderIds = clusterOrders.map((o) => o.id)
+            const allClusterSelected = clusterOrderIds.every((id) => selectedOrders.has(id))
+            const isSpecialGroup = clusterId === "sin-coordenadas"
+            const clusterLabel = isSpecialGroup
+              ? "Sin coordenadas"
+              : `Zona ${clusterId.replace("cluster-", "")}`
 
             return (
-              <div key={zoneId} className="min-w-0 space-y-2 overflow-hidden">
-                {/* Zone header — click to select all in zone */}
+              <div key={clusterId} className="min-w-0 space-y-2 overflow-hidden">
+                {/* Cluster header — click to select all in group */}
                 <div
                   className="flex cursor-pointer items-center gap-2 rounded-2xl border border-border px-3 py-2 transition-opacity hover:opacity-80"
                   style={{
-                    backgroundColor: zone ? `${zone.color}15` : "hsl(var(--secondary))",
-                    borderLeft: `3px solid ${zone?.color || "hsl(var(--border))"}`,
+                    backgroundColor: "hsl(var(--secondary))",
+                    borderLeft: `3px solid hsl(var(--chart-2))`,
                   }}
-                  onClick={() => onSelectZone(zoneId, zoneOrderIds)}
+                  onClick={() => onSelectZone(clusterId, clusterOrderIds)}
                 >
                   <Checkbox
-                    checked={allZoneSelected}
-                    onCheckedChange={() => onSelectZone(zoneId, zoneOrderIds)}
+                    checked={allClusterSelected}
+                    onCheckedChange={() => onSelectZone(clusterId, clusterOrderIds)}
                     onClick={(e) => e.stopPropagation()}
                   />
-                  <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: zone?.color }} />
+                  <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: "hsl(var(--chart-2))" }} />
                   <span className="min-w-0 flex-1 truncate text-xs font-bold text-foreground">
-                    {zone?.name || "Sin zona"}
+                    {clusterLabel}
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {zoneOrders.length} orden{zoneOrders.length !== 1 ? "es" : ""}
+                    {clusterOrders.length} orden{clusterOrders.length !== 1 ? "es" : ""}
                   </span>
                 </div>
 
-                {/* Orders in this zone */}
-                {zoneOrders.map((order) => {
+                {/* Orders in this cluster */}
+                {clusterOrders.map((order) => {
                   const driver = order.driverId ? driverMap.get(order.driverId) || null : null
                   const isSelected = selectedOrders.has(order.id)
 

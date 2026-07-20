@@ -15,8 +15,15 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useCartStore } from "@/lib/store"
 import type { Product, UpsellRule } from "@/lib/types"
-import { formatPrice } from "@/lib/utils"
+import { formatPrice, MINIMUM_ORDER_VALUE } from "@/lib/utils"
 import { toast } from "sonner"
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel"
 
 type CartSuggestion = {
   product: Product
@@ -58,7 +65,8 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
         const hasTriggerProduct = rule.triggerProductIds.some((id) => cartProductIds.has(id))
         const hasTriggerCategory = rule.triggerCategoryIds.some((id) => cartCategoryIds.has(id))
 
-        return hasTriggerProduct || hasTriggerCategory
+        const isGeneralRule = rule.triggerProductIds.length === 0 && rule.triggerCategoryIds.length === 0
+        return isGeneralRule || hasTriggerProduct || hasTriggerCategory
       })
       .sort((a, b) => b.priority - a.priority)
       .flatMap((rule) =>
@@ -232,59 +240,65 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-3">
+                    <Carousel opts={{ align: "start", loop: false }} className="px-8">
+                      <CarouselContent className="-ml-3">
                       {suggestions.map((suggestion) => {
                         const { product, rule, discountedPrice } = suggestion
                         const hasDiscount = rule.discountPercentage > 0
 
                         return (
-                          <div
+                          <CarouselItem
                             key={`${rule.id}-${product.id}`}
-                            className="flex items-center gap-3 rounded-xl border border-primary/15 bg-primary/5 p-3"
+                            className="basis-[88%] pl-3 sm:basis-1/2"
                           >
-                            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-primary/10">
-                              <Image
-                                src={product.image}
-                                alt={product.name}
-                                fill
-                                className="object-cover"
-                                sizes="56px"
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start gap-2">
-                                <p className="title-case truncate text-sm font-bold text-foreground">
-                                  {product.name}
-                                </p>
-                                {hasDiscount && (
-                                  <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-extrabold text-white">
-                                    -{rule.discountPercentage}%
-                                  </span>
-                                )}
+                            <div className="flex h-full items-center gap-3 rounded-xl border border-primary/15 bg-primary/5 p-3">
+                              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-primary/10">
+                                <Image
+                                  src={product.image}
+                                  alt={product.name}
+                                  fill
+                                  className="object-cover"
+                                  sizes="56px"
+                                />
                               </div>
-                              <div className="mt-1 flex items-center gap-2">
-                                <span className="text-sm font-extrabold text-primary">
-                                  {formatPrice(discountedPrice)}
-                                </span>
-                                {hasDiscount && (
-                                  <span className="text-xs text-muted-foreground line-through">
-                                    {formatPrice(product.price)}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start gap-2">
+                                  <p className="title-case line-clamp-2 text-sm font-bold text-foreground">
+                                    {product.name}
+                                  </p>
+                                  {hasDiscount && (
+                                    <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-extrabold text-white">
+                                      -{rule.discountPercentage}%
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-1 flex items-center gap-2">
+                                  <span className="text-sm font-extrabold text-primary">
+                                    {formatPrice(discountedPrice)}
                                   </span>
-                                )}
+                                  {hasDiscount && (
+                                    <span className="text-xs text-muted-foreground line-through">
+                                      {formatPrice(product.price)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
+                              <Button
+                                size="icon"
+                                className="h-9 w-9 shrink-0 rounded-full bg-primary text-white hover:bg-primary/90"
+                                onClick={() => handleAddSuggestion(suggestion)}
+                                aria-label={`Agregar ${product.name} con descuento`}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
                             </div>
-                            <Button
-                              size="icon"
-                              className="h-9 w-9 shrink-0 rounded-full bg-primary text-white hover:bg-primary/90"
-                              onClick={() => handleAddSuggestion(suggestion)}
-                              aria-label={`Agregar ${product.name} con descuento`}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          </CarouselItem>
                         )
                       })}
-                    </div>
+                      </CarouselContent>
+                      <CarouselPrevious className="left-0" aria-label="Sugerencia anterior" />
+                      <CarouselNext className="right-0" aria-label="Siguiente sugerencia" />
+                    </Carousel>
                   </div>
                 )}
               </div>
@@ -298,14 +312,32 @@ export function CartSheet({ open, onClose, products, upsellRules }: CartSheetPro
                 </span>
               </div>
               <Separator />
+              {totalPrice < MINIMUM_ORDER_VALUE && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                  <p className="text-sm text-amber-900">
+                    El mínimo de envío es de <span className="font-bold">{formatPrice(MINIMUM_ORDER_VALUE)}</span>. Te faltan <span className="font-bold">{formatPrice(MINIMUM_ORDER_VALUE - totalPrice)}</span>
+                  </p>
+                </div>
+              )}
               <Button
                 className="w-full h-12 rounded-xl bg-primary text-white hover:bg-primary/90 font-bold text-base shadow-sm"
-                asChild
-                onClick={onClose}
+                disabled={totalPrice < MINIMUM_ORDER_VALUE}
+                asChild={totalPrice >= MINIMUM_ORDER_VALUE}
+                onClick={() => {
+                  if (totalPrice < MINIMUM_ORDER_VALUE) {
+                    toast.error(`El mínimo de envío es de ${formatPrice(MINIMUM_ORDER_VALUE)}`)
+                  } else {
+                    onClose()
+                  }
+                }}
               >
-                <Link href={branchSlug ? `/checkout?branch=${branchSlug}` : "/checkout"}>
-                  Ir al checkout
-                </Link>
+                {totalPrice >= MINIMUM_ORDER_VALUE ? (
+                  <Link href={branchSlug ? `/checkout?branch=${branchSlug}` : "/checkout"}>
+                    Ir al checkout
+                  </Link>
+                ) : (
+                  <span>Ir al checkout</span>
+                )}
               </Button>
             </div>
           </>
