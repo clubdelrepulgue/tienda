@@ -86,11 +86,22 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
   }
   html {
     @apply scroll-smooth;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+  }
+  img {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
   }
 }
 
@@ -250,16 +261,27 @@
   select {
     font-size: 16px !important;
   }
-  
+
   /* Animación suave para botones */
   .active\:scale-95:active {
     transform: scale(0.95);
   }
-  
+
   /* Soporte para notch en iPhone — usa dvh (dynamic viewport) en vez de
      -webkit-fill-available, que colapsaba dentro del flex-column .app-shell
      y dejaba una franja gris debajo del contenido. */
   .min-h-screen {
     min-height: 100dvh;
+  }
+
+  /* Modo estático para dashboard */
+  .static-page {
+    scroll-behavior: auto !important;
+  }
+
+  .static-page * {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.15s !important;
   }
 }

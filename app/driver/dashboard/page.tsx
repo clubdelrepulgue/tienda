@@ -18,7 +18,7 @@ import { useDriverLocation } from "@/hooks/use-driver-location"
 import { GoogleMapsProvider, LiveTrackingMap } from "@/components/maps"
 import { formatZoneMeta } from "@/lib/delivery-zones"
 import { formatPrice } from "@/lib/utils"
-import { unlockAudio, playChime } from "@/lib/notification-sound"
+import { unlockAudio, playChime, requestNotificationPermission } from "@/lib/notification-sound"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -73,11 +73,16 @@ export default function DriverDashboardPage() {
         if (!driverId) return
         const supabase = createClient()
         const channel = supabase
-            .channel("driver-orders")
+            .channel(`driver-orders-${driverId}`)
             .on(
                 "postgres_changes",
-                { event: "*", schema: "public", table: "orders", filter: `driver_id=eq.${driverId}` },
-                () => loadOrders(driverId)
+                { event: "*", schema: "public", table: "orders" },
+                (payload) => {
+                    // Only reload if the change is for this driver's orders
+                    if (payload.new?.driver_id === driverId || payload.old?.driver_id === driverId) {
+                        loadOrders(driverId)
+                    }
+                }
             )
             .subscribe()
         return () => { supabase.removeChannel(channel) }
@@ -96,6 +101,23 @@ export default function DriverDashboardPage() {
             document.removeEventListener("touchstart", unlock)
         }
     }, [driverId])
+
+    // Request notification permission on mount so sounds work in background tabs
+    useEffect(() => {
+        requestNotificationPermission()
+    }, [])
+
+    // Prevent context menu and copying on images
+    useEffect(() => {
+        const handleContextMenu = (e: MouseEvent | TouchEvent) => {
+            if ((e.target as HTMLElement)?.tagName === 'IMG') {
+                e.preventDefault()
+                return false
+            }
+        }
+        document.addEventListener("contextmenu", handleContextMenu as EventListener)
+        return () => document.removeEventListener("contextmenu", handleContextMenu as EventListener)
+    }, [])
 
     const loadOrders = async (id: string) => {
         try {
@@ -218,7 +240,7 @@ export default function DriverDashboardPage() {
 
     return (
         <GoogleMapsProvider>
-            <div className="min-h-screen bg-background">
+            <div className="min-h-screen bg-background static-page">
                 {/* Header */}
                 <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
                     <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">

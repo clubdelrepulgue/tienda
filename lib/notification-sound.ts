@@ -1,10 +1,21 @@
-// Two-tone chime for new-order alerts, synthesized via Web Audio so no
-// audio asset is needed. Mobile browsers (notably iOS Safari) suspend
-// AudioContext until it's created/resumed from within a user gesture, so
-// callers must call unlockAudio() from a click/touch handler before any
-// later programmatic playChime() call will actually produce sound.
-
 let audioCtx: AudioContext | null = null
+let notificationPermission: NotificationPermission = "default"
+
+export async function requestNotificationPermission() {
+    if (!("Notification" in window)) return
+    if (Notification.permission === "granted") {
+        notificationPermission = "granted"
+        return
+    }
+    if (Notification.permission === "denied") {
+        notificationPermission = "denied"
+        return
+    }
+    try {
+        const permission = await Notification.requestPermission()
+        notificationPermission = permission
+    } catch {}
+}
 
 export function unlockAudio() {
     if (audioCtx) {
@@ -17,30 +28,44 @@ export function unlockAudio() {
 }
 
 export function playChime() {
-    if (!audioCtx) return
-    if (audioCtx.state === "suspended") audioCtx.resume()
+    const now = audioCtx?.currentTime ?? 0
 
-    const now = audioCtx.currentTime
-    const notes = [880, 1318.5] // A5 -> E6
+    // Try Web Audio API first (works when tab is active)
+    if (audioCtx) {
+        if (audioCtx.state === "suspended") audioCtx.resume()
 
-    notes.forEach((freq, i) => {
-        const offset = i * 0.16
-        const osc = audioCtx!.createOscillator()
-        const gain = audioCtx!.createGain()
+        const notes = [880, 1318.5] // A5 -> E6
+        notes.forEach((freq, i) => {
+            const offset = i * 0.16
+            const osc = audioCtx!.createOscillator()
+            const gain = audioCtx!.createGain()
 
-        osc.type = "sine"
-        osc.frequency.value = freq
+            osc.type = "sine"
+            osc.frequency.value = freq
 
-        gain.gain.setValueAtTime(0.0001, now + offset)
-        gain.gain.exponentialRampToValueAtTime(0.35, now + offset + 0.015)
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.35)
+            gain.gain.setValueAtTime(0.0001, now + offset)
+            gain.gain.exponentialRampToValueAtTime(0.35, now + offset + 0.015)
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.35)
 
-        osc.connect(gain)
-        gain.connect(audioCtx!.destination)
-        osc.start(now + offset)
-        osc.stop(now + offset + 0.4)
-    })
+            osc.connect(gain)
+            gain.connect(audioCtx!.destination)
+            osc.start(now + offset)
+            osc.stop(now + offset + 0.4)
+        })
+    }
 
+    // Notification API fallback (works when tab is inactive or audio fails)
+    if (notificationPermission === "granted" && "Notification" in window) {
+        try {
+            new Notification("Nuevo pedido", {
+                tag: "new-order",
+                requireInteraction: false,
+                silent: false,
+            })
+        } catch {}
+    }
+
+    // Vibration as fallback
     if (navigator.vibrate) {
         try {
             navigator.vibrate([120, 60, 120])
