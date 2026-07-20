@@ -242,8 +242,8 @@ export default function DriverDashboardPage() {
         }
     }
 
-    const handleLogout = () => {
-        if (driverId) void driverSnapshots.clear(driverId).catch(() => {})
+    const handleLogout = async () => {
+        if (driverId) await driverSnapshots.clear(driverId).catch(() => {})
         try { localStorage.removeItem("driverId"); localStorage.removeItem("driverName") } catch {}
         try { sessionStorage.removeItem("driverId"); sessionStorage.removeItem("driverName") } catch {}
         router.push("/driver")

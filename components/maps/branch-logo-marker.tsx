@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Marker } from "@vis.gl/react-google-maps"
 
-interface BranchLogoMarkerProps {
+export interface BranchLogoMarkerProps {
     position: { lat: number; lng: number }
     title?: string
     logoUrl?: string

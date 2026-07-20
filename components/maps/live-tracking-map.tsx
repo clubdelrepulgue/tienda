@@ -263,7 +263,6 @@ export function LiveTrackingMap({
             }
 
             lastRouteRequestRef.current = { key: cacheKey, requestedAt: now }
-            setRouteLoading(true)
             try {
                 const params = new URLSearchParams({
                     originLat,
@@ -296,8 +295,6 @@ export function LiveTrackingMap({
                     durationMinutes: Math.ceil((dist / 15) * 60),
                     polyline: null,
                 })
-            } finally {
-                setRouteLoading(false)
             }
         },
         [destination.lat, destination.lng]

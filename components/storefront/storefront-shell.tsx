@@ -100,12 +100,16 @@ export function StorefrontShell({
         async function hydrateOfflineMenu() {
             try {
                 if (isOnline && (initialProducts.length > 0 || initialCategories.length > 0)) {
-                    await menuSnapshots.save({
+                    const liveMenu = {
                         branch: initialBranch,
                         categories: initialCategories,
                         products: initialProducts,
                         modifierGroups: initialModifierGroups,
                         upsellRules: initialUpsellRules,
+                    }
+                    setMenuData(liveMenu)
+                    await menuSnapshots.save({
+                        ...liveMenu,
                     })
                     if (!cancelled) setSnapshotUpdatedAt(Date.now())
                     return
