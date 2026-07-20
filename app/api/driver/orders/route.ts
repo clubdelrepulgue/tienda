@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { DEFAULT_PRODUCT_IMAGE } from "@/lib/product-image"
 
 export async function GET(request: NextRequest) {
@@ -11,7 +11,11 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const supabase = await createClient()
+        // Drivers authenticate via phone lookup, not a real Supabase Auth
+        // session (no auth.uid()), so the RLS-bound client can't see their
+        // orders. Use the service-role client, same as the other driver
+        // actions (setOrderEnRoute, completeDriverOrder, updateDriverLocation).
+        const supabase = createAdminClient()
 
         // Get orders assigned to this driver
         const { data: orders, error: oErr } = await supabase

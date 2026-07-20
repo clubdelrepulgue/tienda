@@ -18,6 +18,7 @@ import { useDriverLocation } from "@/hooks/use-driver-location"
 import { GoogleMapsProvider, LiveTrackingMap } from "@/components/maps"
 import { formatZoneMeta } from "@/lib/delivery-zones"
 import { formatPrice } from "@/lib/utils"
+import { unlockAudio, playChime } from "@/lib/notification-sound"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -31,6 +32,7 @@ export default function DriverDashboardPage() {
     const [deliveringId, setDeliveringId] = useState<string | null>(null)
     const [navFocus, setNavFocus] = useState(0)
     const mapSectionRef = useRef<HTMLDivElement>(null)
+    const knownOrderIdsRef = useRef<Set<string> | null>(null)
     const router = useRouter()
 
     const { lastLocation, error, locationStatus } = useDriverLocation({
@@ -72,18 +74,52 @@ export default function DriverDashboardPage() {
         const supabase = createClient()
         const channel = supabase
             .channel("driver-orders")
-            .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
-                loadOrders(driverId)
-            })
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "orders", filter: `driver_id=eq.${driverId}` },
+                () => loadOrders(driverId)
+            )
             .subscribe()
         return () => { supabase.removeChannel(channel) }
+    }, [driverId])
+
+    // Mobile browsers only allow audio to start from within a user gesture,
+    // so we "unlock" the AudioContext on the first tap and reuse it later
+    // when a new order arrives via Realtime (no further gesture needed then).
+    useEffect(() => {
+        if (!driverId) return
+        const unlock = () => unlockAudio()
+        document.addEventListener("pointerdown", unlock, { once: true })
+        document.addEventListener("touchstart", unlock, { once: true })
+        return () => {
+            document.removeEventListener("pointerdown", unlock)
+            document.removeEventListener("touchstart", unlock)
+        }
     }, [driverId])
 
     const loadOrders = async (id: string) => {
         try {
             const response = await fetch(`/api/driver/orders?driverId=${id}`)
             const data = await response.json()
-            setOrders(data || [])
+            const list: Order[] = data || []
+            setOrders(list)
+
+            const currentIds = new Set(list.map((o) => o.id))
+            if (knownOrderIdsRef.current) {
+                const newOrders = list.filter(
+                    (o) => o.status === "ready" && !knownOrderIdsRef.current!.has(o.id)
+                )
+                if (newOrders.length > 0) {
+                    playChime()
+                    toast.success(
+                        newOrders.length === 1
+                            ? `¡Nuevo pedido asignado! #${newOrders[0].orderNumber}`
+                            : `¡${newOrders.length} nuevos pedidos asignados!`,
+                        { duration: 6000 }
+                    )
+                }
+            }
+            knownOrderIdsRef.current = currentIds
 
             const branchIds = [...new Set((data || []).map((o: Order) => o.branchId).filter(Boolean))]
             if (branchIds.length > 0) {
