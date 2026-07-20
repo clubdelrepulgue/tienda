@@ -83,7 +83,6 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    touch-action: manipulation;
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -91,16 +90,12 @@
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    overflow: hidden;
-    position: fixed;
-    width: 100%;
-    height: 100%;
+    touch-action: pan-y;
   }
   html {
     @apply scroll-smooth;
     -webkit-text-size-adjust: 100% !important;
     -webkit-tap-highlight-color: transparent;
-    overflow: hidden;
   }
   img {
     pointer-events: none;
@@ -114,11 +109,10 @@
 .app-shell,
 .blazr-app-shell {
   transition: opacity 240ms ease;
-  height: 100dvh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: #F7F7F7;
-  overflow: hidden;
 }
 
 .home-branch-card {
@@ -284,14 +278,11 @@
   /* Modo estático para dashboard */
   .static-page {
     scroll-behavior: auto !important;
-    overflow: hidden !important;
   }
 
-  .static-page > * {
+  .static-page * {
     animation-duration: 0s !important;
     animation-delay: 0s !important;
     transition-duration: 0.15s !important;
-    overflow-y: auto;
-    overscroll-behavior: none;
   }
 }

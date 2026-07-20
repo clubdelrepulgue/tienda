@@ -19,6 +19,8 @@ import { GoogleMapsProvider, LiveTrackingMap } from "@/components/maps"
 import { formatZoneMeta } from "@/lib/delivery-zones"
 import { formatPrice } from "@/lib/utils"
 import { unlockAudio, playChime, requestNotificationPermission } from "@/lib/notification-sound"
+import { driverSnapshots, formatSnapshotAge } from "@/lib/offline-storage"
+import { useConnectivity } from "@/hooks/use-connectivity"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -31,13 +33,16 @@ export default function DriverDashboardPage() {
     const [enRoutingId, setEnRoutingId] = useState<string | null>(null)
     const [deliveringId, setDeliveringId] = useState<string | null>(null)
     const [navFocus, setNavFocus] = useState(0)
+    const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<number | null>(null)
     const mapSectionRef = useRef<HTMLDivElement>(null)
     const knownOrderIdsRef = useRef<Set<string> | null>(null)
+    const wasOnlineRef = useRef(true)
     const router = useRouter()
+    const isOnline = useConnectivity()
 
     const { lastLocation, error, locationStatus } = useDriverLocation({
         driverId,
-        enabled: true,
+        enabled: isOnline,
         interval: 10000,
         onError: (err) => {
             if (err.code === err.PERMISSION_DENIED) {
@@ -70,7 +75,7 @@ export default function DriverDashboardPage() {
     }, [router])
 
     useEffect(() => {
-        if (!driverId) return
+        if (!driverId || !isOnline) return
         const supabase = createClient()
         const channel = supabase
             .channel(`driver-orders-${driverId}`)
@@ -78,15 +83,24 @@ export default function DriverDashboardPage() {
                 "postgres_changes",
                 { event: "*", schema: "public", table: "orders" },
                 (payload) => {
+                    const nextOrder = payload.new as { driver_id?: string }
+                    const previousOrder = payload.old as { driver_id?: string }
                     // Only reload if the change is for this driver's orders
-                    if (payload.new?.driver_id === driverId || payload.old?.driver_id === driverId) {
+                    if (nextOrder.driver_id === driverId || previousOrder.driver_id === driverId) {
                         loadOrders(driverId)
                     }
                 }
             )
             .subscribe()
         return () => { supabase.removeChannel(channel) }
-    }, [driverId])
+    }, [driverId, isOnline])
+
+    useEffect(() => {
+        if (!wasOnlineRef.current && isOnline && driverId) {
+            loadOrders(driverId)
+        }
+        wasOnlineRef.current = isOnline
+    }, [driverId, isOnline])
 
     // Mobile browsers only allow audio to start from within a user gesture,
     // so we "unlock" the AudioContext on the first tap and reuse it later
@@ -119,9 +133,8 @@ export default function DriverDashboardPage() {
         return () => document.removeEventListener("contextmenu", handleContextMenu as EventListener)
     }, [])
 
-    // Disable pinch-to-zoom and double-tap zoom on mobile
+    // Disable pinch-to-zoom on mobile
     useEffect(() => {
-        let lastTouchEnd = 0
         const handleTouchStart = (e: TouchEvent) => {
             if (e.touches.length > 1) {
                 e.preventDefault()
@@ -132,31 +145,27 @@ export default function DriverDashboardPage() {
                 e.preventDefault()
             }
         }
-        const handleTouchEnd = (e: TouchEvent) => {
-            const now = Date.now()
-            if (now - lastTouchEnd <= 300) {
-                e.preventDefault()
-            }
-            lastTouchEnd = now
-        }
 
-        document.addEventListener("touchstart", handleTouchStart, false)
-        document.addEventListener("touchend", handleTouchEnd, false)
+        document.addEventListener("touchstart", handleTouchStart, { passive: false })
         document.addEventListener("wheel", handleWheel, { passive: false })
 
         return () => {
             document.removeEventListener("touchstart", handleTouchStart)
-            document.removeEventListener("touchend", handleTouchEnd)
             document.removeEventListener("wheel", handleWheel)
         }
     }, [])
 
     const loadOrders = async (id: string) => {
         try {
+            if (!navigator.onLine) throw new Error("offline")
             const response = await fetch(`/api/driver/orders?driverId=${id}`)
+            if (!response.ok) throw new Error("No se pudieron cargar los pedidos")
             const data = await response.json()
-            const list: Order[] = data || []
+            if (!Array.isArray(data)) throw new Error("Respuesta de pedidos inválida")
+            const list: Order[] = data
             setOrders(list)
+            const nextBranchLocations: Record<string, { lat: number; lng: number }> = {}
+            const nextDeliveryZones: Record<string, DeliveryZone> = {}
 
             const currentIds = new Set(list.map((o) => o.id))
             if (knownOrderIdsRef.current) {
@@ -181,11 +190,10 @@ export default function DriverDashboardPage() {
                 const { data: branches } = await supabase
                     .from("sucursales").select("id, lat, lng").in("id", branchIds)
                 if (branches) {
-                    const locs: Record<string, { lat: number; lng: number }> = {}
                     for (const b of branches) {
-                        if (b.lat && b.lng) locs[b.id] = { lat: parseFloat(b.lat), lng: parseFloat(b.lng) }
+                        if (b.lat && b.lng) nextBranchLocations[b.id] = { lat: parseFloat(b.lat), lng: parseFloat(b.lng) }
                     }
-                    setBranchLocations(locs)
+                    setBranchLocations(nextBranchLocations)
                 }
             }
 
@@ -195,9 +203,8 @@ export default function DriverDashboardPage() {
                 const { data: zones } = await supabase
                     .from("delivery_zones").select("*").in("id", zoneIds)
                 if (zones) {
-                    const mapped: Record<string, DeliveryZone> = {}
                     for (const zone of zones) {
-                        mapped[zone.id] = {
+                        nextDeliveryZones[zone.id] = {
                             id: zone.id, branchId: zone.sucursal_id, name: zone.name,
                             color: zone.color || "#3b82f6", coordinates: zone.coordinates || [],
                             deliveryFee: parseFloat(zone.delivery_fee),
@@ -205,17 +212,38 @@ export default function DriverDashboardPage() {
                             estimatedTimeMin: zone.estimated_time_min, isActive: zone.is_active,
                         }
                     }
-                    setDeliveryZones(mapped)
+                    setDeliveryZones(nextDeliveryZones)
                 }
             }
+
+            const updatedAt = Date.now()
+            setSnapshotUpdatedAt(updatedAt)
+            await driverSnapshots.save(id, {
+                orders: list,
+                branchLocations: nextBranchLocations,
+                deliveryZones: nextDeliveryZones,
+            })
         } catch {
-            toast.error("Error cargando pedidos")
+            try {
+                const snapshot = await driverSnapshots.read(id)
+                if (snapshot) {
+                    setOrders(snapshot.orders)
+                    setBranchLocations(snapshot.branchLocations)
+                    setDeliveryZones(snapshot.deliveryZones)
+                    setSnapshotUpdatedAt(snapshot.updatedAt)
+                } else {
+                    toast.error("No hay recorridos guardados en este dispositivo")
+                }
+            } catch {
+                toast.error("No se pudieron recuperar los recorridos guardados")
+            }
         } finally {
             setLoading(false)
         }
     }
 
     const handleLogout = () => {
+        if (driverId) void driverSnapshots.clear(driverId).catch(() => {})
         try { localStorage.removeItem("driverId"); localStorage.removeItem("driverName") } catch {}
         try { sessionStorage.removeItem("driverId"); sessionStorage.removeItem("driverName") } catch {}
         router.push("/driver")
@@ -223,6 +251,10 @@ export default function DriverDashboardPage() {
 
     const handleSetEnRoute = async (orderId: string) => {
         if (!driverId) return
+        if (!isOnline) {
+            toast.error("Necesitás conexión para cambiar el estado del pedido")
+            return
+        }
         setEnRoutingId(orderId)
         const result = await setOrderEnRoute(orderId, driverId)
         if (result.error) {
@@ -236,6 +268,10 @@ export default function DriverDashboardPage() {
 
     const handleDeliver = async (orderId: string) => {
         if (!driverId) return
+        if (!isOnline) {
+            toast.error("Necesitás conexión para marcar el pedido como entregado")
+            return
+        }
         setDeliveringId(orderId)
         const result = await completeDriverOrder(orderId, driverId)
         if (result.error) {
@@ -248,13 +284,16 @@ export default function DriverDashboardPage() {
     }
 
     const handleNavigate = (order: Order) => {
-        if (order.addressLat && order.addressLng) {
+        if (isOnline && order.addressLat && order.addressLng) {
             // Navigate in-app: focus the embedded map and fit it to the full route
             mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
             setNavFocus((n) => n + 1)
         } else {
-            // No GPS coordinates — fall back to external maps using the address
-            window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.address || "")}`, "_blank")
+            // External navigation can still work offline when the device has maps downloaded.
+            const destination = order.addressLat && order.addressLng
+                ? `${order.addressLat},${order.addressLng}`
+                : order.address || ""
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`, "_blank")
         }
     }
 
@@ -307,6 +346,14 @@ export default function DriverDashboardPage() {
                 </header>
 
                 <main className="max-w-md mx-auto px-4 py-4 space-y-5">
+                    {!isOnline && snapshotUpdatedAt && (
+                        <Card className="rounded-2xl border-amber-200 bg-amber-50">
+                            <CardContent className="p-4 text-sm text-amber-900">
+                                <p className="font-semibold">Mostrando el último recorrido guardado</p>
+                                <p className="mt-1 text-xs">Actualizado {formatSnapshotAge(snapshotUpdatedAt)}. Los cambios de estado requieren conexión.</p>
+                            </CardContent>
+                        </Card>
+                    )}
                     {storageError && (
                         <Card className="rounded-2xl border-orange-200 bg-orange-50">
                             <CardContent className="p-4 flex gap-3">
@@ -341,7 +388,7 @@ export default function DriverDashboardPage() {
 
                             <Card ref={mapSectionRef} className="rounded-2xl overflow-hidden border-primary/30 ring-2 ring-primary/20 shadow-md scroll-mt-20">
                                 {/* Map */}
-                                {enRouteOrder.addressLat && enRouteOrder.addressLng ? (
+                                {isOnline && enRouteOrder.addressLat && enRouteOrder.addressLng ? (
                                     <LiveTrackingMap
                                         orderId={enRouteOrder.id}
                                         driverId={driverId ?? undefined}
@@ -356,8 +403,14 @@ export default function DriverDashboardPage() {
                                         focusSignal={navFocus}
                                     />
                                 ) : (
-                                    <div className="h-32 bg-muted flex items-center justify-center">
-                                        <p className="text-sm text-muted-foreground">Sin coordenadas GPS</p>
+                                    <div className="min-h-32 bg-muted flex flex-col items-center justify-center gap-1 p-4 text-center">
+                                        <MapPin className="h-5 w-5 text-muted-foreground" />
+                                        <p className="text-sm font-medium text-foreground">{enRouteOrder.address || "Sin dirección"}</p>
+                                        {enRouteOrder.addressLat && enRouteOrder.addressLng && (
+                                            <p className="text-xs text-muted-foreground">
+                                                {enRouteOrder.addressLat.toFixed(5)}, {enRouteOrder.addressLng.toFixed(5)}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
 
@@ -412,7 +465,7 @@ export default function DriverDashboardPage() {
                                         </Button>
                                         <Button
                                             className="flex-1 rounded-xl"
-                                            disabled={deliveringId === enRouteOrder.id}
+                                            disabled={!isOnline || deliveringId === enRouteOrder.id}
                                             onClick={() => handleDeliver(enRouteOrder.id)}
                                         >
                                             <CheckCircle2 className="h-4 w-4 mr-1.5" />
@@ -484,7 +537,7 @@ export default function DriverDashboardPage() {
                                                     </Button>
                                                     <Button
                                                         className="flex-1 rounded-xl gap-1.5"
-                                                        disabled={!!enRouteOrder || enRoutingId === order.id}
+                                                        disabled={!isOnline || !!enRouteOrder || enRoutingId === order.id}
                                                         onClick={() => handleSetEnRoute(order.id)}
                                                     >
                                                         <Truck className="h-4 w-4" />

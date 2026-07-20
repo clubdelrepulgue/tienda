@@ -9,6 +9,8 @@ import { CartSheet } from "@/components/storefront/cart-sheet"
 import { FloatingCart } from "@/components/storefront/floating-cart"
 import { ReorderBanner } from "@/components/storefront/reorder-banner"
 import { useCartStore } from "@/lib/store"
+import { formatSnapshotAge, menuSnapshots } from "@/lib/offline-storage"
+import { useConnectivity } from "@/hooks/use-connectivity"
 import type { Branch, Product, Category, ModifierGroup, UpsellRule } from "@/lib/types"
 import { applyBranchThemeVars, DEFAULT_BRAND_COLOR } from "@/lib/active-branch"
 import { toast } from "sonner"
@@ -64,12 +66,22 @@ function Banner({ branch }: { branch: Branch }) {
 }
 
 export function StorefrontShell({
-    branch,
-    categories,
-    products,
-    modifierGroups,
-    upsellRules,
+    branch: initialBranch,
+    categories: initialCategories,
+    products: initialProducts,
+    modifierGroups: initialModifierGroups,
+    upsellRules: initialUpsellRules,
 }: StorefrontShellProps) {
+    const [menuData, setMenuData] = useState({
+        branch: initialBranch,
+        categories: initialCategories,
+        products: initialProducts,
+        modifierGroups: initialModifierGroups,
+        upsellRules: initialUpsellRules,
+    })
+    const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<number | null>(null)
+    const isOnline = useConnectivity()
+    const { branch, categories, products, modifierGroups, upsellRules } = menuData
     const [activeCategory, setActiveCategory] = useState("all")
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
     const [productModalOpen, setProductModalOpen] = useState(false)
@@ -81,6 +93,44 @@ export function StorefrontShell({
     const cartBranchName = useCartStore((s) => s.branchName)
     const cartItems = useCartStore((s) => s.items)
     const [branchBlocked, setBranchBlocked] = useState(false)
+
+    useEffect(() => {
+        let cancelled = false
+
+        async function hydrateOfflineMenu() {
+            try {
+                if (isOnline && (initialProducts.length > 0 || initialCategories.length > 0)) {
+                    await menuSnapshots.save({
+                        branch: initialBranch,
+                        categories: initialCategories,
+                        products: initialProducts,
+                        modifierGroups: initialModifierGroups,
+                        upsellRules: initialUpsellRules,
+                    })
+                    if (!cancelled) setSnapshotUpdatedAt(Date.now())
+                    return
+                }
+
+                const snapshot = await menuSnapshots.read(initialBranch.slug)
+                if (snapshot && !cancelled) {
+                    setMenuData(snapshot)
+                    setSnapshotUpdatedAt(snapshot.updatedAt)
+                }
+            } catch {
+                // Cache storage is an enhancement; the live menu remains usable.
+            }
+        }
+
+        hydrateOfflineMenu()
+        return () => { cancelled = true }
+    }, [
+        initialBranch,
+        initialCategories,
+        initialModifierGroups,
+        initialProducts,
+        initialUpsellRules,
+        isOnline,
+    ])
 
     useEffect(() => {
         const result = setBranchContext(branch)
@@ -131,6 +181,11 @@ export function StorefrontShell({
             style={branchStyle}
         >
             <Header branch={branch} onCartOpen={() => setCartOpen(true)} />
+            {!isOnline && snapshotUpdatedAt && (
+                <div className="bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-900">
+                    Menú guardado · actualizado {formatSnapshotAge(snapshotUpdatedAt)}
+                </div>
+            )}
             <Banner branch={branch} />
             <ReorderBanner
                 branch={branch}

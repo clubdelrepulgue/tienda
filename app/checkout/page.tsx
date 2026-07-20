@@ -19,6 +19,7 @@ import { CouponInput } from "@/components/storefront/coupon-input"
 import { GoogleMapsProvider, AddressSelector } from "@/components/maps"
 import { findDeliveryZoneForPoint, formatZoneMeta, getZoneDeliveryFee } from "@/lib/delivery-zones"
 import { applyBranchThemeVars } from "@/lib/active-branch"
+import { useConnectivity } from "@/hooks/use-connectivity"
 
 function getBranchCity(address: string) {
   const parts = address
@@ -53,8 +54,10 @@ export default function CheckoutPage() {
   const addOrderToHistory = useOrderHistoryStore((s) => s.addOrder)
   const totalItems = useCartStore((s) => s.totalItems())
   const router = useRouter()
+  const isOnline = useConnectivity()
 
   const [loading, setLoading] = useState(false)
+  const [checkoutDataFresh, setCheckoutDataFresh] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranch, setSelectedBranch] = useState("")
@@ -96,8 +99,18 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!cartBranchId) return
 
+    if (!isOnline) {
+      setCheckoutDataFresh(false)
+      return
+    }
+
+    setCheckoutDataFresh(false)
+
     fetch(`/api/checkout-data?branchId=${encodeURIComponent(cartBranchId)}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("No se pudieron actualizar los datos")
+        return r.json()
+      })
       .then((data) => {
         if (Array.isArray(data?.branches)) {
           setBranches(data.branches)
@@ -105,11 +118,13 @@ export default function CheckoutPage() {
           if (openBranch) setSelectedBranch(openBranch.id)
         }
         if (Array.isArray(data?.deliveryZones)) setAllDeliveryZones(data.deliveryZones)
+        setCheckoutDataFresh(true)
       })
       .catch(() => {
+        setCheckoutDataFresh(false)
         toast.error("No se pudieron cargar las zonas de envío")
       })
-  }, [cartBranchId])
+  }, [cartBranchId, isOnline])
 
   useEffect(() => {
     if (!selectedBranch) return
@@ -161,6 +176,10 @@ export default function CheckoutPage() {
   }, [selectedBranchInfo])
 
   const handlePlaceOrder = async () => {
+    if (!isOnline || !checkoutDataFresh) {
+      toast.error("Necesitás conexión para confirmar el pedido")
+      return
+    }
     if (!cartBranchId) {
       toast.error("Selecciona una sucursal antes de finalizar")
       router.push("/")
@@ -642,13 +661,17 @@ export default function CheckoutPage() {
               <Button
                 className="w-full h-12 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-base"
                 onClick={handlePlaceOrder}
-                disabled={loading}
+                disabled={loading || !isOnline || !checkoutDataFresh}
               >
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     Procesando pedido...
                   </>
+                ) : !isOnline ? (
+                  "Necesitás conexión para confirmar"
+                ) : !checkoutDataFresh ? (
+                  "Actualizando datos del pedido…"
                 ) : (
                   "Confirmar pedido"
                 )}
