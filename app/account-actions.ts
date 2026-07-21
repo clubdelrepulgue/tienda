@@ -198,3 +198,60 @@ export async function getAccountData(): Promise<{ error: string } | AccountData>
         needsPhone: false,
     }
 }
+
+export interface ActiveOrderSummary {
+    trackingToken: string
+    orderNumber?: number
+    status: string
+}
+
+// In-progress statuses: anything that isn't a terminal state. Kept in sync with
+// the client banner so both agree on what "en curso" means.
+const IN_PROGRESS_STATUSES = ["new", "accepted", "preparing", "ready", "en_route"]
+
+// Server-side recovery of active orders for a logged-in (Google) user. Unlike
+// the browser's local token list, this survives clearing storage, incognito
+// window close, and switching devices — the customer row is keyed by
+// auth_user_id, so any device they log into on sees their live orders.
+export async function getActiveOrdersForUser(): Promise<ActiveOrderSummary[]> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return []
+
+    const admin = createAdminClient()
+
+    try {
+        const { data: customerRow, error: customerError } = await admin
+            .from("customers")
+            .select("id")
+            .eq("auth_user_id", user.id)
+            .maybeSingle()
+
+        if (customerError) throw customerError
+        if (!customerRow) return []
+
+        const { data: orderRows, error: ordersError } = await admin
+            .from("orders")
+            .select("order_number, public_tracking_token, status")
+            .eq("customer_id", customerRow.id)
+            .in("status", IN_PROGRESS_STATUSES)
+            .order("created_at", { ascending: false })
+            .limit(10)
+
+        if (ordersError) throw ordersError
+
+        return (orderRows || [])
+            .filter((row: any) => row.public_tracking_token)
+            .map((row: any) => ({
+                trackingToken: row.public_tracking_token as string,
+                orderNumber: row.order_number as number | undefined,
+                status: row.status as string,
+            }))
+    } catch (error: any) {
+        if (!isMissingRelationError(error)) {
+            console.error("Error loading active orders:", error?.message || error)
+        }
+        return []
+    }
+}

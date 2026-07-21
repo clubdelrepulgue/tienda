@@ -324,16 +324,21 @@ export default function DriverDashboardPage() {
     }
 
     const handleNavigate = (order: Order) => {
-        if (isOnline && order.addressLat && order.addressLng) {
+        if (order.addressLat && order.addressLng) {
             // Navigate in-app: focus the embedded map and fit it to the full route
-            mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
-            setNavFocus((n) => n + 1)
+            if (mapSectionRef.current) {
+                mapSectionRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
+                // Small delay to ensure map is visible before focusing
+                setTimeout(() => setNavFocus((n) => n + 1), 300)
+            } else {
+                setNavFocus((n) => n + 1)
+            }
+            toast.success("Mostrando ruta en el mapa")
         } else {
-            // External navigation can still work offline when the device has maps downloaded.
-            const destination = order.addressLat && order.addressLng
-                ? `${order.addressLat},${order.addressLng}`
-                : order.address || ""
+            // Fallback: open external maps when no coordinates
+            const destination = order.address || "destino"
             window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`, "_blank")
+            toast.info("Abriendo Google Maps...")
         }
     }
 

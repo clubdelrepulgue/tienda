@@ -274,7 +274,12 @@ export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }
             )
             .subscribe()
 
+        // Safety-net polling so driver positions stay live even if a realtime
+        // event is missed (realtime UPDATE above is the primary driver).
+        const pollId = setInterval(fetchDrivers, 10000)
+
         return () => {
+            clearInterval(pollId)
             supabase.removeChannel(channel)
         }
     }, [])

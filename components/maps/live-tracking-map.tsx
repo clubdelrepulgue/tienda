@@ -148,8 +148,7 @@ function RoutePolyline({ encodedPath }: { encodedPath: string }) {
 }
 
 // Fits the map viewport to the given points whenever `signal` changes.
-// Points are read from a ref so the effect only re-runs on an explicit signal,
-// not on every driver-location update.
+// Only runs when signal is explicitly incremented (via "Navegar" button).
 function MapFocuser({
     signal,
     points,
@@ -162,19 +161,31 @@ function MapFocuser({
     pointsRef.current = points
 
     useEffect(() => {
-        if (!map || signal === 0) return
-        const pts = pointsRef.current
-        if (pts.length === 0) return
+        if (!map || !signal) return
 
+        const pts = pointsRef.current
+        if (pts.length === 0) {
+            console.warn('[MapFocuser] No points to focus on')
+            return
+        }
+
+        console.log('[MapFocuser] Focusing on', pts.length, 'points, signal:', signal)
+
+        // Single point: center and zoom in
         if (pts.length === 1) {
             map.setCenter(pts[0])
             map.setZoom(16)
             return
         }
 
+        // Multiple points: fit bounds with padding
         const bounds = new google.maps.LatLngBounds()
         pts.forEach((p) => bounds.extend(p))
-        map.fitBounds(bounds, 56)
+
+        // Fit with 56px padding on all sides
+        setTimeout(() => {
+            map.fitBounds(bounds, 56)
+        }, 50)
     }, [map, signal])
 
     return null

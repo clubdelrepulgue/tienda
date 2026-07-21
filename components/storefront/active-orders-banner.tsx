@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { ChefHat, Check, Clock, PackageCheck, Truck } from "lucide-react"
 import { useOrderHistoryStore } from "@/lib/store"
+import { getActiveOrdersForUser } from "@/app/account-actions"
 import type { Order, OrderStatus } from "@/lib/types"
 
 // An order the browser still has a tracking token for AND whose live status is
@@ -49,28 +50,44 @@ export function ActiveOrdersBanner() {
     const tokensKey = tokens.join(",")
 
     const refresh = useCallback(async () => {
-        if (tokens.length === 0) {
-            setActive([])
-            return
+        // Two independent sources, merged and deduped by token:
+        //  - server: active orders of the logged-in (Google) user, keyed by
+        //    their customer row — survives storage wipes and device switches.
+        //  - local: tracking tokens the browser saved at checkout — the only
+        //    path for guests / incognito, no login required.
+        const byToken = new Map<string, ActiveOrder>()
+
+        const [serverOrders, localResults] = await Promise.all([
+            getActiveOrdersForUser().catch(() => [] as Awaited<ReturnType<typeof getActiveOrdersForUser>>),
+            Promise.all(
+                tokens.map(async (token): Promise<ActiveOrder | null> => {
+                    try {
+                        const res = await fetch(`/api/order/${encodeURIComponent(token)}`, {
+                            cache: "no-store",
+                        })
+                        if (!res.ok) return null
+                        const order = (await res.json()) as Order
+                        if (!IN_PROGRESS.includes(order.status)) return null
+                        return { token, orderNumber: order.orderNumber, status: order.status }
+                    } catch {
+                        return null
+                    }
+                })
+            ),
+        ])
+
+        for (const o of serverOrders) {
+            byToken.set(o.trackingToken, {
+                token: o.trackingToken,
+                orderNumber: o.orderNumber,
+                status: o.status as OrderStatus,
+            })
+        }
+        for (const o of localResults) {
+            if (o && !byToken.has(o.token)) byToken.set(o.token, o)
         }
 
-        const results = await Promise.all(
-            tokens.map(async (token): Promise<ActiveOrder | null> => {
-                try {
-                    const res = await fetch(`/api/order/${encodeURIComponent(token)}`, {
-                        cache: "no-store",
-                    })
-                    if (!res.ok) return null
-                    const order = (await res.json()) as Order
-                    if (!IN_PROGRESS.includes(order.status)) return null
-                    return { token, orderNumber: order.orderNumber, status: order.status }
-                } catch {
-                    return null
-                }
-            })
-        )
-
-        setActive(results.filter((o): o is ActiveOrder => o !== null))
+        setActive([...byToken.values()])
     }, [tokens])
 
     useEffect(() => {

@@ -16,7 +16,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Sheet,
@@ -45,7 +44,13 @@ export default function DispatchPage() {
     activeBranchId
       ? `/api/admin?type=dispatch&branchId=${activeBranchId}`
       : "/api/admin?type=dispatch",
-    fetcher
+    fetcher,
+    {
+      // Realtime updates below drive most refreshes; this polling acts as a
+      // safety net so the board stays live even if a realtime event is missed.
+      refreshInterval: 10000,
+      revalidateOnFocus: true,
+    }
   )
 
   const [orders, setOrders] = useState<Order[]>([])
@@ -208,7 +213,7 @@ export default function DispatchPage() {
 
   return (
     <GoogleMapsProvider>
-    <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-6 pb-10">
       <div className="flex items-center justify-between">
         <div>
           <h1
@@ -242,7 +247,7 @@ export default function DispatchPage() {
       {/* ── Live map: drivers, zones & orders ── */}
       <DriversOverviewMap height="380px" zones={zones} orders={deliveryOrders} />
 
-      <ScrollArea className="flex-1">
+      <div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* ── Delivery by zone ── */}
           <div className="space-y-4">
@@ -509,7 +514,7 @@ export default function DispatchPage() {
             )}
           </div>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Driver assignment sheet */}
       <Sheet open={assignSheetOpen} onOpenChange={setAssignSheetOpen}>
