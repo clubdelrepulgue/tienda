@@ -21,6 +21,7 @@ import { formatPrice } from "@/lib/utils"
 import { unlockAudio, playChime, requestNotificationPermission } from "@/lib/notification-sound"
 import { driverSnapshots, formatSnapshotAge } from "@/lib/offline-storage"
 import { useConnectivity } from "@/hooks/use-connectivity"
+import { registerBackgroundTracking, startBackgroundTracking, stopBackgroundTracking } from "@/lib/background-tracking"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -116,10 +117,20 @@ export default function DriverDashboardPage() {
         }
     }, [driverId])
 
-    // Request notification permission on mount so sounds work in background tabs
+    // Register Service Worker for background location tracking (even when app is minimized)
     useEffect(() => {
+        registerBackgroundTracking()
         requestNotificationPermission()
     }, [])
+
+    // Start/stop background tracking based on driverId
+    useEffect(() => {
+        if (driverId) {
+            startBackgroundTracking(driverId)
+        } else {
+            stopBackgroundTracking()
+        }
+    }, [driverId])
 
     // Prevent context menu and copying on images
     useEffect(() => {

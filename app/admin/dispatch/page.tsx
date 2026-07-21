@@ -30,6 +30,7 @@ import { cn, formatPrice } from "@/lib/utils"
 import { toast } from "sonner"
 import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/actions"
 import { formatZoneMeta } from "@/lib/delivery-zones"
+import { GoogleMapsProvider, DriversOverviewMap } from "@/components/maps"
 import { useActiveBranch } from "../branch-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -206,6 +207,7 @@ export default function DispatchPage() {
   }
 
   return (
+    <GoogleMapsProvider>
     <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
       <div className="flex items-center justify-between">
         <div>
@@ -213,10 +215,10 @@ export default function DispatchPage() {
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: "var(--font-heading)" }}
           >
-            Despacho
+            Despacho y Seguimiento
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Asigna repartidores y gestiona pedidos listos
+            Repartidores en vivo, zonas y pedidos en un solo lugar
           </p>
         </div>
 
@@ -236,6 +238,9 @@ export default function DispatchPage() {
           </Button>
         )}
       </div>
+
+      {/* ── Live map: drivers, zones & orders ── */}
+      <DriversOverviewMap height="380px" zones={zones} orders={deliveryOrders} />
 
       <ScrollArea className="flex-1">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -572,5 +577,6 @@ export default function DispatchPage() {
         </SheetContent>
       </Sheet>
     </div>
+    </GoogleMapsProvider>
   )
 }

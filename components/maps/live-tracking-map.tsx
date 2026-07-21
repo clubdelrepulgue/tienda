@@ -462,41 +462,41 @@ export function LiveTrackingMap({
             {/* Stats cards */}
             {driverLocation && (
                 <div className={`grid gap-3 ${speedDisplay ? "grid-cols-3" : "grid-cols-2"}`}>
-                    <Card className="rounded-xl">
-                        <CardContent className="p-4 flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Card className="rounded-xl min-w-0">
+                        <CardContent className="p-4 flex items-center gap-3 min-w-0">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                                 <Navigation className="h-5 w-5 text-primary" />
                             </div>
-                            <div>
-                                <p className="text-xs text-muted-foreground">Distancia</p>
-                                <p className="font-bold text-lg">
+                            <div className="min-w-0">
+                                <p className="text-xs text-muted-foreground truncate">Distancia</p>
+                                <p className="font-bold text-lg truncate">
                                     {route ? `${route.distanceKm} km` : "--"}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="rounded-xl">
-                        <CardContent className="p-4 flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <Card className="rounded-xl min-w-0">
+                        <CardContent className="p-4 flex items-center gap-3 min-w-0">
+                            <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
                                 <Clock className="h-5 w-5 text-green-600" />
                             </div>
-                            <div>
-                                <p className="text-xs text-muted-foreground">Llegada estimada</p>
-                                <p className="font-bold text-lg">
+                            <div className="min-w-0">
+                                <p className="text-xs text-muted-foreground truncate">Llegada estimada</p>
+                                <p className="font-bold text-lg truncate">
                                     {route ? `~${route.durationMinutes} min` : "--"}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
                     {speedDisplay && (
-                        <Card className="rounded-xl">
-                            <CardContent className="p-4 flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+                        <Card className="rounded-xl min-w-0">
+                            <CardContent className="p-4 flex items-center gap-3 min-w-0">
+                                <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
                                     <Gauge className="h-5 w-5 text-orange-600" />
                                 </div>
-                                <div>
-                                    <p className="text-xs text-muted-foreground">Velocidad</p>
-                                    <p className="font-bold text-lg">{speedDisplay}</p>
+                                <div className="min-w-0">
+                                    <p className="text-xs text-muted-foreground truncate">Velocidad</p>
+                                    <p className="font-bold text-lg truncate">{speedDisplay}</p>
                                 </div>
                             </CardContent>
                         </Card>

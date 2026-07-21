@@ -1,18 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Map, AdvancedMarker } from "@vis.gl/react-google-maps"
 import { createClient } from "@/lib/supabase/client"
-import type { Driver } from "@/lib/types"
+import type { Driver, DeliveryZone, Order } from "@/lib/types"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Bike, Package, Clock, Navigation, Gauge, Signal } from "lucide-react"
+import { Bike, Package, Clock, Navigation, Gauge, Signal, MapPin, Phone } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { BranchLogoMarker } from "./branch-logo-marker"
+import { Polygon } from "./polygon"
 
 interface DriversOverviewMapProps {
     height?: string
+    /** Delivery zones to draw as polygons on the map */
+    zones?: DeliveryZone[]
+    /** Orders to plot as customer markers on the map */
+    orders?: Order[]
 }
 
 interface DriverWithLocation extends Driver {
@@ -116,9 +121,41 @@ function DriverMarker({
     )
 }
 
-export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps) {
+function OrderMarker({
+    order,
+    color,
+    isSelected,
+    onClick,
+}: {
+    order: Order
+    color: string
+    isSelected: boolean
+    onClick: () => void
+}) {
+    if (order.addressLat == null || order.addressLng == null) return null
+
+    return (
+        <AdvancedMarker
+            position={{ lat: order.addressLat, lng: order.addressLng }}
+            title={`#${order.orderNumber} · ${order.customerName}`}
+            onClick={onClick}
+        >
+            <div
+                className={`relative flex items-center justify-center rounded-full shadow-md border-2 border-white transition-transform ${
+                    isSelected ? "h-8 w-8 scale-110 z-10" : "h-6 w-6"
+                } ${order.driverId ? "" : "ring-2 ring-white/70"}`}
+                style={{ backgroundColor: color }}
+            >
+                <MapPin className="h-3.5 w-3.5 text-white" />
+            </div>
+        </AdvancedMarker>
+    )
+}
+
+export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }: DriversOverviewMapProps) {
     const [drivers, setDrivers] = useState<DriverWithLocation[]>([])
     const [selectedDriver, setSelectedDriver] = useState<DriverWithLocation | null>(null)
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
     const [loading, setLoading] = useState(true)
     const [branchLocation, setBranchLocation] = useState<{ lat: number; lng: number; logo?: string; accentColor?: string } | null>(null)
 
@@ -244,6 +281,26 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
 
     const driversWithLocation = drivers.filter((d) => d.currentLocation)
 
+    // NOTE: `Map` here is the Google Maps component import, so use plain
+    // objects for lookups instead of the JS Map constructor.
+    const zoneById = useMemo(() => {
+        const lookup: Record<string, DeliveryZone> = {}
+        zones.forEach((z) => { lookup[z.id] = z })
+        return lookup
+    }, [zones])
+
+    // Only delivery orders with real GPS coordinates can be plotted
+    const mappableOrders = useMemo(
+        () => orders.filter((o) => o.addressLat != null && o.addressLng != null),
+        [orders]
+    )
+
+    const driverById = useMemo(() => {
+        const lookup: Record<string, DriverWithLocation> = {}
+        drivers.forEach((d) => { lookup[d.id] = d })
+        return lookup
+    }, [drivers])
+
     const center =
         driversWithLocation.length > 0
             ? {
@@ -322,6 +379,34 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
                         disableDefaultUI={false}
                         mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || "DEMO_MAP_ID"}
                     >
+                        {/* Delivery zones */}
+                        {zones.map((zone) =>
+                            zone.coordinates && zone.coordinates.length > 2 ? (
+                                <Polygon
+                                    key={zone.id}
+                                    paths={zone.coordinates}
+                                    strokeColor={zone.color || "#3b82f6"}
+                                    fillColor={zone.color || "#3b82f6"}
+                                    fillOpacity={0.12}
+                                    strokeWeight={2}
+                                />
+                            ) : null
+                        )}
+
+                        {/* Order markers */}
+                        {mappableOrders.map((order) => {
+                            const zone = order.deliveryZoneId ? zoneById[order.deliveryZoneId] : undefined
+                            return (
+                                <OrderMarker
+                                    key={order.id}
+                                    order={order}
+                                    color={zone?.color || "#ef4444"}
+                                    isSelected={selectedOrder?.id === order.id}
+                                    onClick={() => { setSelectedOrder(order); setSelectedDriver(null) }}
+                                />
+                            )
+                        })}
+
                         {/* Branch logo marker */}
                         {branchLocation && (
                             <BranchLogoMarker
@@ -339,7 +424,7 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
                                 key={driver.id}
                                 driver={driver}
                                 isSelected={selectedDriver?.id === driver.id}
-                                onClick={() => setSelectedDriver(driver)}
+                                onClick={() => { setSelectedDriver(driver); setSelectedOrder(null) }}
                             />
                         ))}
                     </Map>
@@ -421,6 +506,70 @@ export function DriversOverviewMap({ height = "500px" }: DriversOverviewMapProps
                                 )}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Order info panel */}
+                {selectedOrder && (
+                    <div className="absolute bottom-4 left-4 right-4 bg-background/95 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-border">
+                        <div className="flex items-start justify-between">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="font-bold text-lg">
+                                        Pedido #{selectedOrder.orderNumber}
+                                    </h3>
+                                    {selectedOrder.deliveryZoneId && zoneById[selectedOrder.deliveryZoneId] && (
+                                        <Badge
+                                            variant="outline"
+                                            style={{
+                                                borderColor: zoneById[selectedOrder.deliveryZoneId].color,
+                                                color: zoneById[selectedOrder.deliveryZoneId].color,
+                                            }}
+                                        >
+                                            {zoneById[selectedOrder.deliveryZoneId].name}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-0.5">
+                                    {selectedOrder.customerName}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedOrder(null)}
+                                className="text-muted-foreground hover:text-foreground shrink-0"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="mt-3 pt-3 border-t border-border space-y-1.5 text-sm text-muted-foreground">
+                            {selectedOrder.address && (
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 shrink-0" />
+                                    <span className="line-clamp-2">{selectedOrder.address}</span>
+                                </div>
+                            )}
+                            {selectedOrder.customerPhone && (
+                                <div className="flex items-center gap-2">
+                                    <Phone className="h-4 w-4 shrink-0" />
+                                    <a href={`tel:${selectedOrder.customerPhone}`} className="hover:text-foreground">
+                                        {selectedOrder.customerPhone}
+                                    </a>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-2 pt-1">
+                                {selectedOrder.driverId && driverById[selectedOrder.driverId] ? (
+                                    <Badge variant="outline" className="bg-blue-50">
+                                        <Bike className="h-3 w-3 mr-1" />
+                                        {driverById[selectedOrder.driverId].name}
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline" className="border-dashed">
+                                        Sin repartidor asignado
+                                    </Badge>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

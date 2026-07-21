@@ -20,7 +20,6 @@ import {
   Tag,
   Bike,
   Sparkles,
-  Map as MapIcon,
   PackageCheck,
   Users,
 } from "lucide-react"
@@ -47,8 +46,7 @@ const navItems: AdminNavItem[] = [
   { href: "/admin/orders", label: "Pedidos", icon: ClipboardList },
   { href: "/admin/kitchen", label: "Cocina", icon: ChefHat },
   { href: "/admin/pos", label: "POS / Mostrador", icon: ShoppingBag },
-  { href: "/admin/dispatch", label: "Despacho", icon: PackageCheck },
-  { href: "/admin/live-tracking", label: "Seguimiento", icon: MapIcon },
+  { href: "/admin/dispatch", label: "Despacho y Seguimiento", icon: PackageCheck },
 ]
 
 const configItems: AdminNavItem[] = [

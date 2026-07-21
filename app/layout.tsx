@@ -35,6 +35,7 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'El Club del Repulgue',
   },
+  manifest: '/manifest.json',
   formatDetection: { telephone: false },
 }
 
