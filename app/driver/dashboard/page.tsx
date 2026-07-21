@@ -21,7 +21,7 @@ import { formatPrice } from "@/lib/utils"
 import { unlockAudio, playChime, requestNotificationPermission } from "@/lib/notification-sound"
 import { driverSnapshots, formatSnapshotAge } from "@/lib/offline-storage"
 import { useConnectivity } from "@/hooks/use-connectivity"
-import { registerBackgroundTracking, startBackgroundTracking, stopBackgroundTracking } from "@/lib/background-tracking"
+import { registerBackgroundTracking, startBackgroundTracking, stopBackgroundTracking, notifyAppState } from "@/lib/background-tracking"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -129,6 +129,35 @@ export default function DriverDashboardPage() {
             startBackgroundTracking(driverId)
         } else {
             stopBackgroundTracking()
+        }
+    }, [driverId])
+
+    // Notify Service Worker when app visibility changes (minimized, closed, locked)
+    // Keeps Realtime WebSocket connected while app is active/minimized
+    // Disconnects when app is closed to save battery
+    useEffect(() => {
+        if (!driverId) return
+
+        const handleVisibilityChange = () => {
+            const isActive = document.visibilityState === 'visible'
+            notifyAppState(isActive, driverId)
+        }
+
+        const handleBeforeUnload = () => {
+            notifyAppState(false, driverId)
+        }
+
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+        window.addEventListener('beforeunload', handleBeforeUnload)
+        window.addEventListener('pagehide', handleBeforeUnload)
+
+        // Initial state
+        notifyAppState(document.visibilityState === 'visible', driverId)
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange)
+            window.removeEventListener('beforeunload', handleBeforeUnload)
+            window.removeEventListener('pagehide', handleBeforeUnload)
         }
     }, [driverId])
 
