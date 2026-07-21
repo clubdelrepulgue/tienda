@@ -123,21 +123,37 @@ function RoutePolyline({ encodedPath }: { encodedPath: string }) {
     const polylineRef = useRef<google.maps.Polyline | null>(null)
 
     useEffect(() => {
-        if (!map || !encodedPath) return
+        if (!map) {
+            console.warn('[RoutePolyline] Map not ready')
+            return
+        }
+        if (!encodedPath) {
+            console.warn('[RoutePolyline] No encoded path provided')
+            return
+        }
+
+        console.log('[RoutePolyline] Rendering polyline, encoded path length:', encodedPath.length)
 
         // Clean up previous polyline
         polylineRef.current?.setMap(null)
 
-        const path = decodePolyline(encodedPath)
+        try {
+            const path = decodePolyline(encodedPath)
+            console.log('[RoutePolyline] Decoded', path.length, 'points')
 
-        polylineRef.current = new google.maps.Polyline({
-            path,
-            geodesic: true,
-            strokeColor: "#3b82f6",
-            strokeOpacity: 0.8,
-            strokeWeight: 5,
-            map,
-        })
+            polylineRef.current = new google.maps.Polyline({
+                path,
+                geodesic: true,
+                strokeColor: "#3b82f6",
+                strokeOpacity: 0.8,
+                strokeWeight: 5,
+                map,
+            })
+
+            console.log('[RoutePolyline] Polyline created successfully')
+        } catch (err) {
+            console.error('[RoutePolyline] Error creating polyline:', err)
+        }
 
         return () => {
             polylineRef.current?.setMap(null)
@@ -159,6 +175,18 @@ function MapFocuser({
     const map = useMap()
     const pointsRef = useRef(points)
     pointsRef.current = points
+    const autoFittedRef = useRef(false)
+
+    // First time we know both ends of the trip, frame the whole route instead of
+    // sitting at a fixed zoom — otherwise the map looks cramped and off-center.
+    useEffect(() => {
+        if (!map || autoFittedRef.current || points.length < 2) return
+
+        autoFittedRef.current = true
+        const bounds = new google.maps.LatLngBounds()
+        points.forEach((p) => bounds.extend(p))
+        map.fitBounds(bounds, 64)
+    }, [map, points])
 
     useEffect(() => {
         if (!map || !signal) return
@@ -221,6 +249,36 @@ function formatRelative(from: Date, nowMs: number): string {
     return `hace ${hours} h`
 }
 
+// Compact metric tile. Stacked (icon → label → value) so three of them fit on a
+// phone without truncating either the label or the value.
+function StatTile({
+    icon: Icon,
+    iconClassName,
+    label,
+    value,
+}: {
+    icon: typeof Navigation
+    iconClassName: string
+    label: string
+    value: string
+}) {
+    return (
+        <Card className="rounded-xl min-w-0">
+            <CardContent className="p-3 flex flex-col items-center gap-1.5 text-center">
+                <div
+                    className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${iconClassName}`}
+                >
+                    <Icon className="h-4 w-4" />
+                </div>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none">
+                    {label}
+                </p>
+                <p className="font-bold text-base leading-none whitespace-nowrap">{value}</p>
+            </CardContent>
+        </Card>
+    )
+}
+
 export function LiveTrackingMap({
     orderId,
     driverId,
@@ -254,6 +312,7 @@ export function LiveTrackingMap({
             const cached = routeCache.get(cacheKey)
 
             if (cached && now - cached.cachedAt < ROUTE_CACHE_MS) {
+                console.log('[fetchRoute] Using cached route')
                 setRoute(cached.route)
                 return
             }
@@ -263,6 +322,7 @@ export function LiveTrackingMap({
                 lastRequest?.key === cacheKey &&
                 now - lastRequest.requestedAt < ROUTE_CACHE_MS
             ) {
+                console.log('[fetchRoute] Recent request in progress, skipping')
                 return
             }
 
@@ -270,10 +330,15 @@ export function LiveTrackingMap({
             const lastOrigin = lastRouteOriginRef.current
             if (lastOrigin) {
                 const movedKm = haversineDistance(lastOrigin.lat, lastOrigin.lng, driverLat, driverLng)
-                if (movedKm < ROUTE_MIN_DISTANCE_KM) return
+                if (movedKm < ROUTE_MIN_DISTANCE_KM) {
+                    console.log('[fetchRoute] Driver moved < 150m, skipping')
+                    return
+                }
             }
 
             lastRouteRequestRef.current = { key: cacheKey, requestedAt: now }
+            console.log('[fetchRoute] Fetching route from', { originLat, originLng }, 'to', { destLat, destLng })
+
             try {
                 const params = new URLSearchParams({
                     originLat,
@@ -282,9 +347,15 @@ export function LiveTrackingMap({
                     destLng,
                 })
                 const res = await fetch(`/api/directions?${params}`)
-                if (!res.ok) throw new Error("Route fetch failed")
+                if (!res.ok) {
+                    const errorText = await res.text()
+                    console.error('[fetchRoute] API error:', res.status, errorText)
+                    throw new Error(`API error: ${res.status}`)
+                }
 
                 const data = await res.json()
+                console.log('[fetchRoute] Got response:', data)
+
                 const nextRoute = {
                     distanceKm: data.distanceKm,
                     durationMinutes: data.durationMinutes,
@@ -293,7 +364,9 @@ export function LiveTrackingMap({
                 routeCache.set(cacheKey, { route: nextRoute, cachedAt: now })
                 lastRouteOriginRef.current = { lat: driverLat, lng: driverLng }
                 setRoute(nextRoute)
-            } catch {
+                console.log('[fetchRoute] Route set:', nextRoute)
+            } catch (err) {
+                console.error('[fetchRoute] Error:', err)
                 // Fallback to Haversine
                 const dist = haversineDistance(
                     driverLat,
@@ -301,11 +374,13 @@ export function LiveTrackingMap({
                     destination.lat,
                     destination.lng
                 )
-                setRoute({
+                const fallbackRoute = {
                     distanceKm: +dist.toFixed(2),
                     durationMinutes: Math.ceil((dist / 15) * 60),
                     polyline: null,
-                })
+                }
+                setRoute(fallbackRoute)
+                console.log('[fetchRoute] Using Haversine fallback:', fallbackRoute)
             }
         },
         [destination.lat, destination.lng]
@@ -469,48 +544,29 @@ export function LiveTrackingMap({
             : null
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             {/* Stats cards */}
             {driverLocation && (
-                <div className={`grid gap-3 ${speedDisplay ? "grid-cols-3" : "grid-cols-2"}`}>
-                    <Card className="rounded-xl min-w-0">
-                        <CardContent className="p-4 flex items-center gap-3 min-w-0">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                                <Navigation className="h-5 w-5 text-primary" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs text-muted-foreground truncate">Distancia</p>
-                                <p className="font-bold text-lg truncate">
-                                    {route ? `${route.distanceKm} km` : "--"}
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="rounded-xl min-w-0">
-                        <CardContent className="p-4 flex items-center gap-3 min-w-0">
-                            <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
-                                <Clock className="h-5 w-5 text-green-600" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs text-muted-foreground truncate">Llegada estimada</p>
-                                <p className="font-bold text-lg truncate">
-                                    {route ? `~${route.durationMinutes} min` : "--"}
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
+                <div className={`grid gap-2 ${speedDisplay ? "grid-cols-3" : "grid-cols-2"}`}>
+                    <StatTile
+                        icon={Navigation}
+                        iconClassName="bg-primary/10 text-primary"
+                        label="Distancia"
+                        value={route ? `${route.distanceKm} km` : "--"}
+                    />
+                    <StatTile
+                        icon={Clock}
+                        iconClassName="bg-green-500/10 text-green-600"
+                        label="Llegada"
+                        value={route ? `~${route.durationMinutes} min` : "--"}
+                    />
                     {speedDisplay && (
-                        <Card className="rounded-xl min-w-0">
-                            <CardContent className="p-4 flex items-center gap-3 min-w-0">
-                                <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
-                                    <Gauge className="h-5 w-5 text-orange-600" />
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-xs text-muted-foreground truncate">Velocidad</p>
-                                    <p className="font-bold text-lg truncate">{speedDisplay}</p>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <StatTile
+                            icon={Gauge}
+                            iconClassName="bg-orange-500/10 text-orange-600"
+                            label="Velocidad"
+                            value={speedDisplay}
+                        />
                     )}
                 </div>
             )}
@@ -521,7 +577,11 @@ export function LiveTrackingMap({
                     defaultCenter={center}
                     defaultZoom={14}
                     gestureHandling="greedy"
-                    disableDefaultUI={false}
+                    // The default Google chrome (Map/Satellite tabs, pegman, compass,
+                    // fullscreen) eats most of a phone-sized map — keep it clean and
+                    // rely on pinch/drag, which `greedy` already allows.
+                    disableDefaultUI
+                    clickableIcons={false}
                     mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || undefined}
                 >
                     {/* Fit-to-route on "Navegar" */}
@@ -602,7 +662,7 @@ export function LiveTrackingMap({
                             position={{ lat: branchLocation.lat, lng: branchLocation.lng }}
                             title="El Club del Repulge"
                             logoUrl={branchLogo}
-                            size={60}
+                            size={44}
                             accentColor={branchAccentColor || "#f97316"}
                             zIndex={1}
                         />
@@ -613,15 +673,16 @@ export function LiveTrackingMap({
             {/* Last updated */}
             {lastUpdated && (
                 <div className="flex flex-col items-center justify-center gap-1">
-                    <div className="flex items-center justify-center gap-2">
-                        <p className="text-xs text-muted-foreground">
-                            Ubicación actualizada {formatRelative(lastUpdated, now)}
+                    <div className="flex items-center justify-center gap-1.5">
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-green-500/60 animate-ping" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">
+                            Actualizado {formatRelative(lastUpdated, now)}
+                            {driverLocation?.accuracy != null &&
+                                ` · ±${Math.round(driverLocation.accuracy)}m`}
                         </p>
-                        {driverLocation?.accuracy != null && (
-                            <span className="text-xs text-muted-foreground">
-                                (±{Math.round(driverLocation.accuracy)}m)
-                            </span>
-                        )}
                     </div>
                     {now - lastUpdated.getTime() > 90000 && (
                         <p className="text-xs text-amber-600 dark:text-amber-500">

@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { normalizePhone } from "@/lib/customer"
-import { LOYALTY_TARGET } from "@/lib/loyalty"
+import { LOYALTY_TARGET, resolveRewardCoupon } from "@/lib/loyalty"
 import type { CustomerLoyalty } from "@/lib/loyalty"
 
 export interface AccountOrderSummary {
@@ -151,7 +151,11 @@ export async function getAccountData(): Promise<{ error: string } | AccountData>
         ordersCount: customerRow.orders_count ?? 0,
         progress: customerRow.loyalty_progress ?? 0,
         target: LOYALTY_TARGET,
-        rewardCouponCode: customerRow.reward_coupon_code || null,
+        rewardCouponCode: await resolveRewardCoupon(
+            admin,
+            customerRow.phone,
+            customerRow.reward_coupon_code || null
+        ),
     }
 
     let orders: AccountOrderSummary[] = []

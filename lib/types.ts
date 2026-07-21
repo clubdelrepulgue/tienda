@@ -86,6 +86,8 @@ export interface Order {
   subtotal: number
   deliveryFee: number
   total: number
+  couponCode?: string
+  couponDiscount?: number
   status: OrderStatus
   createdAt: string
   acceptedAt?: string

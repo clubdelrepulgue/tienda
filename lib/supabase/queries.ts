@@ -304,6 +304,8 @@ function mapOrder(row: any, items: CartItem[]): Order {
         subtotal: parseFloat(row.subtotal),
         deliveryFee: parseFloat(row.delivery_fee),
         total: parseFloat(row.total),
+        couponCode: row.coupon_code || undefined,
+        couponDiscount: row.coupon_discount ? parseFloat(row.coupon_discount) : 0,
         status: row.status,
         createdAt: row.created_at,
         acceptedAt: row.accepted_at,
@@ -413,6 +415,10 @@ export async function getOrderById(id: string): Promise<Order | null> {
 export async function getCoupons(): Promise<Coupon[]> {
     const supabase = await createClient()
 
+    // Personal loyalty rewards (customer_phone set) are not marketing coupons:
+    // they're issued and consumed automatically, and deleting one from here
+    // used to strand the customer holding the code. Keep the list to coupons
+    // staff actually manage. The column only exists after scripts/015.
     const { data, error } = await supabase
         .from("coupons")
         .select("*")
@@ -421,23 +427,25 @@ export async function getCoupons(): Promise<Coupon[]> {
     if (error) throw error
     if (!data) return []
 
-    return data.map((row) => ({
-        id: row.id,
-        code: row.code,
-        description: row.description,
-        discountType: row.discount_type,
-        discountValue: parseFloat(row.discount_value),
-        minOrderAmount: parseFloat(row.min_order_amount || 0),
-        maxDiscountAmount: row.max_discount_amount ? parseFloat(row.max_discount_amount) : undefined,
-        usageLimit: row.usage_limit,
-        usageCount: row.usage_count || 0,
-        perUserLimit: row.per_user_limit || 1,
-        validFrom: row.valid_from,
-        validUntil: row.valid_until,
-        applicableTo: row.applicable_to || [],
-        excludedProducts: row.excluded_products || [],
-        isActive: row.is_active,
-    }))
+    return data
+        .filter((row) => !row.customer_phone)
+        .map((row) => ({
+            id: row.id,
+            code: row.code,
+            description: row.description,
+            discountType: row.discount_type,
+            discountValue: parseFloat(row.discount_value),
+            minOrderAmount: parseFloat(row.min_order_amount || 0),
+            maxDiscountAmount: row.max_discount_amount ? parseFloat(row.max_discount_amount) : undefined,
+            usageLimit: row.usage_limit,
+            usageCount: row.usage_count || 0,
+            perUserLimit: row.per_user_limit || 1,
+            validFrom: row.valid_from,
+            validUntil: row.valid_until,
+            applicableTo: row.applicable_to || [],
+            excludedProducts: row.excluded_products || [],
+            isActive: row.is_active,
+        }))
 }
 
 // ─── Delivery Zones ────────────────────────────────────────────

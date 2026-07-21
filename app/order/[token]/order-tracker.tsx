@@ -144,7 +144,7 @@ export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps
                 <main className="mx-auto max-w-md px-4 py-6 flex flex-col gap-6 w-full">
                     {/* Status Stepper */}
                     <Card className="rounded-2xl bg-card border-border">
-                        <CardContent className="p-6">
+                        <CardContent className="p-5">
                             {isCancelled ? (
                                 <div className="text-center py-4">
                                     <Badge className="bg-destructive/15 text-destructive border-destructive/20 text-sm px-4 py-1.5">
@@ -155,29 +155,31 @@ export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps
                                     </p>
                                 </div>
                             ) : (
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-start">
                                     {steps.map((step, i) => {
                                         const isComplete = currentStepIndex >= i
                                         const isCurrent = currentStepIndex === i
                                         const StepIcon = step.icon
 
                                         return (
-                                            <div key={step.status} className="flex items-center flex-1 last:flex-none">
-                                                <div className="flex flex-col items-center gap-2">
+                                            <div key={step.status} className="flex items-start flex-1 last:flex-none">
+                                                {/* Fixed-width column so the labels stay under their
+                                                    icon and the last step never gets clipped */}
+                                                <div className="flex w-12 shrink-0 flex-col items-center gap-1.5">
                                                     <div
                                                         className={cn(
-                                                            "h-10 w-10 rounded-full flex items-center justify-center transition-all",
+                                                            "h-9 w-9 rounded-full flex items-center justify-center transition-all",
                                                             isComplete
                                                                 ? "bg-primary text-primary-foreground"
                                                                 : "bg-secondary text-muted-foreground",
                                                             isCurrent && "ring-4 ring-primary/20"
                                                         )}
                                                     >
-                                                        <StepIcon className="h-5 w-5" />
+                                                        <StepIcon className="h-4 w-4" />
                                                     </div>
                                                     <span
                                                         className={cn(
-                                                            "text-xs font-medium text-center",
+                                                            "text-[10px] font-medium text-center leading-tight whitespace-nowrap",
                                                             isComplete
                                                                 ? "text-primary"
                                                                 : "text-muted-foreground"
@@ -189,7 +191,7 @@ export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps
                                                 {i < steps.length - 1 && (
                                                     <div
                                                         className={cn(
-                                                            "flex-1 h-0.5 mx-2 rounded-full transition-colors",
+                                                            "flex-1 h-0.5 mt-[17px] mx-0.5 rounded-full transition-colors",
                                                             currentStepIndex > i
                                                                 ? "bg-primary"
                                                                 : "bg-secondary"
@@ -208,7 +210,7 @@ export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps
                     {showTracking && destination && (
                         <Card className="rounded-2xl bg-card border-border overflow-hidden">
                             <CardContent className="p-4">
-                                <h2 className="font-semibold text-card-foreground mb-4 text-sm uppercase tracking-wide">
+                                <h2 className="font-semibold text-card-foreground mb-3 text-sm uppercase tracking-wide">
                                     ¡Tu pedido ya va en camino! 🛵
                                 </h2>
                                 <LiveTrackingMap
@@ -217,7 +219,7 @@ export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps
                                     trackingToken={token}
                                     destination={destination}
                                     branchLocation={branchLocation ?? undefined}
-                                    height="300px"
+                                    height="clamp(320px, 52vh, 460px)"
                                 />
                             </CardContent>
                         </Card>
@@ -270,6 +272,12 @@ export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps
                                     <span>Subtotal</span>
                                     <span>{formatPrice(order.subtotal)}</span>
                                 </div>
+                                {(order.couponDiscount ?? 0) > 0 && (
+                                    <div className="flex justify-between text-green-600">
+                                        <span>Descuento{order.couponCode ? ` (${order.couponCode})` : ""}</span>
+                                        <span>-{formatPrice(order.couponDiscount!)}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between text-muted-foreground">
                                     <span>Delivery</span>
                                     <span>

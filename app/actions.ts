@@ -126,6 +126,29 @@ function isMissingTableError(error: any) {
     return error?.code === "42P01"
 }
 
+function isMissingColumnError(error: any) {
+    return error?.code === "42703"
+}
+
+// A personal reward (scripts/015) may only be redeemed by the phone that
+// earned it. Public coupons have customer_phone NULL and are open to everyone.
+function isCouponOwnedByOther(coupon: any, normalizedPhone: string) {
+    const owner = coupon?.customer_phone
+    if (!owner) return false
+    return normalizeCustomerPhone(owner) !== normalizedPhone
+}
+
+// Single source of truth for the discount, so validateCoupon and createOrder
+// can never disagree — the latter recomputes it instead of trusting the client.
+function computeCouponDiscount(coupon: any, cartTotal: number) {
+    if (coupon.discount_type === "percentage") {
+        const discount = cartTotal * (Number(coupon.discount_value) / 100)
+        const cap = coupon.max_discount_amount ? Number(coupon.max_discount_amount) : null
+        return cap != null && discount > cap ? cap : discount
+    }
+    return Number(coupon.discount_value)
+}
+
 async function upsertCustomerOnOrder(
     adminSupabase: any,
     phone: string,
@@ -173,7 +196,7 @@ async function createLoyaltyRewardCoupon(adminSupabase: any, phone: string): Pro
     const code = `FIDE-${Math.random().toString(36).slice(2, 7).toUpperCase()}`
     const now = Date.now()
 
-    const { error } = await adminSupabase.from("coupons").insert({
+    const row = {
         code,
         description: `Premio fidelidad (${LOYALTY_TARGET} pedidos) — cliente ${phone}`,
         discount_type: "percentage",
@@ -184,7 +207,18 @@ async function createLoyaltyRewardCoupon(adminSupabase: any, phone: string): Pro
         valid_from: new Date(now).toISOString(),
         valid_until: new Date(now + LOYALTY_REWARD_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString(),
         is_active: true,
-    })
+        // Personal reward: only this phone can redeem it (scripts/015).
+        customer_phone: phone,
+    }
+
+    let { error } = await adminSupabase.from("coupons").insert(row)
+
+    if (isMissingColumnError(error)) {
+        // scripts/015 not applied yet — fall back to a global coupon rather
+        // than denying the customer the reward they earned.
+        const { customer_phone, ...legacyRow } = row
+        ;({ error } = await adminSupabase.from("coupons").insert(legacyRow))
+    }
 
     if (error) {
         console.error("Error creating loyalty coupon:", error.message)
@@ -431,17 +465,49 @@ export async function createOrder(formData: {
 
     // Per-customer coupon limit: a coupon can only be redeemed per_user_limit
     // times by the same phone. Enforced here (server-side), not just in the UI.
-    let redeemedCoupon: { id: string; code: string; usageCount: number } | null = null
+    let redeemedCoupon: { id: string; code: string } | null = null
     const normalizedCustomerPhone = normalizeCustomerPhone(formData.customerPhone)
 
     if (formData.couponCode && (formData.couponDiscount || 0) > 0) {
         const { data: coupon } = await adminSupabase
             .from("coupons")
-            .select("id, code, per_user_limit, usage_count")
+            .select("*")
             .eq("code", formData.couponCode.toUpperCase())
             .maybeSingle()
 
-        if (coupon && normalizedCustomerPhone) {
+        if (!coupon || coupon.is_active === false) {
+            return { error: "Código de cupón inválido" }
+        }
+
+        // A personal reward is only redeemable by the phone that earned it —
+        // enforced here too, not just in validateCoupon, since the client
+        // controls what it posts.
+        if (isCouponOwnedByOther(coupon, normalizedCustomerPhone)) {
+            return { error: "Este cupón pertenece a otro cliente" }
+        }
+
+        // validateCoupon runs on the client's say-so; re-check everything here
+        // so a crafted request can't replay an expired or exhausted coupon.
+        if (new Date(coupon.valid_from) > new Date()) {
+            return { error: "Este cupón aún no está disponible" }
+        }
+        if (coupon.valid_until && new Date(coupon.valid_until) < new Date()) {
+            return { error: "Este cupón ha expirado" }
+        }
+        if (formData.subtotal < Number(coupon.min_order_amount || 0)) {
+            return { error: `Mínimo de compra: ${formatPrice(Number(coupon.min_order_amount))}` }
+        }
+        if (coupon.usage_limit && (coupon.usage_count ?? 0) >= coupon.usage_limit) {
+            return { error: "Este cupón ha alcanzado su límite de uso" }
+        }
+
+        // The discount is money: never take the client's number on trust.
+        const expectedDiscount = computeCouponDiscount(coupon, formData.subtotal)
+        if (toCents(expectedDiscount) !== toCents(formData.couponDiscount || 0)) {
+            return { error: "El descuento del cupón no es válido" }
+        }
+
+        if (normalizedCustomerPhone) {
             const { count, error: redemptionsError } = await adminSupabase
                 .from("coupon_redemptions")
                 .select("id", { count: "exact", head: true })
@@ -455,10 +521,10 @@ export async function createOrder(formData: {
                 }
             } else if ((count ?? 0) >= (coupon.per_user_limit || 1)) {
                 return { error: "Ya usaste este cupón el máximo de veces permitido" }
-            } else {
-                redeemedCoupon = { id: coupon.id, code: coupon.code, usageCount: coupon.usage_count || 0 }
             }
         }
+
+        redeemedCoupon = { id: coupon.id, code: coupon.code }
     }
 
     // POS orders are taken face to face at the counter: there is nothing to
@@ -540,25 +606,34 @@ export async function createOrder(formData: {
         }
     }
 
-    if (redeemedCoupon && normalizedCustomerPhone) {
+    if (redeemedCoupon) {
         try {
-            await adminSupabase.from("coupon_redemptions").insert({
-                coupon_id: redeemedCoupon.id,
-                customer_phone: normalizedCustomerPhone,
-                order_id: order.id,
+            if (normalizedCustomerPhone) {
+                await adminSupabase.from("coupon_redemptions").insert({
+                    coupon_id: redeemedCoupon.id,
+                    customer_phone: normalizedCustomerPhone,
+                    order_id: order.id,
+                })
+            }
+
+            // Atomic increment (scripts/015). Read-then-write lost concurrent
+            // redemptions; the old 004 trigger double-counted them.
+            const { error: bumpError } = await adminSupabase.rpc("bump_coupon_usage", {
+                p_coupon_id: redeemedCoupon.id,
             })
 
-            await adminSupabase
-                .from("coupons")
-                .update({ usage_count: redeemedCoupon.usageCount + 1 })
-                .eq("id", redeemedCoupon.id)
+            if (bumpError) {
+                console.error("Error incrementing coupon usage:", bumpError.message)
+            }
 
             // If the customer just spent their loyalty reward, clear it
-            await adminSupabase
-                .from("customers")
-                .update({ reward_coupon_code: null })
-                .eq("phone", normalizedCustomerPhone)
-                .eq("reward_coupon_code", redeemedCoupon.code)
+            if (normalizedCustomerPhone) {
+                await adminSupabase
+                    .from("customers")
+                    .update({ reward_coupon_code: null })
+                    .eq("phone", normalizedCustomerPhone)
+                    .eq("reward_coupon_code", redeemedCoupon.code)
+            }
         } catch (redemptionError) {
             console.error("Error recording coupon redemption:", redemptionError)
         }
@@ -1522,17 +1597,29 @@ export async function removeAdminUserAccess(userId: string): ActionResult {
 // ─── Coupons ───────────────────────────────────────────────────
 
 export async function validateCoupon(code: string, cartTotal: number, customerPhone?: string) {
-    const supabase = await createClient()
+    // Service-role read: personal rewards are hidden from the public RLS
+    // policy (scripts/015) so they can't be enumerated or spent by others.
+    // Every check below runs server-side, so nothing extra is exposed.
+    const supabase = createAdminClient()
+    const normalizedPhone = normalizeCustomerPhone(customerPhone || "")
 
     const { data: coupon, error } = await supabase
         .from("coupons")
         .select("*")
         .eq("code", code.toUpperCase())
         .eq("is_active", true)
-        .single()
+        .maybeSingle()
 
     if (error || !coupon) {
         return { error: "Código de cupón inválido" }
+    }
+
+    // Personal loyalty reward: same "invalid" wording as an unknown code, so a
+    // stranger can't probe whether a FIDE-* code exists.
+    if (isCouponOwnedByOther(coupon, normalizedPhone)) {
+        return normalizedPhone
+            ? { error: "Este cupón pertenece a otro cliente" }
+            : { error: "Ingresá tu teléfono para usar este cupón" }
     }
 
     // Check dates
@@ -1554,7 +1641,6 @@ export async function validateCoupon(code: string, cartTotal: number, customerPh
     }
 
     // Per-customer limit (early feedback; createOrder re-enforces this)
-    const normalizedPhone = normalizeCustomerPhone(customerPhone || "")
     if (normalizedPhone) {
         try {
             const adminSupabase = createAdminClient()
@@ -1572,16 +1658,7 @@ export async function validateCoupon(code: string, cartTotal: number, customerPh
         }
     }
 
-    // Calculate discount
-    let discount = 0
-    if (coupon.discount_type === "percentage") {
-        discount = cartTotal * (coupon.discount_value / 100)
-        if (coupon.max_discount_amount && discount > coupon.max_discount_amount) {
-            discount = coupon.max_discount_amount
-        }
-    } else {
-        discount = coupon.discount_value
-    }
+    const discount = computeCouponDiscount(coupon, cartTotal)
 
     return {
         valid: true,
@@ -1668,9 +1745,29 @@ export async function updateCoupon(
 export async function deleteCoupon(id: string) {
     const supabase = await createClient()
 
+    // Grab the code first: customers reference their reward by code, so
+    // deleting the row without clearing it leaves them holding a code that
+    // always fails validation.
+    const { data: coupon } = await supabase
+        .from("coupons")
+        .select("code")
+        .eq("id", id)
+        .maybeSingle()
+
     const { error } = await supabase.from("coupons").delete().eq("id", id)
 
     if (error) return { error: error.message }
+
+    if (coupon?.code) {
+        const { error: unlinkError } = await createAdminClient()
+            .from("customers")
+            .update({ reward_coupon_code: null })
+            .eq("reward_coupon_code", coupon.code)
+
+        if (unlinkError && !isMissingTableError(unlinkError)) {
+            console.error("Error clearing loyalty reward reference:", unlinkError.message)
+        }
+    }
 
     revalidatePath("/admin/coupons")
     return { success: true }
