@@ -109,7 +109,7 @@ export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps
         <GoogleMapsProvider>
             <div className="flex min-h-dvh flex-1 flex-col bg-background">
                 <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
-                    <div className="mx-auto max-w-2xl flex items-center gap-3 px-4 py-3">
+                    <div className="mx-auto max-w-md flex items-center gap-3 px-4 py-3">
                         <Button variant="ghost" size="icon" className="rounded-full shrink-0" asChild>
                             <Link href="/" aria-label="Volver al menú">
                                 <ArrowLeft className="h-5 w-5" />
@@ -141,7 +141,7 @@ export function OrderTracker({ initialOrder, token, loyalty }: OrderTrackerProps
                     </div>
                 </header>
 
-                <main className="mx-auto max-w-2xl px-4 py-6 flex flex-col gap-6">
+                <main className="mx-auto max-w-md px-4 py-6 flex flex-col gap-6 w-full">
                     {/* Status Stepper */}
                     <Card className="rounded-2xl bg-card border-border">
                         <CardContent className="p-6">

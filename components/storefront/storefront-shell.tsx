@@ -8,6 +8,7 @@ import { ProductModal } from "@/components/storefront/product-modal"
 import { CartSheet } from "@/components/storefront/cart-sheet"
 import { FloatingCart } from "@/components/storefront/floating-cart"
 import { ReorderBanner } from "@/components/storefront/reorder-banner"
+import { ActiveOrdersBanner } from "@/components/storefront/active-orders-banner"
 import { useCartStore } from "@/lib/store"
 import { formatSnapshotAge, menuSnapshots } from "@/lib/offline-storage"
 import { useConnectivity } from "@/hooks/use-connectivity"
@@ -191,6 +192,7 @@ export function StorefrontShell({
                 </div>
             )}
             <Banner branch={branch} />
+            <ActiveOrdersBanner />
             <ReorderBanner
                 branch={branch}
                 products={products}
