@@ -461,6 +461,11 @@ export async function createOrder(formData: {
         }
     }
 
+    // POS orders are taken face to face at the counter: there is nothing to
+    // review, so they skip the "new" column and land straight in the kitchen.
+    const isCounterOrder = formData.orderType === "pos"
+    const initialStatus = isCounterOrder ? "accepted" : "new"
+
     const { data: order, error: orderError } = await adminSupabase
         .from("orders")
         .insert({
@@ -474,7 +479,8 @@ export async function createOrder(formData: {
             subtotal: formData.subtotal,
             delivery_fee: formData.deliveryFee,
             total: formData.total,
-            status: "new",
+            status: initialStatus,
+            accepted_at: isCounterOrder ? new Date().toISOString() : null,
             coupon_code: formData.couponCode || null,
             coupon_discount: formData.couponDiscount || 0,
             delivery_zone_id: resolvedDeliveryZoneId,

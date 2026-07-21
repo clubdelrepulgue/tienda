@@ -180,15 +180,15 @@ export default function AdminShell({
   }
 
   return (
-    <div className="flex min-h-dvh bg-background">
+    <div className="flex h-dvh max-h-dvh overflow-hidden bg-background">
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          "sticky top-0 hidden h-dvh max-h-dvh min-h-dvh shrink-0 flex-col border-r border-sidebar-border/80 bg-sidebar transition-[width] duration-300 ease-in-out md:flex",
+          "hidden h-full shrink-0 flex-col overflow-hidden border-r border-sidebar-border/80 bg-sidebar transition-[width] duration-300 ease-in-out md:flex",
           sidebarCollapsed ? "w-[76px]" : "w-64"
         )}
       >
-        <div className={cn("border-b border-sidebar-border/80 py-3", sidebarCollapsed ? "px-2" : "px-4")}>
+        <div className={cn("shrink-0 border-b border-sidebar-border/80 py-3", sidebarCollapsed ? "px-2" : "px-4")}>
           <div className={cn("flex items-center gap-2", sidebarCollapsed ? "flex-col justify-center" : "justify-between")}>
             <Link
               href="/admin"
@@ -257,14 +257,14 @@ export default function AdminShell({
         <ScrollArea className="min-h-0 flex-1">
           <NavContent pathname={pathname} collapsed={sidebarCollapsed} />
         </ScrollArea>
-        <div className={cn("border-t border-sidebar-border/80", sidebarCollapsed ? "p-2" : "p-3")}>
+        <div className={cn("shrink-0 border-t border-sidebar-border/80", sidebarCollapsed ? "p-2" : "p-3")}>
           <SignOutButton onClick={handleSignOut} collapsed={sidebarCollapsed} />
         </div>
       </aside>
 
       {/* Mobile Header + Sheet */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-50 flex items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden">
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+        <header className="z-50 flex shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9" suppressHydrationWarning>
@@ -306,7 +306,9 @@ export default function AdminShell({
           </span>
         </header>
 
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8 xl:px-10">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 md:px-8 md:py-8 xl:px-10">
+          {children}
+        </main>
       </div>
     </div>
   )

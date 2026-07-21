@@ -61,7 +61,8 @@ export async function GET(request: NextRequest) {
             case "upsells":
                 return NextResponse.json(await getAllUpsellRules(branchId))
             case "kitchen-orders":
-                // Orders for kitchen display: accepted, preparing, ready (new orders must be accepted first at counter)
+                // Orders for kitchen display: accepted, preparing, ready. Online/phone orders
+                // must be accepted at the counter first; POS orders are created already accepted.
                 return NextResponse.json(await getOrdersByStatus(["accepted", "preparing", "ready"], branchId))
             case "dispatch": {
                 // All data needed for the dispatch view

@@ -338,7 +338,7 @@ export default function POSPage() {
                 subtotal,
                 deliveryFee,
                 total: orderTotal,
-                status: "new",
+                status: "accepted",
                 createdAt: new Date().toISOString(),
                 branchId: selectedBranch,
             }
@@ -354,7 +354,7 @@ export default function POSPage() {
     }
 
     return (
-        <div className="h-[calc(100vh-4rem)] flex gap-4">
+        <div className="h-full min-h-0 flex gap-4">
             {/* Left Side - Products */}
             <div className="flex-1 flex flex-col min-w-0">
                 {/* Categories */}
