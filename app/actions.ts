@@ -2007,21 +2007,69 @@ export async function deleteDriver(id: string) {
     return { success: true }
 }
 
+/**
+ * Registra una posición del repartidor.
+ *
+ * Todo el trabajo lo hace la función `record_driver_location` (scripts/016) en
+ * un único round-trip: descarta fixes que llegan desordenados, refresca
+ * `last_seen_at` y archiva en el historial solo cuando hubo movimiento real.
+ *
+ * Antes esto hacía dos escrituras sobre `drivers` (un UPDATE directo más el
+ * que disparaba el trigger del historial), lo que generaba dos eventos Realtime
+ * por posición y podía hacer retroceder el pin en el panel.
+ */
 export async function updateDriverLocation(
     driverId: string,
     lat: number,
     lng: number,
     extra?: {
-        accuracy?: number
+        accuracy?: number | null
         speed?: number | null
         heading?: number | null
         altitude?: number | null
+        capturedAt?: string
     }
 ) {
     const supabase = createAdminClient()
-    const now = new Date().toISOString()
 
-    // Update current_location on drivers (includes accuracy for UI indicators)
+    const capturedAt = extra?.capturedAt ?? new Date().toISOString()
+
+    const { data, error } = await supabase.rpc("record_driver_location", {
+        p_driver_id: driverId,
+        p_lat: lat,
+        p_lng: lng,
+        p_accuracy: extra?.accuracy ?? null,
+        p_speed_ms: extra?.speed ?? null,
+        p_heading: extra?.heading ?? null,
+        p_captured_at: capturedAt,
+    })
+
+    if (error) {
+        // La migración 016 puede no estar aplicada todavía: caemos al camino
+        // viejo para no dejar al repartidor sin reportar posición.
+        if (isMissingFunctionError(error)) {
+            return updateDriverLocationFallback(supabase, driverId, lat, lng, extra, capturedAt)
+        }
+        return { error: error.message }
+    }
+
+    const result = Array.isArray(data) ? data[0] : data
+    return { success: true, stale: result?.stale === true }
+}
+
+function isMissingFunctionError(error: any) {
+    // 42883 = undefined_function, PGRST202 = PostgREST no encontró la función
+    return error?.code === "42883" || error?.code === "PGRST202"
+}
+
+async function updateDriverLocationFallback(
+    supabase: any,
+    driverId: string,
+    lat: number,
+    lng: number,
+    extra: { accuracy?: number | null; speed?: number | null; heading?: number | null } | undefined,
+    capturedAt: string
+) {
     const { data, error } = await supabase
         .from("drivers")
         .update({
@@ -2031,7 +2079,7 @@ export async function updateDriverLocation(
                 accuracy: extra?.accuracy ?? null,
                 heading: extra?.heading ?? null,
                 speed: extra?.speed ?? null,
-                updated_at: now,
+                updated_at: capturedAt,
             },
         })
         .eq("id", driverId)
@@ -2040,21 +2088,89 @@ export async function updateDriverLocation(
     if (error) return { error: error.message }
     if (!data || data.length === 0) return { error: "Repartidor no encontrado" }
 
-    // Insert into location history for tracking analytics
-    // Fire-and-forget — don't block the response
-    supabase
-        .from("driver_location_history")
-        .insert({
-            driver_id: driverId,
-            lat,
-            lng,
-            accuracy: extra?.accuracy ?? null,
-            speed: extra?.speed != null ? extra.speed * 3.6 : null, // m/s → km/h
-            heading: extra?.heading ?? null,
-        })
-        .then(({ error: histErr }) => {
-            if (histErr) console.error("Error inserting location history:", histErr.message)
-        })
+    return { success: true, stale: false }
+}
+
+/**
+ * Estado de turno del repartidor.
+ *
+ * Va por server action con el cliente admin porque los repartidores se
+ * autentican con un lookup por teléfono, no con una sesión de Supabase Auth
+ * (no hay `auth.uid()`), y la policy "Drivers self read" les niega el SELECT.
+ */
+export async function getDriverShiftState(driverId: string) {
+    const supabase = createAdminClient()
+
+    const { data, error } = await supabase
+        .from("drivers")
+        .select("id, name, is_active, is_available, is_on_shift, shift_started_at, last_seen_at")
+        .eq("id", driverId)
+        .maybeSingle()
+
+    if (error) {
+        // Migración 016 sin aplicar: las columnas de turno no existen todavía.
+        if (isMissingColumnError(error)) {
+            const { data: basic } = await supabase
+                .from("drivers")
+                .select("id, name, is_active, is_available")
+                .eq("id", driverId)
+                .maybeSingle()
+
+            if (!basic) return { error: "Repartidor no encontrado" }
+            return {
+                driver: {
+                    id: basic.id,
+                    name: basic.name,
+                    isActive: basic.is_active,
+                    isAvailable: basic.is_available,
+                    isOnShift: undefined,
+                    shiftStartedAt: null,
+                    lastSeenAt: null,
+                },
+            }
+        }
+        return { error: error.message }
+    }
+
+    if (!data) return { error: "Repartidor no encontrado" }
+
+    return {
+        driver: {
+            id: data.id,
+            name: data.name,
+            isActive: data.is_active,
+            isAvailable: data.is_available,
+            isOnShift: data.is_on_shift ?? undefined,
+            shiftStartedAt: data.shift_started_at ?? null,
+            lastSeenAt: data.last_seen_at ?? null,
+        },
+    }
+}
+
+/** El repartidor entra o sale de turno desde su app. */
+export async function setDriverShift(driverId: string, onShift: boolean) {
+    const supabase = createAdminClient()
+
+    const { error } = await supabase.rpc("set_driver_shift", {
+        p_driver_id: driverId,
+        p_on_shift: onShift,
+    })
+
+    if (error) {
+        if (isMissingFunctionError(error)) {
+            const { error: updateError } = await supabase
+                .from("drivers")
+                .update({
+                    is_on_shift: onShift,
+                    shift_started_at: onShift ? new Date().toISOString() : null,
+                    last_seen_at: onShift ? new Date().toISOString() : undefined,
+                })
+                .eq("id", driverId)
+            if (updateError) return { error: updateError.message }
+            return { success: true }
+        }
+        return { error: error.message }
+    }
 
     return { success: true }
 }

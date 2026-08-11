@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { Navigation, Clock, Bike, Home, Gauge } from "lucide-react"
 import { BranchLogoMarker } from "./branch-logo-marker"
+import { useSmoothPosition } from "@/hooks/use-smooth-position"
 
 interface LiveTrackingMapProps {
     orderId: string
@@ -123,24 +124,13 @@ function RoutePolyline({ encodedPath }: { encodedPath: string }) {
     const polylineRef = useRef<google.maps.Polyline | null>(null)
 
     useEffect(() => {
-        if (!map) {
-            console.warn('[RoutePolyline] Map not ready')
-            return
-        }
-        if (!encodedPath) {
-            console.warn('[RoutePolyline] No encoded path provided')
-            return
-        }
-
-        console.log('[RoutePolyline] Rendering polyline, encoded path length:', encodedPath.length)
+        if (!map || !encodedPath) return
 
         // Clean up previous polyline
         polylineRef.current?.setMap(null)
 
         try {
             const path = decodePolyline(encodedPath)
-            console.log('[RoutePolyline] Decoded', path.length, 'points')
-
             polylineRef.current = new google.maps.Polyline({
                 path,
                 geodesic: true,
@@ -149,8 +139,6 @@ function RoutePolyline({ encodedPath }: { encodedPath: string }) {
                 strokeWeight: 5,
                 map,
             })
-
-            console.log('[RoutePolyline] Polyline created successfully')
         } catch (err) {
             console.error('[RoutePolyline] Error creating polyline:', err)
         }
@@ -192,12 +180,7 @@ function MapFocuser({
         if (!map || !signal) return
 
         const pts = pointsRef.current
-        if (pts.length === 0) {
-            console.warn('[MapFocuser] No points to focus on')
-            return
-        }
-
-        console.log('[MapFocuser] Focusing on', pts.length, 'points, signal:', signal)
+        if (pts.length === 0) return
 
         // Single point: center and zoom in
         if (pts.length === 1) {
@@ -312,7 +295,6 @@ export function LiveTrackingMap({
             const cached = routeCache.get(cacheKey)
 
             if (cached && now - cached.cachedAt < ROUTE_CACHE_MS) {
-                console.log('[fetchRoute] Using cached route')
                 setRoute(cached.route)
                 return
             }
@@ -322,7 +304,6 @@ export function LiveTrackingMap({
                 lastRequest?.key === cacheKey &&
                 now - lastRequest.requestedAt < ROUTE_CACHE_MS
             ) {
-                console.log('[fetchRoute] Recent request in progress, skipping')
                 return
             }
 
@@ -331,13 +312,11 @@ export function LiveTrackingMap({
             if (lastOrigin) {
                 const movedKm = haversineDistance(lastOrigin.lat, lastOrigin.lng, driverLat, driverLng)
                 if (movedKm < ROUTE_MIN_DISTANCE_KM) {
-                    console.log('[fetchRoute] Driver moved < 150m, skipping')
                     return
                 }
             }
 
             lastRouteRequestRef.current = { key: cacheKey, requestedAt: now }
-            console.log('[fetchRoute] Fetching route from', { originLat, originLng }, 'to', { destLat, destLng })
 
             try {
                 const params = new URLSearchParams({
@@ -354,7 +333,6 @@ export function LiveTrackingMap({
                 }
 
                 const data = await res.json()
-                console.log('[fetchRoute] Got response:', data)
 
                 const nextRoute = {
                     distanceKm: data.distanceKm,
@@ -364,7 +342,6 @@ export function LiveTrackingMap({
                 routeCache.set(cacheKey, { route: nextRoute, cachedAt: now })
                 lastRouteOriginRef.current = { lat: driverLat, lng: driverLng }
                 setRoute(nextRoute)
-                console.log('[fetchRoute] Route set:', nextRoute)
             } catch (err) {
                 console.error('[fetchRoute] Error:', err)
                 // Fallback to Haversine
@@ -380,7 +357,6 @@ export function LiveTrackingMap({
                     polyline: null,
                 }
                 setRoute(fallbackRoute)
-                console.log('[fetchRoute] Using Haversine fallback:', fallbackRoute)
             }
         },
         [destination.lat, destination.lng]
@@ -491,9 +467,38 @@ export function LiveTrackingMap({
         fetchDriverLocation()
 
         if (trackingToken) {
-            const interval = window.setInterval(fetchDriverLocation, 10000)
-            return () => {
+            // El cliente sigue el pedido por token, sin sesión de Supabase, así
+            // que no puede usar Realtime: acá polleamos. 5 s con la pestaña a la
+            // vista (el marcador interpola el tramo intermedio, así que se ve
+            // continuo) y nada mientras está oculta, para no gastar batería ni
+            // requests con el teléfono en el bolsillo.
+            let interval: number | null = null
+
+            const start = () => {
+                if (interval !== null) return
+                interval = window.setInterval(fetchDriverLocation, 5000)
+            }
+            const stop = () => {
+                if (interval === null) return
                 window.clearInterval(interval)
+                interval = null
+            }
+
+            const onVisibility = () => {
+                if (document.visibilityState === "visible") {
+                    fetchDriverLocation()
+                    start()
+                } else {
+                    stop()
+                }
+            }
+
+            onVisibility()
+            document.addEventListener("visibilitychange", onVisibility)
+
+            return () => {
+                stop()
+                document.removeEventListener("visibilitychange", onVisibility)
             }
         }
 
@@ -523,6 +528,13 @@ export function LiveTrackingMap({
             supabase.removeChannel(channel)
         }
     }, [driverId, fetchRoute, trackingToken])
+
+    // El pin se desliza entre lecturas en vez de saltar. Es cosmético: los
+    // números (distancia, ETA, "actualizado hace X") siguen saliendo de la
+    // posición real, no de la interpolada.
+    const smoothDriver = useSmoothPosition(
+        driverLocation ? { lat: driverLocation.lat, lng: driverLocation.lng } : null
+    )
 
     const center = driverLocation
         ? {
@@ -591,9 +603,9 @@ export function LiveTrackingMap({
                     {route?.polyline && <RoutePolyline encodedPath={route.polyline} />}
 
                     {/* Driver marker */}
-                    {driverLocation && hasMapId && (
+                    {driverLocation && smoothDriver && hasMapId && (
                         <AdvancedMarker
-                            position={{ lat: driverLocation.lat, lng: driverLocation.lng }}
+                            position={smoothDriver}
                             title="Repartidor"
                         >
                             <div className="relative">
@@ -628,9 +640,9 @@ export function LiveTrackingMap({
                             </div>
                         </AdvancedMarker>
                     )}
-                    {driverLocation && !hasMapId && (
+                    {driverLocation && smoothDriver && !hasMapId && (
                         <Marker
-                            position={{ lat: driverLocation.lat, lng: driverLocation.lng }}
+                            position={smoothDriver}
                             title="Repartidor"
                             icon={markerIcon(ICON_DRIVER)}
                             zIndex={3}

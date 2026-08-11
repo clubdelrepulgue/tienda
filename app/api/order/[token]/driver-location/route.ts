@@ -32,14 +32,37 @@ export async function GET(
 
     const { data: driver, error: driverError } = await supabase
         .from("drivers")
-        .select("current_location")
+        .select("current_location, last_seen_at")
         .eq("id", order.driver_id)
         .eq("is_active", true)
         .maybeSingle()
 
     if (driverError) {
+        // La migración 016 puede no estar aplicada: reintentamos sin last_seen_at
+        // antes de dejar al cliente sin seguimiento.
+        if (driverError.code === "42703") {
+            const { data: basic } = await supabase
+                .from("drivers")
+                .select("current_location")
+                .eq("id", order.driver_id)
+                .eq("is_active", true)
+                .maybeSingle()
+
+            return NextResponse.json(
+                { location: basic?.current_location ?? null, lastSeenAt: null },
+                { headers: { "Cache-Control": "no-store" } }
+            )
+        }
         return NextResponse.json({ error: driverError.message }, { status: 400 })
     }
 
-    return NextResponse.json({ location: driver?.current_location ?? null })
+    // `lastSeenAt` deja que el cliente distinga "el repartidor está parado en un
+    // semáforo" de "perdimos su señal", que en el mapa se ven exactamente igual.
+    return NextResponse.json(
+        {
+            location: driver?.current_location ?? null,
+            lastSeenAt: driver?.last_seen_at ?? null,
+        },
+        { headers: { "Cache-Control": "no-store" } }
+    )
 }

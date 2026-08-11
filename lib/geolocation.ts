@@ -93,3 +93,47 @@ function makeError(code: number, message: string): GeolocationPositionError {
         TIMEOUT: 3,
     } as GeolocationPositionError
 }
+
+// ─── Helpers geométricos compartidos ──────────────────────────────────────
+// Usados por el tracking del repartidor y por los mapas para decidir cuándo
+// una posición cambió lo suficiente como para valer una escritura o un
+// re-cálculo de ruta.
+
+const EARTH_RADIUS_M = 6_371_000
+
+/** Distancia en metros entre dos puntos (haversine). */
+export function distanceMeters(
+    aLat: number,
+    aLng: number,
+    bLat: number,
+    bLng: number
+): number {
+    const toRad = Math.PI / 180
+    const dLat = (bLat - aLat) * toRad
+    const dLng = (bLng - aLng) * toRad
+    const h =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(aLat * toRad) * Math.cos(bLat * toRad) * Math.sin(dLng / 2) ** 2
+    return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+}
+
+/** Rumbo en grados (0-360) de A hacia B. */
+export function bearingDegrees(
+    aLat: number,
+    aLng: number,
+    bLat: number,
+    bLng: number
+): number {
+    const toRad = Math.PI / 180
+    const y = Math.sin((bLng - aLng) * toRad) * Math.cos(bLat * toRad)
+    const x =
+        Math.cos(aLat * toRad) * Math.sin(bLat * toRad) -
+        Math.sin(aLat * toRad) * Math.cos(bLat * toRad) * Math.cos((bLng - aLng) * toRad)
+    return (Math.atan2(y, x) * (180 / Math.PI) + 360) % 360
+}
+
+/** Diferencia angular más corta entre dos rumbos (0-180). */
+export function headingDelta(a: number, b: number): number {
+    const diff = Math.abs(a - b) % 360
+    return diff > 180 ? 360 - diff : diff
+}

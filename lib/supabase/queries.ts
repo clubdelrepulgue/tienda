@@ -527,6 +527,9 @@ export async function getDrivers(): Promise<Driver[]> {
         vehiclePlate: row.vehicle_plate,
         isActive: row.is_active,
         isAvailable: row.is_available,
+        isOnShift: row.is_on_shift ?? undefined,
+        shiftStartedAt: row.shift_started_at ?? null,
+        lastSeenAt: row.last_seen_at ?? null,
         currentLocation: row.current_location,
     }))
 }
@@ -554,6 +557,9 @@ export async function getAvailableDrivers(): Promise<Driver[]> {
         vehiclePlate: row.vehicle_plate,
         isActive: row.is_active,
         isAvailable: row.is_available,
+        isOnShift: row.is_on_shift ?? undefined,
+        shiftStartedAt: row.shift_started_at ?? null,
+        lastSeenAt: row.last_seen_at ?? null,
         currentLocation: row.current_location,
     }))
 }
@@ -579,6 +585,9 @@ export async function getDriverByUserId(userId: string): Promise<Driver | null> 
         vehiclePlate: data.vehicle_plate,
         isActive: data.is_active,
         isAvailable: data.is_available,
+        isOnShift: data.is_on_shift ?? undefined,
+        shiftStartedAt: data.shift_started_at ?? null,
+        lastSeenAt: data.last_seen_at ?? null,
         currentLocation: data.current_location,
     }
 }

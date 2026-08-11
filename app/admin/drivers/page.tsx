@@ -14,6 +14,7 @@ import { createDriver, updateDriver, deleteDriver } from "@/app/actions"
 import type { Driver } from "@/lib/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { getDriverPresence } from "@/lib/driver-presence"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -121,9 +122,31 @@ export default function DriversPage() {
                                         <p className="text-xs text-muted-foreground">{vehicleLabel[driver.vehicleType || "motorcycle"]}</p>
                                     </div>
                                 </div>
-                                <Badge variant={driver.isAvailable ? "default" : "secondary"}>
-                                    {driver.isAvailable ? "Disponible" : "Ocupado"}
-                                </Badge>
+                                <div className="flex flex-col items-end gap-1.5">
+                                    {/* Conexión y carga de trabajo son dos cosas
+                                        distintas: mostrarlas juntas evita leer
+                                        "Disponible" en alguien desconectado. */}
+                                    {(() => {
+                                        const presence = getDriverPresence({
+                                            isActive: driver.isActive,
+                                            isOnShift: driver.isOnShift,
+                                            lastSeenAt: driver.lastSeenAt,
+                                            locationUpdatedAt: driver.currentLocation?.updatedAt,
+                                        })
+                                        return (
+                                            <Badge variant="outline" className={presence.className}>
+                                                <span
+                                                    className="h-1.5 w-1.5 rounded-full mr-1.5"
+                                                    style={{ backgroundColor: presence.dotColor }}
+                                                />
+                                                {presence.label}
+                                            </Badge>
+                                        )
+                                    })()}
+                                    <Badge variant={driver.isAvailable ? "default" : "secondary"}>
+                                        {driver.isAvailable ? "Libre" : "Ocupado"}
+                                    </Badge>
+                                </div>
                             </div>
 
                             <div className="space-y-1 text-sm text-muted-foreground mb-3">

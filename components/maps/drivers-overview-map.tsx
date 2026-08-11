@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Map, AdvancedMarker } from "@vis.gl/react-google-maps"
 import { createClient } from "@/lib/supabase/client"
 import type { Driver, DeliveryZone, Order } from "@/lib/types"
@@ -11,6 +11,8 @@ import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { BranchLogoMarker } from "./branch-logo-marker"
 import { Polygon } from "./polygon"
+import { getDriverPresence, formatAge, type DriverPresence } from "@/lib/driver-presence"
+import { useSmoothPosition } from "@/hooks/use-smooth-position"
 
 interface DriversOverviewMapProps {
     height?: string
@@ -27,6 +29,7 @@ interface DriverWithLocation extends Driver {
         address: string
         status: string
     }
+    presence: DriverPresence
 }
 
 const defaultCenter = { lat: -34.9011, lng: -56.1645 }
@@ -40,30 +43,42 @@ function DriverMarker({
     isSelected: boolean
     onClick: () => void
 }) {
-    if (!driver.currentLocation) return null
+    // El marcador se anima entre lecturas para que el recorrido se lea como
+    // un movimiento continuo en vez de saltos cada pocos segundos.
+    const smooth = useSmoothPosition(
+        driver.currentLocation
+            ? { lat: driver.currentLocation.lat, lng: driver.currentLocation.lng }
+            : null
+    )
 
-    const color = driver.activeOrder
+    if (!driver.currentLocation || !smooth) return null
+
+    const { presence } = driver
+    const isDelivering = !!driver.activeOrder
+    const disconnected = presence.level === "offline" || presence.level === "off_shift"
+
+    // El color dice qué está haciendo; la opacidad y el reloj, si lo estamos
+    // viendo en vivo. Antes ambas cosas se mezclaban en `is_available`.
+    const color = disconnected
+        ? "bg-gray-400"
+        : isDelivering
         ? "bg-blue-500"
-        : driver.isAvailable
+        : presence.level === "live"
         ? "bg-green-500"
-        : "bg-gray-500"
+        : "bg-amber-500"
 
     const hasHeading = driver.currentLocation.heading != null
-    const isStale =
-        driver.currentLocation.updatedAt &&
-        Date.now() - new Date(driver.currentLocation.updatedAt).getTime() > 5 * 60 * 1000
+    const showStale = presence.level === "stale" || presence.level === "weak"
 
     return (
         <AdvancedMarker
-            position={{
-                lat: driver.currentLocation.lat,
-                lng: driver.currentLocation.lng,
-            }}
-            title={driver.name}
+            position={smooth}
+            title={`${driver.name} · ${presence.label}`}
             onClick={onClick}
+            zIndex={isSelected ? 20 : presence.level === "live" ? 10 : 5}
         >
             <div className={`relative ${isSelected ? "z-10" : ""}`}>
-                {/* Accuracy circle — shown when accuracy > 50m */}
+                {/* Círculo de precisión — solo si el error supera los 50 m */}
                 {driver.currentLocation.accuracy != null &&
                     driver.currentLocation.accuracy > 50 && (
                         <div
@@ -74,26 +89,32 @@ function DriverMarker({
                                 top: "50%",
                                 left: "50%",
                                 transform: "translate(-50%, -50%)",
-                                color: driver.activeOrder
-                                    ? "#3b82f6"
-                                    : driver.isAvailable
-                                    ? "#22c55e"
-                                    : "#6b7280",
+                                color: presence.dotColor,
                             }}
                         />
                     )}
 
-                {driver.activeOrder && (
-                    <div className="absolute -inset-2 bg-blue-500/30 rounded-full animate-pulse" />
+                {/* El pulso solo cuando la señal es fresca: si parpadea con datos
+                    viejos, transmite una certeza que no tenemos. */}
+                {presence.level === "live" && (
+                    <div
+                        className={`absolute -inset-2 rounded-full animate-ping ${
+                            isDelivering ? "bg-blue-500/30" : "bg-green-500/25"
+                        }`}
+                    />
                 )}
 
                 <div
-                    className={`relative h-10 w-10 rounded-full flex items-center justify-center shadow-lg border-2 border-white transition-transform ${color} ${
+                    className={`relative h-10 w-10 rounded-full flex items-center justify-center shadow-lg border-2 border-white ${color} ${
                         isSelected ? "scale-125" : ""
-                    } ${isStale ? "opacity-50" : ""}`}
+                    } ${disconnected ? "opacity-40" : showStale ? "opacity-70" : ""}`}
                     style={
                         hasHeading
-                            ? { transform: `rotate(${driver.currentLocation.heading}deg)${isSelected ? " scale(1.25)" : ""}` }
+                            ? {
+                                  transform: `rotate(${driver.currentLocation.heading}deg)${
+                                      isSelected ? " scale(1.25)" : ""
+                                  }`,
+                              }
                             : undefined
                     }
                 >
@@ -104,15 +125,17 @@ function DriverMarker({
                     )}
                 </div>
 
-                {driver.activeOrder && (
+                {isDelivering && (
                     <div className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 rounded-full flex items-center justify-center text-xs text-white font-bold border-2 border-white">
                         <Package className="h-3 w-3" />
                     </div>
                 )}
 
-                {/* Stale indicator */}
-                {isStale && (
-                    <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-yellow-500 rounded-full flex items-center justify-center border border-white">
+                {(showStale || disconnected) && (
+                    <div
+                        className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center border border-white"
+                        style={{ backgroundColor: presence.dotColor }}
+                    >
                         <Clock className="h-2.5 w-2.5 text-white" />
                     </div>
                 )}
@@ -152,68 +175,99 @@ function OrderMarker({
     )
 }
 
+const parseLocation = (loc: any) =>
+    loc
+        ? {
+              lat: parseFloat(loc.lat),
+              lng: parseFloat(loc.lng),
+              accuracy: loc.accuracy != null ? parseFloat(loc.accuracy) : null,
+              heading: loc.heading != null ? parseFloat(loc.heading) : null,
+              speed: loc.speed != null ? parseFloat(loc.speed) : null,
+              updatedAt: loc.updated_at,
+          }
+        : undefined
+
+type RawDriver = Omit<DriverWithLocation, "presence">
+
 export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }: DriversOverviewMapProps) {
-    const [drivers, setDrivers] = useState<DriverWithLocation[]>([])
-    const [selectedDriver, setSelectedDriver] = useState<DriverWithLocation | null>(null)
+    const [rawDrivers, setRawDrivers] = useState<RawDriver[]>([])
+    const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
     const [loading, setLoading] = useState(true)
     const [branchLocation, setBranchLocation] = useState<{ lat: number; lng: number; logo?: string; accentColor?: string } | null>(null)
+    /** Reloj propio: la presencia envejece sola aunque no lleguen eventos. */
+    const [now, setNow] = useState(() => Date.now())
+    const [realtimeStatus, setRealtimeStatus] = useState<"connecting" | "live" | "down">("connecting")
+
+    const fetchDriversRef = useRef<(() => Promise<void>) | null>(null)
 
     useEffect(() => {
         const supabase = createClient()
-
-        const parseLocation = (loc: any) =>
-            loc
-                ? {
-                      lat: parseFloat(loc.lat),
-                      lng: parseFloat(loc.lng),
-                      accuracy: loc.accuracy != null ? parseFloat(loc.accuracy) : null,
-                      heading: loc.heading != null ? parseFloat(loc.heading) : null,
-                      speed: loc.speed != null ? parseFloat(loc.speed) : null,
-                      updatedAt: loc.updated_at,
-                  }
-                : undefined
+        let disposed = false
 
         const fetchDrivers = async () => {
+            // Una sola query para todos los repartidores y otra para todos sus
+            // pedidos activos. Antes era una query de pedidos POR repartidor
+            // (N+1) repetida cada 10 s.
             const { data: driversData } = await supabase
                 .from("drivers")
                 .select("*")
                 .eq("is_active", true)
 
+            if (disposed) return
             if (!driversData) {
                 setLoading(false)
                 return
             }
 
-            const driversWithOrders = await Promise.all(
-                driversData.map(async (driver) => {
-                    const { data: orders } = await supabase
-                        .from("orders")
-                        .select("id, order_number, address_text, status")
-                        .eq("driver_id", driver.id)
-                        .eq("status", "ready")
-                        .order("driver_assigned_at", { ascending: false })
-                        .limit(1)
+            // `en_route` es el estado en el que el repartidor realmente está
+            // entregando. Filtrar solo por `ready` (como antes) hacía que quien
+            // salió a repartir desapareciera del contador "En entrega" y
+            // perdiera el pin azul.
+            const { data: activeOrders } = await supabase
+                .from("orders")
+                .select("id, order_number, address_text, status, driver_id, driver_assigned_at")
+                .in("driver_id", driversData.map((d) => d.id))
+                .in("status", ["ready", "en_route"])
+                .order("driver_assigned_at", { ascending: false })
 
+            if (disposed) return
+
+            const orderByDriver = new globalThis.Map<string, any>()
+            for (const order of activeOrders || []) {
+                if (!order.driver_id) continue
+                const current = orderByDriver.get(order.driver_id)
+                // en_route gana sobre ready: es el pedido que está en la calle.
+                if (!current || (order.status === "en_route" && current.status !== "en_route")) {
+                    orderByDriver.set(order.driver_id, order)
+                }
+            }
+
+            setRawDrivers(
+                driversData.map((driver) => {
+                    const order = orderByDriver.get(driver.id)
                     return {
                         ...driver,
+                        isActive: driver.is_active,
+                        isAvailable: driver.is_available,
+                        isOnShift: driver.is_on_shift ?? undefined,
+                        lastSeenAt: driver.last_seen_at ?? null,
                         currentLocation: parseLocation(driver.current_location),
-                        activeOrder: orders?.[0]
+                        activeOrder: order
                             ? {
-                                  id: orders[0].id,
-                                  orderNumber: orders[0].order_number,
-                                  address: orders[0].address_text,
-                                  status: orders[0].status,
+                                  id: order.id,
+                                  orderNumber: order.order_number,
+                                  address: order.address_text,
+                                  status: order.status,
                               }
                             : undefined,
-                    }
+                    } as RawDriver
                 })
             )
-
-            setDrivers(driversWithOrders)
             setLoading(false)
         }
 
+        fetchDriversRef.current = fetchDrivers
         fetchDrivers()
 
         const fetchBranchLocation = async () => {
@@ -223,6 +277,7 @@ export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }
                 .limit(1)
                 .single()
 
+            if (disposed) return
             if (data?.location) {
                 setBranchLocation({
                     lat: parseFloat(data.location.lat),
@@ -239,52 +294,126 @@ export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }
             .channel("drivers-overview")
             .on(
                 "postgres_changes",
-                {
-                    event: "UPDATE",
-                    schema: "public",
-                    table: "drivers",
-                },
+                { event: "UPDATE", schema: "public", table: "drivers" },
                 (payload) => {
-                    const updatedDriver = payload.new as any
-                    setDrivers((prev) =>
-                        prev.map((d) =>
-                            d.id === updatedDriver.id
+                    const updated = payload.new as any
+                    setRawDrivers((prev) => {
+                        const known = prev.some((d) => d.id === updated.id)
+                        // Repartidor que se activó después de la carga inicial:
+                        // recargamos en vez de perder el evento (el `.map` de
+                        // antes descartaba silenciosamente estos casos).
+                        if (!known) {
+                            if (updated.is_active) fetchDriversRef.current?.()
+                            return prev
+                        }
+                        return prev.map((d) =>
+                            d.id === updated.id
                                 ? {
                                       ...d,
-                                      currentLocation: updatedDriver.current_location
-                                          ? parseLocation(updatedDriver.current_location)
+                                      isAvailable: updated.is_available,
+                                      isActive: updated.is_active,
+                                      isOnShift: updated.is_on_shift ?? d.isOnShift,
+                                      lastSeenAt: updated.last_seen_at ?? d.lastSeenAt,
+                                      currentLocation: updated.current_location
+                                          ? parseLocation(updated.current_location)
                                           : d.currentLocation,
-                                      isAvailable: updatedDriver.is_available,
                                   }
                                 : d
                         )
-                    )
+                    })
                 }
             )
             .on(
                 "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "orders",
-                },
-                () => {
-                    fetchDrivers()
+                { event: "*", schema: "public", table: "orders" },
+                (payload) => {
+                    // Solo recargamos si el cambio afecta la asignación o el
+                    // estado de un pedido; el resto de los UPDATE de orders
+                    // (totales, notas) no mueven este mapa.
+                    const next = payload.new as any
+                    const prev = payload.old as any
+                    const touchesDispatch =
+                        next?.driver_id !== prev?.driver_id || next?.status !== prev?.status
+                    if (touchesDispatch || payload.eventType !== "UPDATE") {
+                        fetchDriversRef.current?.()
+                    }
                 }
             )
-            .subscribe()
+            .subscribe((status) => {
+                if (disposed) return
+                if (status === "SUBSCRIBED") setRealtimeStatus("live")
+                else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setRealtimeStatus("down")
+            })
 
-        // Safety-net polling so driver positions stay live even if a realtime
-        // event is missed (realtime UPDATE above is the primary driver).
-        const pollId = setInterval(fetchDrivers, 10000)
+        // Red de seguridad, no el mecanismo principal: si Realtime está sano no
+        // hace falta refrescar seguido. Antes esto corría cada 10 s y competía
+        // con los eventos, provocando parpadeo de los pines.
+        const pollId = setInterval(() => {
+            if (document.visibilityState === "visible") fetchDriversRef.current?.()
+        }, 60_000)
 
         return () => {
+            disposed = true
             clearInterval(pollId)
+            fetchDriversRef.current = null
             supabase.removeChannel(channel)
         }
     }, [])
 
+    // Si Realtime se cae, volvemos a poll agresivo para no dejar el panel ciego.
+    useEffect(() => {
+        if (realtimeStatus !== "down") return
+        const id = setInterval(() => fetchDriversRef.current?.(), 10_000)
+        return () => clearInterval(id)
+    }, [realtimeStatus])
+
+    // El "hace X" y el nivel de presencia tienen que envejecer en pantalla
+    // aunque no llegue ningún evento nuevo.
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 5_000)
+        return () => clearInterval(id)
+    }, [])
+
+    const drivers: DriverWithLocation[] = useMemo(
+        () =>
+            rawDrivers.map((d) => ({
+                ...d,
+                presence: getDriverPresence(
+                    {
+                        isActive: d.isActive,
+                        isOnShift: d.isOnShift,
+                        lastSeenAt: d.lastSeenAt,
+                        locationUpdatedAt: d.currentLocation?.updatedAt,
+                    },
+                    now
+                ),
+            })),
+        [rawDrivers, now]
+    )
+
+    const selectedDriver = useMemo(
+        () => drivers.find((d) => d.id === selectedDriverId) ?? null,
+        [drivers, selectedDriverId]
+    )
+
+    const handleSelectDriver = useCallback((id: string) => {
+        setSelectedDriverId(id)
+        setSelectedOrder(null)
+    }, [])
+
     const driversWithLocation = drivers.filter((d) => d.currentLocation)
+
+    const connectedCount = drivers.filter(
+        (d) => d.presence.level === "live" || d.presence.level === "weak"
+    ).length
+    const deliveringCount = drivers.filter((d) => d.activeOrder).length
+    // "Libre ahora" = conectado, sin pedido encima y con señal confiable.
+    const assignableCount = drivers.filter(
+        (d) => d.presence.assignable && d.isAvailable && !d.activeOrder
+    ).length
+    const offlineCount = drivers.filter(
+        (d) => d.presence.level === "offline" || d.presence.level === "stale"
+    ).length
 
     // NOTE: `Map` here is the Google Maps component import, so use plain
     // objects for lookups instead of the JS Map constructor.
@@ -340,39 +469,44 @@ export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }
 
     return (
         <div className="space-y-4">
-            {/* Stats */}
+            {/* Stats — cada tarjeta responde una pregunta distinta:
+                quién está conectado, quién puede recibir un pedido ahora,
+                quién está entregando y a quién perdimos de vista. */}
             <div className="grid grid-cols-4 gap-3">
                 <Card className="rounded-xl">
                     <CardContent className="p-4">
-                        <p className="text-2xl font-bold">{drivers.length}</p>
-                        <p className="text-xs text-muted-foreground">Total</p>
+                        <div className="flex items-baseline gap-1.5">
+                            <p className="text-2xl font-bold text-green-600">{connectedCount}</p>
+                            <span className="text-sm text-muted-foreground">/ {drivers.length}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Conectados</p>
                     </CardContent>
                 </Card>
                 <Card className="rounded-xl">
                     <CardContent className="p-4">
-                        <p className="text-2xl font-bold text-green-600">
-                            {drivers.filter((d) => d.isAvailable).length}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Disponibles</p>
+                        <p className="text-2xl font-bold text-emerald-600">{assignableCount}</p>
+                        <p className="text-xs text-muted-foreground">Libres ahora</p>
                     </CardContent>
                 </Card>
                 <Card className="rounded-xl">
                     <CardContent className="p-4">
-                        <p className="text-2xl font-bold text-blue-600">
-                            {drivers.filter((d) => d.activeOrder).length}
-                        </p>
+                        <p className="text-2xl font-bold text-blue-600">{deliveringCount}</p>
                         <p className="text-xs text-muted-foreground">En entrega</p>
                     </CardContent>
                 </Card>
                 <Card className="rounded-xl">
                     <CardContent className="p-4">
-                        <p className="text-2xl font-bold text-gray-500">
-                            {drivers.filter((d) => !d.currentLocation).length}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Sin ubicación</p>
+                        <p className="text-2xl font-bold text-gray-500">{offlineCount}</p>
+                        <p className="text-xs text-muted-foreground">Sin señal</p>
                     </CardContent>
                 </Card>
             </div>
+
+            {realtimeStatus === "down" && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Conexión en vivo interrumpida — actualizando cada 10 s hasta recuperarla.
+                </div>
+            )}
 
             {/* Map */}
             <div className="relative">
@@ -407,7 +541,7 @@ export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }
                                     order={order}
                                     color={zone?.color || "#ef4444"}
                                     isSelected={selectedOrder?.id === order.id}
-                                    onClick={() => { setSelectedOrder(order); setSelectedDriver(null) }}
+                                    onClick={() => { setSelectedOrder(order); setSelectedDriverId(null) }}
                                 />
                             )
                         })}
@@ -428,8 +562,8 @@ export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }
                             <DriverMarker
                                 key={driver.id}
                                 driver={driver}
-                                isSelected={selectedDriver?.id === driver.id}
-                                onClick={() => { setSelectedDriver(driver); setSelectedOrder(null) }}
+                                isSelected={selectedDriverId === driver.id}
+                                onClick={() => handleSelectDriver(driver.id)}
                             />
                         ))}
                     </Map>
@@ -445,25 +579,38 @@ export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }
                                     {selectedDriver.phone}
                                 </p>
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                    {/* Conexión y ocupación son cosas distintas:
+                                        antes las dos salían del mismo flag y un
+                                        repartidor con el celular apagado figuraba
+                                        como "Disponible". */}
+                                    <Badge
+                                        variant="outline"
+                                        className={selectedDriver.presence.className}
+                                    >
+                                        <span
+                                            className="h-1.5 w-1.5 rounded-full mr-1.5"
+                                            style={{ backgroundColor: selectedDriver.presence.dotColor }}
+                                        />
+                                        {selectedDriver.presence.label}
+                                    </Badge>
                                     <Badge
                                         variant={
-                                            selectedDriver.isAvailable ? "default" : "secondary"
+                                            selectedDriver.activeOrder ? "secondary" : "default"
                                         }
                                     >
-                                        {selectedDriver.isAvailable
-                                            ? "Disponible"
-                                            : "No disponible"}
+                                        {selectedDriver.activeOrder ? "Ocupado" : "Libre"}
                                     </Badge>
                                     {selectedDriver.activeOrder && (
                                         <Badge variant="outline" className="bg-blue-50">
                                             <Package className="h-3 w-3 mr-1" />
                                             Pedido #{selectedDriver.activeOrder.orderNumber}
+                                            {selectedDriver.activeOrder.status === "en_route" && " · en camino"}
                                         </Badge>
                                     )}
                                 </div>
                             </div>
                             <button
-                                onClick={() => setSelectedDriver(null)}
+                                onClick={() => setSelectedDriverId(null)}
                                 className="text-muted-foreground hover:text-foreground"
                             >
                                 ✕
@@ -482,9 +629,15 @@ export function DriversOverviewMap({ height = "500px", zones = [], orders = [] }
                         {/* GPS info row */}
                         {selectedDriver.currentLocation && (
                             <div className="mt-3 pt-3 border-t border-border flex items-center gap-4 flex-wrap text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {/* El ping (last_seen_at) prueba que sigue conectado;
+                                        la posición puede ser más vieja si está quieto. */}
+                                    <span>Señal {formatAge(selectedDriver.presence.ageMs)}</span>
+                                </div>
                                 {selectedDriver.currentLocation.updatedAt && (
                                     <div className="flex items-center gap-1">
-                                        <Clock className="h-3 w-3" />
+                                        <MapPin className="h-3 w-3" />
                                         {formatDistanceToNow(
                                             new Date(selectedDriver.currentLocation.updatedAt),
                                             { addSuffix: true, locale: es }

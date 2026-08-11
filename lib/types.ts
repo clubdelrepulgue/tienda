@@ -165,7 +165,13 @@ export interface Driver {
   vehicleType?: "motorcycle" | "bicycle" | "car"
   vehiclePlate?: string
   isActive: boolean
+  /** Ocupado/libre. NO significa conectado — ver lib/driver-presence.ts */
   isAvailable: boolean
+  /** El repartidor entró en turno desde su app (migración 016). */
+  isOnShift?: boolean
+  shiftStartedAt?: string | null
+  /** Último ping recibido: la fuente de verdad de "está conectado". */
+  lastSeenAt?: string | null
   currentLocation?: {
     lat: number
     lng: number

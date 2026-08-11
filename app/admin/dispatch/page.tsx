@@ -31,6 +31,7 @@ import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/action
 import { formatZoneMeta } from "@/lib/delivery-zones"
 import { GoogleMapsProvider, DriversOverviewMap } from "@/components/maps"
 import { useActiveBranch } from "../branch-context"
+import { getDriverPresence, formatAge, type DriverPresence } from "@/lib/driver-presence"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -118,6 +119,48 @@ export default function DispatchPage() {
     drivers.forEach((d) => map.set(d.id, d))
     return map
   }, [drivers])
+
+  // Reloj propio para que la presencia envejezca en pantalla aunque no llegue
+  // ningún evento (un repartidor que se queda sin batería no genera eventos).
+  const [presenceNow, setPresenceNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setPresenceNow(Date.now()), 10000)
+    return () => clearInterval(id)
+  }, [])
+
+  const { assignableDrivers, unavailableDrivers } = useMemo(() => {
+    const assignable: { driver: Driver; presence: DriverPresence }[] = []
+    const unavailable: { driver: Driver; presence: DriverPresence; reason: string }[] = []
+
+    for (const driver of drivers) {
+      if (!driver.isActive) continue
+
+      const presence = getDriverPresence(
+        {
+          isActive: driver.isActive,
+          isOnShift: driver.isOnShift,
+          lastSeenAt: driver.lastSeenAt,
+          locationUpdatedAt: driver.currentLocation?.updatedAt,
+        },
+        presenceNow
+      )
+
+      if (presence.assignable && driver.isAvailable) {
+        assignable.push({ driver, presence })
+        continue
+      }
+
+      const reason = !presence.assignable
+        ? `${presence.label} · ${formatAge(presence.ageMs)}`
+        : "Ocupado con otro pedido"
+      unavailable.push({ driver, presence, reason })
+    }
+
+    // El más "fresco" primero: es el que más probablemente conteste.
+    assignable.sort((a, b) => (a.presence.ageMs ?? Infinity) - (b.presence.ageMs ?? Infinity))
+
+    return { assignableDrivers: assignable, unavailableDrivers: unavailable }
+  }, [drivers, presenceNow])
 
   const ordersByZone = useMemo(() => {
     const groups = new Map<string, Order[]>()
@@ -528,49 +571,71 @@ export default function DispatchPage() {
           </SheetHeader>
 
           <div className="mt-6 space-y-4">
-            {drivers
-              .filter((d) => d.isActive && d.isAvailable)
-              .map((driver) => (
-                <button
-                  key={driver.id}
-                  onClick={() => handleAssignDriver(driver.id)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent hover:border-accent transition-colors text-left"
-                >
-                  <div className="h-10 w-10 rounded-full bg-chart-2/15 flex items-center justify-center text-lg">
-                    {vehicleIcon[driver.vehicleType || "motorcycle"]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {driver.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {driver.phone}
-                      {driver.vehiclePlate && ` · ${driver.vehiclePlate}`}
-                    </p>
-                  </div>
-                  <div className="h-2 w-2 rounded-full bg-chart-2 shrink-0" />
-                </button>
-              ))}
-
-            {drivers
-              .filter((d) => d.isActive && !d.isAvailable)
-              .map((driver) => (
-                <div
-                  key={driver.id}
-                  className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-muted/30 opacity-50"
-                >
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-lg">
-                    {vehicleIcon[driver.vehicleType || "motorcycle"]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-muted-foreground truncate">
-                      {driver.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{driver.phone}</p>
-                  </div>
-                  <div className="h-2 w-2 rounded-full bg-muted-foreground/30 shrink-0" />
+            {/* Asignables primero: conectados, con señal fresca y sin pedido
+                encima. Antes bastaba con `is_available`, que es solo
+                ocupado/libre — un repartidor con el celular apagado aparecía
+                acá arriba como si estuviera esperando trabajo. */}
+            {assignableDrivers.map(({ driver, presence }) => (
+              <button
+                key={driver.id}
+                onClick={() => handleAssignDriver(driver.id)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent hover:border-accent transition-colors text-left"
+              >
+                <div className="h-10 w-10 rounded-full bg-chart-2/15 flex items-center justify-center text-lg">
+                  {vehicleIcon[driver.vehicleType || "motorcycle"]}
                 </div>
-              ))}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {driver.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {driver.phone}
+                    {driver.vehiclePlate && ` · ${driver.vehiclePlate}`}
+                  </p>
+                </div>
+                <Badge variant="outline" className={cn("shrink-0", presence.className)}>
+                  <span
+                    className="h-1.5 w-1.5 rounded-full mr-1.5"
+                    style={{ backgroundColor: presence.dotColor }}
+                  />
+                  {presence.label}
+                </Badge>
+              </button>
+            ))}
+
+            {unavailableDrivers.length > 0 && (
+              <div className="pt-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                  No disponibles
+                </p>
+                {/* Siguen siendo asignables a propósito: el local muchas veces
+                    coordina por teléfono y el sistema no debería impedirlo.
+                    Lo que cambia es que ahora dice por qué no conviene. */}
+                <div className="space-y-2">
+                  {unavailableDrivers.map(({ driver, presence, reason }) => (
+                    <button
+                      key={driver.id}
+                      onClick={() => handleAssignDriver(driver.id)}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-muted/30 hover:bg-muted/60 transition-colors text-left"
+                    >
+                      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-lg opacity-60">
+                        {vehicleIcon[driver.vehicleType || "motorcycle"]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-muted-foreground truncate">
+                          {driver.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{reason}</p>
+                      </div>
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: presence.dotColor }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {drivers.filter((d) => d.isActive).length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
@@ -578,6 +643,17 @@ export default function DispatchPage() {
                 <p className="text-sm">No hay drivers registrados</p>
               </div>
             )}
+
+            {drivers.filter((d) => d.isActive).length > 0 &&
+              assignableDrivers.length === 0 && (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Bike className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Ningún repartidor conectado ahora</p>
+                  <p className="text-xs mt-1">
+                    Podés asignar igual desde la lista de arriba si lo coordinás por teléfono.
+                  </p>
+                </div>
+              )}
           </div>
         </SheetContent>
       </Sheet>

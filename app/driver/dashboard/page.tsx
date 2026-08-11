@@ -5,13 +5,14 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
     Package, MapPin, Phone, LogOut, Clock, Navigation,
-    Locate, AlertCircle, Wifi, Truck, CheckCircle2,
+    Locate, AlertCircle, Wifi, Truck, CheckCircle2, Power, WifiOff,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { createClient } from "@/lib/supabase/client"
-import { completeDriverOrder, setOrderEnRoute } from "@/app/actions"
+import { completeDriverOrder, setOrderEnRoute, setDriverShift, getDriverShiftState } from "@/app/actions"
 import type { DeliveryZone, Order } from "@/lib/types"
 import { toast } from "sonner"
 import { useDriverLocation } from "@/hooks/use-driver-location"
@@ -21,7 +22,6 @@ import { formatPrice } from "@/lib/utils"
 import { unlockAudio, playChime, requestNotificationPermission } from "@/lib/notification-sound"
 import { driverSnapshots, formatSnapshotAge } from "@/lib/offline-storage"
 import { useConnectivity } from "@/hooks/use-connectivity"
-import { registerBackgroundTracking, startBackgroundTracking, stopBackgroundTracking, notifyAppState } from "@/lib/background-tracking"
 
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
@@ -35,19 +35,23 @@ export default function DriverDashboardPage() {
     const [deliveringId, setDeliveringId] = useState<string | null>(null)
     const [navFocus, setNavFocus] = useState(0)
     const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<number | null>(null)
+    const [onShift, setOnShift] = useState(true)
+    const [shiftSyncing, setShiftSyncing] = useState(false)
     const mapSectionRef = useRef<HTMLDivElement>(null)
     const knownOrderIdsRef = useRef<Set<string> | null>(null)
     const wasOnlineRef = useRef(true)
     const router = useRouter()
     const isOnline = useConnectivity()
 
-    const { lastLocation, error, locationStatus } = useDriverLocation({
+    // El GPS solo corre en turno: así "conectado" es una decisión del
+    // repartidor y no una inferencia del panel.
+    const { lastLocation, locationStatus } = useDriverLocation({
         driverId,
-        enabled: isOnline,
-        interval: 10000,
+        enabled: onShift,
+        heartbeatMs: 15000,
         onError: (err) => {
             if (err.code === err.PERMISSION_DENIED) {
-                toast.error("Por favor habilita la ubicación GPS para continuar")
+                toast.error("Habilitá la ubicación para que te vean en el mapa")
             }
         },
     })
@@ -75,8 +79,54 @@ export default function DriverDashboardPage() {
         loadOrders(id)
     }, [router])
 
+    // Entrar a la app = entrar en turno. El repartidor puede salir con el
+    // switch del header; al salir dejamos de rastrear y el panel deja de
+    // ofrecerlo para asignaciones (en vez de mostrarlo "Disponible" para
+    // siempre, que es lo que pasaba antes).
     useEffect(() => {
-        if (!driverId || !isOnline) return
+        if (!driverId) return
+        let cancelled = false
+
+        const enterShift = async () => {
+            const state = await getDriverShiftState(driverId)
+            if (cancelled) return
+
+            // Si ya estaba en turno respetamos ese estado; si no, lo abrimos.
+            if (state.driver?.isOnShift === true) {
+                setOnShift(true)
+                return
+            }
+
+            const result = await setDriverShift(driverId, true)
+            if (!cancelled && !result.error) setOnShift(true)
+        }
+
+        enterShift()
+        return () => { cancelled = true }
+    }, [driverId])
+
+    const handleToggleShift = async (next: boolean) => {
+        if (!driverId) return
+        setShiftSyncing(true)
+        // Optimista: el GPS arranca/para al instante, sin esperar al servidor.
+        setOnShift(next)
+
+        const result = await setDriverShift(driverId, next)
+        if (result.error) {
+            setOnShift(!next)
+            toast.error("No se pudo cambiar el turno. Revisá tu conexión.")
+        } else {
+            toast.success(next ? "Estás en turno" : "Saliste de turno")
+        }
+        setShiftSyncing(false)
+    }
+
+    // El canal NO depende de `isOnline`: navigator.onLine parpadea al cambiar de
+    // antena o entrar en un túnel, y reconstruir el canal en cada parpadeo
+    // provocaba huecos de varios segundos. El cliente de Supabase ya reconecta
+    // solo; nosotros solo forzamos un refetch al volver a foreground.
+    useEffect(() => {
+        if (!driverId) return
         const supabase = createClient()
         const channel = supabase
             .channel(`driver-orders-${driverId}`)
@@ -86,15 +136,27 @@ export default function DriverDashboardPage() {
                 (payload) => {
                     const nextOrder = payload.new as { driver_id?: string }
                     const previousOrder = payload.old as { driver_id?: string }
-                    // Only reload if the change is for this driver's orders
-                    if (nextOrder.driver_id === driverId || previousOrder.driver_id === driverId) {
+                    // Solo recargamos si el cambio toca los pedidos de este
+                    // repartidor. `payload.old.driver_id` requiere replica
+                    // identity full en orders (migración 016); sin eso, una
+                    // desasignación no llegaba nunca.
+                    if (nextOrder?.driver_id === driverId || previousOrder?.driver_id === driverId) {
                         loadOrders(driverId)
                     }
                 }
             )
             .subscribe()
-        return () => { supabase.removeChannel(channel) }
-    }, [driverId, isOnline])
+
+        const refetchOnFocus = () => {
+            if (document.visibilityState === "visible") loadOrders(driverId)
+        }
+        document.addEventListener("visibilitychange", refetchOnFocus)
+
+        return () => {
+            document.removeEventListener("visibilitychange", refetchOnFocus)
+            supabase.removeChannel(channel)
+        }
+    }, [driverId])
 
     useEffect(() => {
         if (!wasOnlineRef.current && isOnline && driverId) {
@@ -117,49 +179,21 @@ export default function DriverDashboardPage() {
         }
     }, [driverId])
 
-    // Register Service Worker for background location tracking (even when app is minimized)
+    // Permiso de notificaciones: lo usa playChime() para avisar de un pedido
+    // nuevo cuando la pestaña no está al frente.
+    //
+    // Acá antes se registraba un Service Worker propio (/sw.js) que hacía dos
+    // cosas, las dos mal:
+    //   - "tracking en background": imposible, la Geolocation API no existe en
+    //     un Service Worker, nunca envió una posición.
+    //   - Realtime de pedidos: solo se conectaba con la app VISIBLE, o sea
+    //     exactamente cuando esta misma página ya está suscripta. Redundante.
+    // Y, peor, se registraba en scope "/" igual que el SW de Serwist
+    // (app/sw.ts), así que ambos se pisaban: cada uno desregistraba al otro y
+    // el repartidor perdía el modo offline de forma intermitente.
     useEffect(() => {
-        registerBackgroundTracking()
         requestNotificationPermission()
     }, [])
-
-    // Start/stop background tracking based on driverId
-    useEffect(() => {
-        if (driverId) {
-            startBackgroundTracking(driverId)
-        } else {
-            stopBackgroundTracking()
-        }
-    }, [driverId])
-
-    // Notify Service Worker when app visibility changes (minimized, closed, locked)
-    // Keeps Realtime WebSocket connected while app is active/minimized
-    // Disconnects when app is closed to save battery
-    useEffect(() => {
-        if (!driverId) return
-
-        const handleVisibilityChange = () => {
-            const isActive = document.visibilityState === 'visible'
-            notifyAppState(isActive, driverId)
-        }
-
-        const handleBeforeUnload = () => {
-            notifyAppState(false, driverId)
-        }
-
-        document.addEventListener('visibilitychange', handleVisibilityChange)
-        window.addEventListener('beforeunload', handleBeforeUnload)
-        window.addEventListener('pagehide', handleBeforeUnload)
-
-        // Initial state
-        notifyAppState(document.visibilityState === 'visible', driverId)
-
-        return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange)
-            window.removeEventListener('beforeunload', handleBeforeUnload)
-            window.removeEventListener('pagehide', handleBeforeUnload)
-        }
-    }, [driverId])
 
     // Prevent context menu and copying on images
     useEffect(() => {
@@ -283,7 +317,12 @@ export default function DriverDashboardPage() {
     }
 
     const handleLogout = async () => {
-        if (driverId) await driverSnapshots.clear(driverId).catch(() => {})
+        // Cerrar sesión cierra el turno: si no, el repartidor quedaría "en
+        // turno" en el panel hasta que expire el heartbeat.
+        if (driverId) {
+            await setDriverShift(driverId, false).catch(() => {})
+            await driverSnapshots.clear(driverId).catch(() => {})
+        }
         try { localStorage.removeItem("driverId"); localStorage.removeItem("driverName") } catch {}
         try { sessionStorage.removeItem("driverId"); sessionStorage.removeItem("driverName") } catch {}
         router.push("/driver")
@@ -367,26 +406,59 @@ export default function DriverDashboardPage() {
                                     {pendingOrders.length} pendiente{pendingOrders.length !== 1 ? "s" : ""}
                                     {enRouteOrder ? " · 1 en camino" : ""}
                                 </p>
-                                {locationStatus === "active" && (
-                                    <Badge variant="outline" className="text-xs bg-green-50 text-green-600 border-green-200">
-                                        <Locate className="h-3 w-3 mr-1" />GPS activo
+                                {!onShift && (
+                                    <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                                        <Power className="h-3 w-3 mr-1" />Fuera de turno
                                     </Badge>
                                 )}
-                                {locationStatus === "fallback" && (
+                                {onShift && !isOnline && (
+                                    <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">
+                                        <WifiOff className="h-3 w-3 mr-1" />Sin internet
+                                    </Badge>
+                                )}
+                                {onShift && isOnline && locationStatus === "active" && (
+                                    <Badge variant="outline" className="text-xs bg-green-50 text-green-600 border-green-200">
+                                        <Locate className="h-3 w-3 mr-1" />En vivo
+                                    </Badge>
+                                )}
+                                {onShift && isOnline && locationStatus === "degraded" && (
                                     <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-600 border-yellow-200">
                                         <Wifi className="h-3 w-3 mr-1" />Ubicación aprox.
                                     </Badge>
                                 )}
-                                {locationStatus === "error" && (
+                                {onShift && isOnline && locationStatus === "requesting" && (
+                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200">
+                                        <Locate className="h-3 w-3 mr-1 animate-pulse" />Buscando GPS
+                                    </Badge>
+                                )}
+                                {onShift && locationStatus === "denied" && (
                                     <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">
-                                        <AlertCircle className="h-3 w-3 mr-1" />GPS sin acceso
+                                        <AlertCircle className="h-3 w-3 mr-1" />GPS bloqueado
+                                    </Badge>
+                                )}
+                                {onShift && locationStatus === "error" && (
+                                    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200">
+                                        <AlertCircle className="h-3 w-3 mr-1" />Sin señal GPS
                                     </Badge>
                                 )}
                             </div>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={handleLogout}>
-                            <LogOut className="h-5 w-5" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex flex-col items-center gap-0.5 pr-1">
+                                <Switch
+                                    checked={onShift}
+                                    disabled={shiftSyncing}
+                                    onCheckedChange={handleToggleShift}
+                                    aria-label="Entrar o salir de turno"
+                                />
+                                <span className="text-[10px] leading-none text-muted-foreground">
+                                    Turno
+                                </span>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={handleLogout}>
+                                <LogOut className="h-5 w-5" />
+                            </Button>
+                        </div>
                     </div>
                 </header>
 
@@ -411,11 +483,43 @@ export default function DriverDashboardPage() {
                         </Card>
                     )}
 
-                    {error && error.code === error.PERMISSION_DENIED && (
+                    {!onShift && (
+                        <Card className="rounded-2xl border-border bg-muted/40">
+                            <CardContent className="p-4 flex gap-3">
+                                <Power className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-medium">Estás fuera de turno</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        No se comparte tu ubicación y el local no te va a asignar
+                                        pedidos nuevos. Activá el switch de arriba para volver.
+                                    </p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {onShift && locationStatus === "denied" && (
                         <Card className="rounded-2xl border-orange-200 bg-orange-50">
                             <CardContent className="p-4">
                                 <p className="text-sm text-orange-800">
-                                    <strong>Ubicación desactivada:</strong> Activá el GPS para que los clientes puedan seguir tu ubicación.
+                                    <strong>Ubicación bloqueada:</strong> el local no puede verte en el
+                                    mapa ni asignarte pedidos. Habilitá la ubicación para este sitio
+                                    en los ajustes del navegador.
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Mientras la app está en segundo plano no hay GPS para web
+                        (ni en iOS ni en Android): avisamos en vez de fingir que
+                        seguimos reportando. */}
+                    {onShift && locationStatus === "error" && (
+                        <Card className="rounded-2xl border-amber-200 bg-amber-50">
+                            <CardContent className="p-4">
+                                <p className="text-sm text-amber-900">
+                                    <strong>Sin señal de GPS.</strong> Mantené esta pantalla abierta
+                                    mientras repartís: si el celular se bloquea, dejás de aparecer en
+                                    el mapa del local.
                                 </p>
                             </CardContent>
                         </Card>

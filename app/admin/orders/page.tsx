@@ -42,6 +42,17 @@ import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/action
 import { PrintReceiptButton } from "@/components/receipt/order-receipt"
 import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
 import { useActiveBranch } from "../branch-context"
+import { getDriverPresence } from "@/lib/driver-presence"
+
+/** Presencia de un repartidor a partir de la fila que devuelve la API. */
+function driverPresenceOf(driver: Driver) {
+  return getDriverPresence({
+    isActive: driver.isActive,
+    isOnShift: driver.isOnShift,
+    lastSeenAt: driver.lastSeenAt,
+    locationUpdatedAt: driver.currentLocation?.updatedAt,
+  })
+}
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -179,8 +190,12 @@ function OrderCard({
   const FulfillmentIcon = fulfillmentIcon
   const isDeliveryDispatch = order.deliveryMethod === "delivery" && Boolean(onDeliveryDepart)
   const activeDrivers = deliveryDrivers.filter((d) => d.isActive)
-  const availableDrivers = activeDrivers.filter((d) => d.isAvailable)
-  const unavailableDrivers = activeDrivers.filter((d) => !d.isAvailable)
+  const availableDrivers = activeDrivers.filter(
+    (d) => d.isAvailable && driverPresenceOf(d).assignable
+  )
+  const unavailableDrivers = activeDrivers.filter(
+    (d) => !(d.isAvailable && driverPresenceOf(d).assignable)
+  )
   const isReady = order.status === "ready"
   const elapsedTime = formatElapsedTime(order.createdAt, now, isReady ? order.readyAt : undefined)
 
@@ -630,8 +645,16 @@ function DriverAssignSheet({
   drivers: Driver[]
   onAssign: (driverId: string) => void
 }) {
-  const availableDrivers = drivers.filter((d) => d.isActive && d.isAvailable)
-  const offlineDrivers = drivers.filter((d) => d.isActive && !d.isAvailable)
+  // "Disponible" para asignar = conectado y sin pedido encima. `isAvailable`
+  // por sí solo es ocupado/libre y no dice nada sobre si el celular está
+  // prendido, así que antes se ofrecían repartidores desconectados.
+  const activeDriverList = drivers.filter((d) => d.isActive)
+  const availableDrivers = activeDriverList.filter(
+    (d) => d.isAvailable && driverPresenceOf(d).assignable
+  )
+  const offlineDrivers = activeDriverList.filter(
+    (d) => !(d.isAvailable && driverPresenceOf(d).assignable)
+  )
 
   const vehicleIcon = {
     motorcycle: "🏍️",
