@@ -183,11 +183,13 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
   if (typeof window === "undefined") return
 
   const single = renderReceiptHTML(order, branch)
-  const copies = Array.from({ length: RECEIPT_CONFIG.copies }, (_, i) => {
-    // Page break between copies so each gets its own cut on thermal printers.
-    const breakStyle = i < RECEIPT_CONFIG.copies - 1 ? "page-break-after:always;" : ""
-    return `<div style="${breakStyle}">${single}</div>`
-  }).join("")
+  // Cada copia es su propia página. El salto va como `break-before` en las
+  // copias 2..n en vez de `break-after` en las 1..n-1: así nunca queda una
+  // página vacía al final, que en un rollo térmico son varios cm de papel.
+  const copies = Array.from(
+    { length: RECEIPT_CONFIG.copies },
+    () => `<div class="receipt-page">${single}</div>`
+  ).join("")
 
   const orderRef = order.orderNumber || order.id.slice(-6)
 
@@ -228,36 +230,47 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
         <title>Recibo #${esc(orderRef)}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          /* Force the printable area to a thermal-roll width (80mm) so the
-             browser doesn't fall back to A4. Must live at the top level —
-             some engines ignore @page nested inside @media print. */
-          @page { size: 80mm auto; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           html, body { width: 80mm; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          /* Sin esto, 1px de desborde genera una página extra que en un rollo
+             continuo se traduce en un montón de papel en blanco. */
+          body { overflow: hidden; }
+          .receipt-page { width: 80mm; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
+          .receipt-page + .receipt-page { break-before: page; page-break-before: always; }
           .receipt-content { width: 80mm !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           @media print {
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
             body { margin: 0; padding: 0; }
           }
         </style>
+        <!-- El alto real se calcula tras renderizar y se escribe acá.
+             Ojo: \`size: 80mm auto\` NO es válido en CSS (la forma con dos
+             valores exige dos longitudes), así que el navegador descartaba la
+             regla entera y caía al tamaño de papel del driver — de ahí el
+             ticket kilométrico. Este placeholder ya es válido. -->
+        <style id="receipt-page-size">@page { size: 80mm 200mm; margin: 0; }</style>
       </head>
       <body>${copies}</body>
     </html>`)
   doc.close()
 
-  // Measures the real rendered height of one receipt and pins the @page size to
-  // exactly that, so each copy always lands on a single page instead of being
-  // split across two when the browser assumes a fixed (A4/Letter) page height.
+  // Mide el alto real de una copia y fija el @page exactamente a esa medida,
+  // para que cada ticket ocupe una página justa en vez de una hoja A4/rollo
+  // completo. Además clava el alto de cada copia: con `overflow: hidden` eso
+  // garantiza que nada se derrame a una segunda página.
   const pinPageHeight = () => {
-    const el = doc.querySelector<HTMLElement>(".receipt-content")
-    if (!el) return
-    const heightPx = el.getBoundingClientRect().height
-    if (!heightPx) return
-    // px → mm at 96dpi, rounded up with a small buffer so content never spills.
-    const heightMm = Math.ceil((heightPx * 25.4) / 96) + 4
-    const style = doc.createElement("style")
-    // Appended last, so this @page rule overrides the "auto" one above.
-    style.textContent = `@page { size: 80mm ${heightMm}mm; margin: 0; }`
-    doc.head.appendChild(style)
+    const pages = Array.from(doc.querySelectorAll<HTMLElement>(".receipt-page"))
+    if (pages.length === 0) return
+    const tallestPx = Math.max(...pages.map((page) => page.getBoundingClientRect().height))
+    if (!tallestPx) return
+    // px → mm a 96dpi, redondeado hacia arriba con un margen mínimo.
+    const heightMm = Math.ceil((tallestPx * 25.4) / 96) + 2
+    pages.forEach((page) => {
+      page.style.height = `${heightMm}mm`
+    })
+    const pageStyle = doc.getElementById("receipt-page-size")
+    if (pageStyle) {
+      pageStyle.textContent = `@page { size: 80mm ${heightMm}mm; margin: 0; }`
+    }
   }
 
   let printed = false
@@ -270,18 +283,13 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
       setTimeout(() => {
         pinPageHeight()
         win.focus()
-        // Intenta enviar a la impresora predeterminada sin mostrar diálogo
         try {
+          // Bloquea hasta que se cierra el diálogo de impresión, así que
+          // recién después es seguro desmontar el iframe.
           win.print()
-          // Auto-cierra después de 500ms si usa impresora configurada
-          setTimeout(() => {
-            win.close()
-          }, 500)
-        } catch {
-          // Fallback si hay error
+        } finally {
           cleanup()
         }
-        cleanup()
       }, 50)
     })
   }

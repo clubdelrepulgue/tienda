@@ -506,6 +506,29 @@ export async function getAllDeliveryZones(): Promise<DeliveryZone[]> {
 
 // ─── Drivers ───────────────────────────────────────────────────
 
+/**
+ * Normaliza el JSONB `drivers.current_location`.
+ *
+ * En la base la marca de tiempo es `updated_at`, pero el tipo `Driver` la
+ * expone como `updatedAt`. Devolver el JSONB crudo dejaba `updatedAt`
+ * undefined, y `getDriverPresence` — que lo usa como fallback de `last_seen_at`
+ * cuando la migración 016 no está aplicada — daba "Sin señal" y marcaba al
+ * repartidor como NO asignable aunque estuviera reportando posición hace
+ * segundos. Aceptamos las dos formas por si la fila viene ya normalizada.
+ */
+function normalizeDriverLocation(loc: any): Driver["currentLocation"] {
+    if (!loc || loc.lat == null || loc.lng == null) return undefined
+
+    return {
+        lat: parseFloat(loc.lat),
+        lng: parseFloat(loc.lng),
+        accuracy: loc.accuracy != null ? parseFloat(loc.accuracy) : null,
+        heading: loc.heading != null ? parseFloat(loc.heading) : null,
+        speed: loc.speed != null ? parseFloat(loc.speed) : null,
+        updatedAt: loc.updatedAt ?? loc.updated_at,
+    }
+}
+
 export async function getDrivers(): Promise<Driver[]> {
     const supabase = await createClient()
 
@@ -530,7 +553,7 @@ export async function getDrivers(): Promise<Driver[]> {
         isOnShift: row.is_on_shift ?? undefined,
         shiftStartedAt: row.shift_started_at ?? null,
         lastSeenAt: row.last_seen_at ?? null,
-        currentLocation: row.current_location,
+        currentLocation: normalizeDriverLocation(row.current_location),
     }))
 }
 
@@ -560,7 +583,7 @@ export async function getAvailableDrivers(): Promise<Driver[]> {
         isOnShift: row.is_on_shift ?? undefined,
         shiftStartedAt: row.shift_started_at ?? null,
         lastSeenAt: row.last_seen_at ?? null,
-        currentLocation: row.current_location,
+        currentLocation: normalizeDriverLocation(row.current_location),
     }))
 }
 
@@ -588,7 +611,7 @@ export async function getDriverByUserId(userId: string): Promise<Driver | null> 
         isOnShift: data.is_on_shift ?? undefined,
         shiftStartedAt: data.shift_started_at ?? null,
         lastSeenAt: data.last_seen_at ?? null,
-        currentLocation: data.current_location,
+        currentLocation: normalizeDriverLocation(data.current_location),
     }
 }
 
