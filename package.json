@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "pos:kiosk": "bash scripts/pos-kiosk.sh"
   },
   "dependencies": {
     "@googlemaps/polyline-codec": "^1.0.28",

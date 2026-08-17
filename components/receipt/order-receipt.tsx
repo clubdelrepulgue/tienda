@@ -16,7 +16,25 @@ const RECEIPT_CONFIG = {
   footer: "Seguinos en redes y volvé cuando quieras.",
   // Number of identical copies to print per job.
   copies: 2,
+  // Ancho del rollo, en mm. 80 para las térmicas estándar, 58 para las angostas.
+  paperWidthMm: 80,
+  // Alto de página, en mm. "auto" mide el ticket ya renderizado y fija el
+  // @page a esa altura exacta (lo correcto para PDF y para drivers con rollo de
+  // largo variable). Si tu driver sólo ofrece un tamaño de papel fijo, poné acá
+  // ese mismo número para que Chrome no reescale ni agregue papel de más.
+  paperHeightMm: "auto" as "auto" | number,
+  // Papel extra al final de cada copia, en mm: espacio para el corte.
+  feedAfterMm: 2,
 }
+
+const PAPER_W = RECEIPT_CONFIG.paperWidthMm
+// Padding lateral del ticket (mm por lado) y ancho útil resultante.
+const SIDE_PADDING_MM = 6
+const CONTENT_W = PAPER_W - SIDE_PADDING_MM * 2
+// Ancho máximo de las columnas que pueden desbordar (valores de fila y nombres
+// de ítem), como fracción del ancho útil.
+const VALUE_MAX_MM = Math.round(CONTENT_W * 0.73)
+const ITEM_MAX_MM = Math.round(CONTENT_W * 0.81)
 
 // ── HTML escaping (order data is user-entered) ──────────────────
 function esc(value: string | number | null | undefined): string {
@@ -60,7 +78,7 @@ function row(label: string, value: string): string {
   return `
     <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:13px;font-weight:600;">
       <span style="color:#000;">${esc(label)}:</span>
-      <span style="text-align:right;max-width:50mm;word-break:break-word;font-weight:700;">${esc(value)}</span>
+      <span style="text-align:right;max-width:${VALUE_MAX_MM}mm;word-break:break-word;font-weight:700;">${esc(value)}</span>
     </div>`
 }
 
@@ -104,7 +122,7 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
       return `
         <div style="margin-bottom:5px;">
           <div style="display:flex;justify-content:space-between;font-weight:700;font-size:13px;">
-            <span style="max-width:55mm;word-break:break-word;">${item.quantity}x ${esc(item.name)}${item.variantName ? ` (${esc(item.variantName)})` : ""}</span>
+            <span style="max-width:${ITEM_MAX_MM}mm;word-break:break-word;">${item.quantity}x ${esc(item.name)}${item.variantName ? ` (${esc(item.variantName)})` : ""}</span>
             <span style="white-space:nowrap;margin-left:4px;">${formatPrice(itemTotal)}</span>
           </div>
           ${modifiersHTML}
@@ -123,7 +141,7 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
   const phoneRow = order.customerPhone ? row("Tel", order.customerPhone) : ""
 
   return `
-    <div class="receipt-content" style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm 6mm;box-sizing:border-box;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <div class="receipt-content" style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#000;background:#fff;width:${PAPER_W}mm;padding:4mm ${SIDE_PADDING_MM}mm;box-sizing:border-box;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       <div style="text-align:center;margin-bottom:8px;">
         ${
           logoUrl
@@ -197,11 +215,11 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
   iframe.setAttribute("aria-hidden", "true")
   // Keep the iframe off-screen but give it a real size. A 0×0 iframe is not
   // laid out by Chrome, so the @page size rule is dropped and printing falls
-  // back to A4. An 80mm-wide, positive-height frame forces proper layout.
+  // back to A4. Un frame del ancho del rollo y con alto real fuerza el layout.
   iframe.style.position = "fixed"
   iframe.style.left = "-9999px"
   iframe.style.top = "0"
-  iframe.style.width = "80mm"
+  iframe.style.width = `${PAPER_W}mm`
   iframe.style.height = "100vh"
   iframe.style.border = "0"
   document.body.appendChild(iframe)
@@ -230,13 +248,13 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
         <title>Recibo #${esc(orderRef)}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          html, body { width: 80mm; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          html, body { width: ${PAPER_W}mm; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           /* Sin esto, 1px de desborde genera una página extra que en un rollo
              continuo se traduce en un montón de papel en blanco. */
           body { overflow: hidden; }
-          .receipt-page { width: 80mm; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
+          .receipt-page { width: ${PAPER_W}mm; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
           .receipt-page + .receipt-page { break-before: page; page-break-before: always; }
-          .receipt-content { width: 80mm !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .receipt-content { width: ${PAPER_W}mm !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           @media print {
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
             body { margin: 0; padding: 0; }
@@ -247,7 +265,9 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
              valores exige dos longitudes), así que el navegador descartaba la
              regla entera y caía al tamaño de papel del driver — de ahí el
              ticket kilométrico. Este placeholder ya es válido. -->
-        <style id="receipt-page-size">@page { size: 80mm 200mm; margin: 0; }</style>
+        <style id="receipt-page-size">@page { size: ${PAPER_W}mm ${
+          RECEIPT_CONFIG.paperHeightMm === "auto" ? 200 : RECEIPT_CONFIG.paperHeightMm
+        }mm; margin: 0; }</style>
       </head>
       <body>${copies}</body>
     </html>`)
@@ -260,16 +280,23 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
   const pinPageHeight = () => {
     const pages = Array.from(doc.querySelectorAll<HTMLElement>(".receipt-page"))
     if (pages.length === 0) return
-    const tallestPx = Math.max(...pages.map((page) => page.getBoundingClientRect().height))
-    if (!tallestPx) return
-    // px → mm a 96dpi, redondeado hacia arriba con un margen mínimo.
-    const heightMm = Math.ceil((tallestPx * 25.4) / 96) + 2
+
+    let heightMm: number
+    if (typeof RECEIPT_CONFIG.paperHeightMm === "number") {
+      heightMm = RECEIPT_CONFIG.paperHeightMm
+    } else {
+      const tallestPx = Math.max(...pages.map((page) => page.getBoundingClientRect().height))
+      if (!tallestPx) return
+      // px → mm a 96dpi, redondeado hacia arriba + el papel de corte.
+      heightMm = Math.ceil((tallestPx * 25.4) / 96) + RECEIPT_CONFIG.feedAfterMm
+    }
+
     pages.forEach((page) => {
       page.style.height = `${heightMm}mm`
     })
     const pageStyle = doc.getElementById("receipt-page-size")
     if (pageStyle) {
-      pageStyle.textContent = `@page { size: 80mm ${heightMm}mm; margin: 0; }`
+      pageStyle.textContent = `@page { size: ${PAPER_W}mm ${heightMm}mm; margin: 0; }`
     }
   }
 

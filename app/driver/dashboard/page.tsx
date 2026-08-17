@@ -23,6 +23,9 @@ import { unlockAudio, playChime, requestNotificationPermission } from "@/lib/not
 import { driverSnapshots, formatSnapshotAge } from "@/lib/offline-storage"
 import { useConnectivity } from "@/hooks/use-connectivity"
 
+/** Cada cuánto se vuelve a chequear que el turno abierto en la app exista en la base. */
+const SHIFT_RECONCILE_MS = 2 * 60_000
+
 export default function DriverDashboardPage() {
     const [driverId, setDriverId] = useState<string | null>(null)
     const [driverName, setDriverName] = useState<string>("")
@@ -40,6 +43,8 @@ export default function DriverDashboardPage() {
     const mapSectionRef = useRef<HTMLDivElement>(null)
     const knownOrderIdsRef = useRef<Set<string> | null>(null)
     const wasOnlineRef = useRef(true)
+    /** El repartidor salió de turno a propósito: no se lo reabre solo. */
+    const shiftOptOutRef = useRef(false)
     const router = useRouter()
     const isOnline = useConnectivity()
 
@@ -83,13 +88,23 @@ export default function DriverDashboardPage() {
     // switch del header; al salir dejamos de rastrear y el panel deja de
     // ofrecerlo para asignaciones (en vez de mostrarlo "Disponible" para
     // siempre, que es lo que pasaba antes).
+    //
+    // El turno se RECONCILIA, no se abre una sola vez. Antes esto corría solo
+    // al montar: si la escritura fallaba —la red, o la función
+    // `set_driver_shift` que todavía no existía en la base— el GPS seguía
+    // pingueando con el estado local en `true` mientras la fila decía
+    // `is_on_shift = false`. El panel mostraba "Fuera de turno" con señal de
+    // hace segundos y no dejaba asignarle nada, y no había forma de que se
+    // recuperara solo: el efecto ya no volvía a correr.
     useEffect(() => {
         if (!driverId) return
         let cancelled = false
 
-        const enterShift = async () => {
+        const reconcileShift = async () => {
+            if (cancelled || shiftOptOutRef.current) return
+
             const state = await getDriverShiftState(driverId)
-            if (cancelled) return
+            if (cancelled || shiftOptOutRef.current) return
 
             // Si ya estaba en turno respetamos ese estado; si no, lo abrimos.
             if (state.driver?.isOnShift === true) {
@@ -98,11 +113,26 @@ export default function DriverDashboardPage() {
             }
 
             const result = await setDriverShift(driverId, true)
-            if (!cancelled && !result.error) setOnShift(true)
+            if (!cancelled && !shiftOptOutRef.current && !result.error) setOnShift(true)
         }
 
-        enterShift()
-        return () => { cancelled = true }
+        reconcileShift()
+
+        const reconcileOnForeground = () => {
+            if (document.visibilityState === "visible") reconcileShift()
+        }
+        document.addEventListener("visibilitychange", reconcileOnForeground)
+        window.addEventListener("focus", reconcileOnForeground)
+        window.addEventListener("online", reconcileShift)
+        const retryId = setInterval(reconcileShift, SHIFT_RECONCILE_MS)
+
+        return () => {
+            cancelled = true
+            clearInterval(retryId)
+            document.removeEventListener("visibilitychange", reconcileOnForeground)
+            window.removeEventListener("focus", reconcileOnForeground)
+            window.removeEventListener("online", reconcileShift)
+        }
     }, [driverId])
 
     const handleToggleShift = async (next: boolean) => {
@@ -116,6 +146,9 @@ export default function DriverDashboardPage() {
             setOnShift(!next)
             toast.error("No se pudo cambiar el turno. Revisá tu conexión.")
         } else {
+            // Solo cuando el servidor confirmó: salir de turno es una decisión
+            // explícita y la reconciliación no debe pisarla.
+            shiftOptOutRef.current = !next
             toast.success(next ? "Estás en turno" : "Saliste de turno")
         }
         setShiftSyncing(false)
