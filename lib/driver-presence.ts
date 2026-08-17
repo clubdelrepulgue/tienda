@@ -14,6 +14,39 @@
  * el flag de turno diga que sí.
  */
 
+/** Última posición conocida del repartidor, ya normalizada. */
+export interface DriverLocation {
+    lat: number
+    lng: number
+    accuracy: number | null
+    heading: number | null
+    speed: number | null
+    updatedAt: string
+}
+
+/**
+ * Normaliza el JSONB `drivers.current_location`.
+ *
+ * En la base la marca de tiempo se llama `updated_at`; el resto de la app la
+ * consume como `updatedAt`. Cuando se pasaba el JSONB crudo, `updatedAt` quedaba
+ * undefined y `getDriverPresence` — que lo usa como fallback de `last_seen_at`
+ * mientras la migración 016 no esté aplicada — daba "Sin señal" y bloqueaba la
+ * asignación aunque el repartidor estuviera reportando hace segundos.
+ * Aceptamos las dos formas por si la fila ya viene normalizada.
+ */
+export function normalizeDriverLocation(loc: any): DriverLocation | undefined {
+    if (!loc || loc.lat == null || loc.lng == null) return undefined
+
+    return {
+        lat: parseFloat(loc.lat),
+        lng: parseFloat(loc.lng),
+        accuracy: loc.accuracy != null ? parseFloat(loc.accuracy) : null,
+        heading: loc.heading != null ? parseFloat(loc.heading) : null,
+        speed: loc.speed != null ? parseFloat(loc.speed) : null,
+        updatedAt: loc.updatedAt ?? loc.updated_at,
+    }
+}
+
 /** Ping más reciente que esto ⇒ lo estamos viendo moverse ahora. */
 export const LIVE_THRESHOLD_MS = 45_000
 /** Todavía utilizable, pero la posición ya no es de fiar al metro. */

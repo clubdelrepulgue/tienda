@@ -139,6 +139,9 @@ export default function KitchenDisplayPage() {
     const [historyOpen, setHistoryOpen] = useState(false)
     const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set())
     const prevOrdersRef = useRef<Order[]>([])
+    // Sucursal ya "sembrada": la primera tanda de pedidos al abrir el panel o
+    // al cambiar de sucursal es estado inicial, no pedidos nuevos.
+    const seededBranchRef = useRef<string | null>(null)
 
     useEffect(() => {
         const unlock = () => {
@@ -151,6 +154,13 @@ export default function KitchenDisplayPage() {
 
     useEffect(() => {
         if (initialOrders) {
+            if (seededBranchRef.current !== selectedBranch) {
+                seededBranchRef.current = selectedBranch
+                prevOrdersRef.current = initialOrders
+                setOrders(initialOrders)
+                return
+            }
+
             const prevIds = new Set(prevOrdersRef.current.map((o) => o.id))
             const newOrders = initialOrders.filter((o) => !prevIds.has(o.id) && o.status === "accepted")
 
@@ -160,7 +170,7 @@ export default function KitchenDisplayPage() {
             })
 
             if (newOrders.length > 0 && soundEnabled) {
-                playNewOrderSound()
+                playNewOrderSound(`kitchen:${selectedBranch}`)
                 newOrders.forEach((o) => {
                     toast.info(`Nuevo pedido #${o.orderNumber}`, {
                         duration: 5000,
@@ -169,7 +179,7 @@ export default function KitchenDisplayPage() {
             }
 
             if (readyOrders.length > 0 && soundEnabled) {
-                playOrderReadySound()
+                playOrderReadySound(`kitchen:${selectedBranch}`)
                 readyOrders.forEach((o) => {
                     toast.success(`Pedido #${o.orderNumber} listo`, {
                         duration: 5000,
@@ -180,15 +190,24 @@ export default function KitchenDisplayPage() {
             setOrders(initialOrders)
             prevOrdersRef.current = initialOrders
         }
-    }, [initialOrders, soundEnabled])
+    }, [initialOrders, soundEnabled, selectedBranch])
 
+    // Solo escuchamos los pedidos de la sucursal activa: asi el refresco (y el
+    // sonido que dispara) nunca lo provoca un pedido de otro local.
     useEffect(() => {
+        if (!selectedBranch) return
+
         const supabase = createClient()
         const channel = supabase
-            .channel("kitchen-orders")
+            .channel(`kitchen-orders-${selectedBranch}`)
             .on(
                 "postgres_changes",
-                { event: "*", schema: "public", table: "orders" },
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "orders",
+                    filter: `sucursal_id=eq.${selectedBranch}`,
+                },
                 () => {
                     mutate()
                 }
@@ -198,7 +217,7 @@ export default function KitchenDisplayPage() {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [mutate])
+    }, [mutate, selectedBranch])
 
     const [now, setNow] = useState(Date.now())
     useEffect(() => {

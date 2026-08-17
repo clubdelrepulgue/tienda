@@ -42,7 +42,7 @@ import { updateOrderStatus, assignDriver, assignDriverBatch } from "@/app/action
 import { PrintReceiptButton } from "@/components/receipt/order-receipt"
 import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
 import { useActiveBranch } from "../branch-context"
-import { getDriverPresence } from "@/lib/driver-presence"
+import { getDriverPresence, normalizeDriverLocation } from "@/lib/driver-presence"
 
 /** Presencia de un repartidor a partir de la fila que devuelve la API. */
 function driverPresenceOf(driver: Driver) {
@@ -792,7 +792,38 @@ const COLUMNS: Column[] = [
     iconClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
     statuses: ["ready"],
   },
+  {
+    id: "dispatched",
+    label: "En camino",
+    icon: Bike,
+    color: "border-sky-200 bg-sky-50 text-sky-700",
+    headerTint: "from-sky-50",
+    iconClassName: "border-sky-200 bg-sky-50 text-sky-700",
+    statuses: ["en_route"],
+    nextStatus: "delivered",
+    buttonText: "Entregado",
+  },
 ]
+
+/**
+ * Un pedido "despachado" ya salió de la cocina y está en manos del repartidor.
+ *
+ * Son dos situaciones que para el mostrador son la misma: el pedido listo al
+ * que ya se le asignó repartidor (todavía en `ready`, esperando que arranque)
+ * y el que el repartidor ya marcó en camino (`en_route`).
+ *
+ * Antes ambos desaparecían del tablero: el asignado quedaba excluido de la
+ * columna "Listos" y no existía columna para `en_route`, así que asignar un
+ * repartidor hacía que el pedido se esfumara de la pantalla.
+ */
+function isDispatched(order: Order): boolean {
+  if (order.status === "en_route") return true
+  return (
+    order.status === "ready" &&
+    order.deliveryMethod === "delivery" &&
+    Boolean(order.driverId)
+  )
+}
 
 export default function OrdersPage() {
   const { activeBranchId, branches } = useActiveBranch()
@@ -834,17 +865,25 @@ export default function OrdersPage() {
     }
   }, [dispatchData])
 
-  // Realtime subscription
+  // Realtime subscription: acotada a la sucursal activa para que el aviso
+  // sonoro solo suene por pedidos del panel que estamos mirando.
   useEffect(() => {
+    if (!selectedBranch) return
+
     const supabase = createClient()
     const channel = supabase
-      .channel("admin-orders")
+      .channel(`admin-orders-${selectedBranch}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+          filter: `sucursal_id=eq.${selectedBranch}`,
+        },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            playNewOrderSound()
+            playNewOrderSound(`dispatch:${selectedBranch}`)
             toast.info(`Nuevo pedido #${payload.new.order_number}`, {
               description: "Revisar y aceptar en mostrador",
               duration: 12000,
@@ -863,14 +902,40 @@ export default function OrdersPage() {
       )
       .subscribe()
 
-    // Also listen for driver availability changes
+    // Estado de los repartidores.
+    //
+    // Antes esto llamaba `mutate()` en cada UPDATE de `drivers`. Como cada ping
+    // de GPS escribe esa tabla (uno cada pocos segundos por repartidor en
+    // turno), el panel refetcheaba TODO el endpoint de despacho —pedidos, sus
+    // items y zonas— varias veces por minuto. De ahí venía la sensación de que
+    // asignar un repartidor "va lento": la UI peleaba con un refetch constante.
+    // Ahora aplicamos la fila entrante sobre el estado local, sin ir al server.
     const driverChannel = supabase
-      .channel("admin-drivers")
+      .channel(`admin-drivers-${selectedBranch}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "drivers" },
-        () => {
-          mutate()
+        (payload) => {
+          const row = payload.new as any
+          if (!row?.id) return
+
+          setDrivers((current) =>
+            current.map((driver) =>
+              driver.id === row.id
+                ? {
+                    ...driver,
+                    name: row.name ?? driver.name,
+                    isActive: row.is_active ?? driver.isActive,
+                    isAvailable: row.is_available ?? driver.isAvailable,
+                    isOnShift: row.is_on_shift ?? driver.isOnShift,
+                    lastSeenAt: row.last_seen_at ?? driver.lastSeenAt,
+                    currentLocation:
+                      normalizeDriverLocation(row.current_location) ??
+                      driver.currentLocation,
+                  }
+                : driver
+            )
+          )
         }
       )
       .subscribe()
@@ -879,7 +944,7 @@ export default function OrdersPage() {
       supabase.removeChannel(channel)
       supabase.removeChannel(driverChannel)
     }
-  }, [mutate])
+  }, [mutate, selectedBranch])
 
   const handleNextStatus = async (orderId: string, nextStatus: OrderStatus) => {
     const changedAt = new Date().toISOString()
@@ -994,18 +1059,21 @@ export default function OrdersPage() {
     [branches, selectedBranch]
   )
 
-  // Filter out delivered/cancelled/en_route from active view
+  // Solo salen del tablero los pedidos cerrados. Los despachados siguen
+  // visibles en su propia columna hasta que se marcan entregados.
   const activeOrders = useMemo(
     () =>
       (Array.isArray(orders) ? orders : []).filter(
-        (o) =>
-          o.status !== "delivered" &&
-          o.status !== "cancelled" &&
-          o.status !== "en_route" &&
-          !(o.status === "ready" && o.deliveryMethod === "delivery" && o.driverId)
+        (o) => o.status !== "delivered" && o.status !== "cancelled"
       ),
     [orders]
   )
+
+  const driverMap = useMemo(() => {
+    const map = new Map<string, Driver>()
+    drivers.forEach((d) => map.set(d.id, d))
+    return map
+  }, [drivers])
 
   return (
     <div className="flex min-h-0 flex-col gap-5">
@@ -1027,10 +1095,13 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="grid min-h-0 grid-cols-[repeat(3,minmax(280px,1fr))] gap-4 overflow-x-auto pb-3 snap-x xl:gap-5">
+      <div className="grid min-h-0 grid-cols-[repeat(4,minmax(280px,1fr))] gap-4 overflow-x-auto pb-3 snap-x xl:gap-5">
         {COLUMNS.map((col) => {
+          const isDispatchedCol = col.id === "dispatched"
           const colOrders = activeOrders.filter((o) =>
-            col.statuses.includes(o.status)
+            isDispatchedCol
+              ? isDispatched(o)
+              : col.statuses.includes(o.status) && !isDispatched(o)
           )
           const ColIcon = col.icon
           const isReadyCol = col.id === "ready"
@@ -1112,6 +1183,11 @@ export default function OrdersPage() {
                           now={now}
                           updating={updatingId === order.id}
                           departing={false}
+                          driver={
+                            order.driverId
+                              ? driverMap.get(order.driverId) ?? null
+                              : null
+                          }
                           onNext={
                             col.nextStatus
                               ? () =>

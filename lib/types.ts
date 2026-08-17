@@ -1,3 +1,5 @@
+import type { DriverLocation } from "./driver-presence"
+
 export interface Category {
   id: string
   branchId: string
@@ -172,14 +174,7 @@ export interface Driver {
   shiftStartedAt?: string | null
   /** Último ping recibido: la fuente de verdad de "está conectado". */
   lastSeenAt?: string | null
-  currentLocation?: {
-    lat: number
-    lng: number
-    accuracy: number | null
-    heading: number | null
-    speed: number | null
-    updatedAt: string
-  }
+  currentLocation?: DriverLocation
 }
 
 export interface UpsellRule {

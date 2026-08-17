@@ -309,7 +309,7 @@ export default function POSPage() {
                 return
             }
 
-            playNewOrderSound()
+            playNewOrderSound(`pos:${selectedBranch}`)
             toast.success(`Pedido #${result.orderNumber} creado`)
 
             // Build the order locally and print 2 copies with branch data.

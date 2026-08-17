@@ -2,6 +2,7 @@ import { createClient } from "./server"
 import { createPublicClient } from "./public"
 import type { Category, Product, ProductVariant, ModifierGroup, ModifierOption, Order, Branch, CartItem, CartItemModifier, Coupon, DeliveryZone, Driver, UpsellRule } from "../types"
 import { DEFAULT_PRODUCT_IMAGE, getProductImage } from "../product-image"
+import { normalizeDriverLocation } from "../driver-presence"
 
 // ─── Catalog Queries ───────────────────────────────────────────
 
@@ -506,28 +507,6 @@ export async function getAllDeliveryZones(): Promise<DeliveryZone[]> {
 
 // ─── Drivers ───────────────────────────────────────────────────
 
-/**
- * Normaliza el JSONB `drivers.current_location`.
- *
- * En la base la marca de tiempo es `updated_at`, pero el tipo `Driver` la
- * expone como `updatedAt`. Devolver el JSONB crudo dejaba `updatedAt`
- * undefined, y `getDriverPresence` — que lo usa como fallback de `last_seen_at`
- * cuando la migración 016 no está aplicada — daba "Sin señal" y marcaba al
- * repartidor como NO asignable aunque estuviera reportando posición hace
- * segundos. Aceptamos las dos formas por si la fila viene ya normalizada.
- */
-function normalizeDriverLocation(loc: any): Driver["currentLocation"] {
-    if (!loc || loc.lat == null || loc.lng == null) return undefined
-
-    return {
-        lat: parseFloat(loc.lat),
-        lng: parseFloat(loc.lng),
-        accuracy: loc.accuracy != null ? parseFloat(loc.accuracy) : null,
-        heading: loc.heading != null ? parseFloat(loc.heading) : null,
-        speed: loc.speed != null ? parseFloat(loc.speed) : null,
-        updatedAt: loc.updatedAt ?? loc.updated_at,
-    }
-}
 
 export async function getDrivers(): Promise<Driver[]> {
     const supabase = await createClient()
