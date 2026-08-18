@@ -52,6 +52,35 @@ abierta. El código loguea `[recibo] alto medido: 80mm x NNmm` con la medida rea
 del ticket. Elegí un alto cómodo para un pedido normal — si un pedido sale más
 largo, se derrama a una segunda página (más papel, pero nunca cortado).
 
+## La caja del local corre Windows
+
+El mostrador imprime desde una notebook con **Windows**, no desde la Mac de
+desarrollo. Para esa máquina va `scripts/pos-kiosk.cmd` (doble click, o
+`pos-kiosk.cmd https://otra-url/admin/pos`). `scripts/pos-kiosk.sh` es el
+equivalente para macOS/Linux.
+
+### Ajustes del diálogo de Chrome (una sola vez, en el perfil del kiosk)
+
+Estos tres son los que arruinan el ticket y **no se pueden forzar desde el
+código** — son del navegador, los tiene que dejar puestos la persona:
+
+| Ajuste | Valor | Por qué |
+|---|---|---|
+| **Encabezados y pies de página** | **desmarcado** | Si está marcado, Chrome imprime la fecha y `Recibo #NN` arriba y la URL abajo, y **fuerza márgenes** que descuadran todo el ticket. |
+| **Márgenes** | **Ninguno** | "Predeterminado" mete márgenes propios e ignora el `margin: 0` del `@page`. |
+| **Escala** | **Predeterminada / 100** | "Ajustar al ancho de página" achica o agranda el ticket contra el papel del driver. |
+
+Están todos bajo **Más opciones** (o **Configuración adicional**) en el diálogo.
+Chrome los recuerda por perfil, por eso el kiosk usa uno propio: se configuran
+una vez y quedan.
+
+### Tamaño de papel en Windows
+
+**Panel de control → Dispositivos e impresoras** → click derecho en la V320N →
+**Preferencias de impresión** → **Tamaño del papel**. Si no hay uno a medida,
+casi todos estos drivers traen un botón para crear uno: ancho `80mm`, alto el
+que mida el ticket, márgenes 0.
+
 ## Imprimir sin el diálogo
 
 Los navegadores no permiten imprimir en silencio desde la página; la única vía
@@ -59,8 +88,19 @@ soportada es arrancar Chrome con `--kiosk-printing`, que hace que `window.print(
 mande el trabajo directo a la impresora predeterminada.
 
 ```bash
-npm run pos:kiosk                          # http://localhost:3000/admin/pos
+npm run pos:kiosk                          # macOS/Linux, http://localhost:3000/admin/pos
 npm run pos:kiosk -- https://tu-dominio/admin/pos
+```
+
+En Windows: doble click en `scripts/pos-kiosk.cmd`.
+
+Si no querés copiar el `.cmd` a la máquina del local (algunos antivirus los
+bloquean), sale igual con un acceso directo hecho a mano: click derecho en el
+escritorio → **Nuevo → Acceso directo**, y pegar esto como destino, en una sola
+línea:
+
+```
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing --user-data-dir="%LOCALAPPDATA%\pos-kiosk-chrome" --no-first-run --disable-background-networking --app="https://www.clubdelrepulgue.uy/admin/pos"
 ```
 
 El script usa un perfil de Chrome aparte (`~/.config/pos-kiosk-chrome`). Es
