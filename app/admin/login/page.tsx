@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { safeAdminPath } from "@/lib/admin-paths"
 import { toast } from "sonner"
 
 export default function AdminLoginPage() {
@@ -54,7 +55,11 @@ export default function AdminLoginPage() {
             }
 
             toast.success("Bienvenido de nuevo")
-            router.push("/admin")
+            // Volver a la pantalla que se pidió (?next=). Se lee de
+            // window.location en vez de useSearchParams para no obligar a
+            // envolver la página en un Suspense.
+            const requested = new URLSearchParams(window.location.search).get("next")
+            router.push(safeAdminPath(requested) ?? "/admin")
             router.refresh()
         } catch {
             setError("Algo salio mal")

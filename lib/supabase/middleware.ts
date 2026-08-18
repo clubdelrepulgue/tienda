@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { safeAdminPath } from '@/lib/admin-paths'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -64,7 +65,12 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       const url = request.nextUrl.clone()
+      const intended = request.nextUrl.pathname + request.nextUrl.search
       url.pathname = '/admin/login'
+      url.search = ''
+      // Recordar a dónde iba: la caja abre /admin/pos en una ventana sin barra
+      // de direcciones, así que tras el login tiene que volver ahí sola.
+      if (intended !== '/admin') url.searchParams.set('next', intended)
       return NextResponse.redirect(url)
     }
   }
@@ -78,10 +84,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // If logged in and visiting /admin/login, redirect to /admin
+  // If logged in and visiting /admin/login, redirect to /admin (o a ?next=).
   if (request.nextUrl.pathname === '/admin/login' && user && isAdmin) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/admin'
+    const target = safeAdminPath(request.nextUrl.searchParams.get('next')) ?? '/admin'
+    const url = new URL(target, request.url)
     return NextResponse.redirect(url)
   }
 

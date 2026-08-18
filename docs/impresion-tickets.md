@@ -11,6 +11,12 @@ arriba del archivo:
 | `paperHeightMm` | `"auto"` mide el ticket y fija el `@page` a esa altura exacta. Un número fija el alto (usalo si tu driver sólo tiene un tamaño de papel fijo). |
 | `feedAfterMm` | Papel extra al final de cada copia, para el corte. |
 
+## La impresora
+
+**V320N** — térmica de tickets, rollo de **80mm**, 230mm/s, ESC/POS, USB + LAN.
+Hoy está conectada por **USB**. (Si algún día se pasa a red, el camino bueno es
+mandarle ESC/POS directo al puerto 9100 y olvidarse del driver y del diálogo.)
+
 ## "Sale con largo de hoja A4"
 
 `@page { size: 80mm <alto> }` sólo manda cuando el destino es **Guardar como PDF**.
@@ -18,20 +24,33 @@ Al imprimir a una impresora real, Chrome usa el **tamaño de papel del driver** 
 si no coincide con el `@page`, reescala y/o alarga la página. O sea: el largo de
 más se arregla en el driver, no en el código.
 
+Los drivers de estas 80mm traen como predeterminado un papel de `80 x 297mm`
+(el alto de un A4). Ese es exactamente el síntoma: el driver rellena con líneas
+en blanco hasta completar los 297mm. Se arregla creando un tamaño a medida.
+
 En macOS:
 
-1. **Ajustes del sistema → Impresoras y escáneres** → seleccionar la térmica.
-2. Abrir el diálogo de impresión del sistema (`⌥⌘P` desde Chrome) → menú
-   **Tamaño del papel → Gestionar tamaños personalizados…**
-3. Crear uno nuevo: ancho `80 mm`, alto `~150 mm` (o el que ocupe un ticket
-   típico), y **todos los márgenes en 0**.
-4. Elegir ese tamaño como predeterminado de esa impresora.
-5. Si el driver ofrece un modo de rollo con largo variable ("Roll Paper",
-   "Receipt", "Document length: variable"), preferilo: la impresora avanza sólo
-   lo impreso y no hay papel de sobra.
+1. **Ajustes del sistema → Impresoras y escáneres** → seleccionar la V320N.
+2. Desde Chrome, abrir el diálogo del sistema con `⌥⌘P` → menú
+   **Tamaño del papel → Gestionar tamaños personalizados…** → `+`.
+3. Crear uno: ancho `80 mm`, alto `150 mm`, y **los cuatro márgenes en 0**.
+   Nombralo `Ticket 80x150`.
+4. Elegirlo en el diálogo y dejarlo pegado (ver la sección de kiosk).
+5. Si el driver de la V320N ofrece un modo de rollo con largo variable
+   ("Roll Paper", "Receipt", "Document length: variable"), preferilo: la
+   impresora avanza sólo lo impreso y no hay papel de sobra.
 
-Si terminás con un tamaño de papel fijo, poné ese mismo alto en
-`RECEIPT_CONFIG.paperHeightMm` para que Chrome no reescale el contenido.
+Después poné ese mismo alto en `RECEIPT_CONFIG.paperHeightMm` (`150`) para que
+Chrome no reescale el contenido:
+
+```ts
+paperHeightMm: 150,
+```
+
+**Cómo saber qué alto usar:** imprimí un ticket con la consola del navegador
+abierta. El código loguea `[recibo] alto medido: 80mm x NNmm` con la medida real
+del ticket. Elegí un alto cómodo para un pedido normal — si un pedido sale más
+largo, se derrama a una segunda página (más papel, pero nunca cortado).
 
 ## Imprimir sin el diálogo
 

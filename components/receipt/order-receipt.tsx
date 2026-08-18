@@ -281,22 +281,33 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
     const pages = Array.from(doc.querySelectorAll<HTMLElement>(".receipt-page"))
     if (pages.length === 0) return
 
-    let heightMm: number
-    if (typeof RECEIPT_CONFIG.paperHeightMm === "number") {
-      heightMm = RECEIPT_CONFIG.paperHeightMm
-    } else {
-      const tallestPx = Math.max(...pages.map((page) => page.getBoundingClientRect().height))
-      if (!tallestPx) return
-      // px → mm a 96dpi, redondeado hacia arriba + el papel de corte.
-      heightMm = Math.ceil((tallestPx * 25.4) / 96) + RECEIPT_CONFIG.feedAfterMm
+    const tallestPx = Math.max(...pages.map((page) => page.getBoundingClientRect().height))
+    const measuredMm = tallestPx
+      ? Math.ceil((tallestPx * 25.4) / 96) + RECEIPT_CONFIG.feedAfterMm
+      : 0
+    if (measuredMm) {
+      // Útil para elegir el tamaño de papel personalizado en el driver.
+      console.debug(`[recibo] alto medido: ${PAPER_W}mm x ${measuredMm}mm`)
     }
 
+    if (typeof RECEIPT_CONFIG.paperHeightMm === "number") {
+      // Alto fijo: el @page estático ya trae la medida. No clavamos el alto de
+      // cada copia y soltamos el recorte, así un pedido largo se derrama a una
+      // segunda página en vez de salir cortado.
+      doc.body.style.overflow = "visible"
+      pages.forEach((page) => {
+        page.style.overflow = "visible"
+      })
+      return
+    }
+
+    if (!measuredMm) return
     pages.forEach((page) => {
-      page.style.height = `${heightMm}mm`
+      page.style.height = `${measuredMm}mm`
     })
     const pageStyle = doc.getElementById("receipt-page-size")
     if (pageStyle) {
-      pageStyle.textContent = `@page { size: ${PAPER_W}mm ${heightMm}mm; margin: 0; }`
+      pageStyle.textContent = `@page { size: ${PAPER_W}mm ${measuredMm}mm; margin: 0; }`
     }
   }
 
