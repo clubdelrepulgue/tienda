@@ -15,6 +15,9 @@ import { getAdminScope, getEffectiveBranchId } from "@/lib/admin-scope"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { AdminUserAccount } from "@/lib/types"
 
+/** Estados que el panel de despacho muestra; el resto ya está cerrado. */
+const DISPATCH_STATUSES = ["new", "accepted", "preparing", "ready", "en_route"]
+
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
@@ -65,9 +68,15 @@ export async function GET(request: NextRequest) {
                 // must be accepted at the counter first; POS orders are created already accepted.
                 return NextResponse.json(await getOrdersByStatus(["accepted", "preparing", "ready"], branchId))
             case "dispatch": {
-                // All data needed for the dispatch view
+                // All data needed for the dispatch view.
+                //
+                // Solo los estados vivos: ambos consumidores descartan los
+                // pedidos cerrados igual, y este endpoint se refetchea entero
+                // con cada pedido nuevo. Sin este filtro la respuesta crecía
+                // con el histórico completo —cada pedido con todos sus items—
+                // y el panel se volvía más lento cuanto más vendías.
                 const [dispatchOrders, zones, availableDrivers] = await Promise.all([
-                    getOrders({ branchId }),
+                    getOrders({ branchId, statuses: DISPATCH_STATUSES }),
                     getAllDeliveryZones(),
                     getDrivers(),
                 ])

@@ -43,6 +43,7 @@ import { PrintReceiptButton } from "@/components/receipt/order-receipt"
 import { playNewOrderSound, unlockAudio } from "@/lib/sounds"
 import { useActiveBranch } from "../branch-context"
 import { getDriverPresence, normalizeDriverLocation } from "@/lib/driver-presence"
+import { mapOrder } from "@/lib/order-mapper"
 
 /** Presencia de un repartidor a partir de la fila que devuelve la API. */
 function driverPresenceOf(driver: Driver) {
@@ -890,10 +891,15 @@ export default function OrdersPage() {
             })
             mutate()
           } else if (payload.eventType === "UPDATE") {
+            // Mapeo completo de la fila, no un merge de claves crudas: la
+            // tarjeta refleja el estado nuevo entero (incluido `readyAt`, que
+            // alimenta el cronómetro) sin esperar a un refetch. Los items no
+            // viajan en el payload de `orders`, así que conservamos los que ya
+            // teníamos.
             setOrders((current) =>
               current.map((order) =>
                 order.id === payload.new.id
-                  ? { ...order, ...payload.new, status: payload.new.status, driverId: payload.new.driver_id }
+                  ? mapOrder(payload.new, order.items)
                   : order
               )
             )
@@ -1109,7 +1115,7 @@ export default function OrdersPage() {
           return (
             <div
               key={col.id}
-              className="flex h-[calc(100dvh-14rem)] min-h-[420px] min-w-[280px] max-h-[680px] max-w-full snap-center flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+              className="flex min-h-[420px] min-w-[280px] max-w-full snap-center flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
             >
               {/* Column header */}
               <div

@@ -3,6 +3,7 @@ import { createPublicClient } from "./public"
 import type { Category, Product, ProductVariant, ModifierGroup, ModifierOption, Order, Branch, CartItem, CartItemModifier, Coupon, DeliveryZone, Driver, UpsellRule } from "../types"
 import { DEFAULT_PRODUCT_IMAGE, getProductImage } from "../product-image"
 import { normalizeDriverLocation } from "../driver-presence"
+import { mapOrder, mapOrderItems } from "../order-mapper"
 
 // ─── Catalog Queries ───────────────────────────────────────────
 
@@ -275,53 +276,6 @@ export async function getBranchById(id: string): Promise<Branch | null> {
 
 // ─── Order Queries ─────────────────────────────────────────────
 
-function mapOrderItems(items: any[], branchId: string): CartItem[] {
-    return items.map((item) => ({
-        id: item.id,
-        productId: item.producto_id || "",
-        branchId,
-        name: item.nombre_snapshot,
-        image: DEFAULT_PRODUCT_IMAGE,
-        price: parseFloat(item.precio_unit),
-        quantity: item.qty,
-        modifiers: (item.modifiers_json || []) as CartItemModifier[],
-        variantName: item.variante_snapshot || undefined,
-        note: item.nota || undefined,
-    }))
-}
-
-function mapOrder(row: any, items: CartItem[]): Order {
-    return {
-        id: row.id,
-        orderNumber: row.order_number,
-        trackingToken: row.public_tracking_token,
-        customerName: row.customer_name,
-        customerPhone: row.customer_phone || "",
-        address: row.address_text || "",
-        deliveryNotes: row.notes || "",
-        deliveryMethod: row.fulfillment_type,
-        paymentMethod: row.payment_method,
-        items,
-        subtotal: parseFloat(row.subtotal),
-        deliveryFee: parseFloat(row.delivery_fee),
-        total: parseFloat(row.total),
-        couponCode: row.coupon_code || undefined,
-        couponDiscount: row.coupon_discount ? parseFloat(row.coupon_discount) : 0,
-        status: row.status,
-        createdAt: row.created_at,
-        acceptedAt: row.accepted_at,
-        preparingAt: row.preparing_at,
-        readyAt: row.ready_at,
-        deliveredAt: row.delivered_at,
-        cancelledAt: row.cancelled_at,
-        branchId: row.sucursal_id || "",
-        addressLat: row.address_lat != null ? parseFloat(row.address_lat) : null,
-        addressLng: row.address_lng != null ? parseFloat(row.address_lng) : null,
-        driverId: row.driver_id || null,
-        deliveryZoneId: row.delivery_zone_id || null,
-        orderType: row.order_type || "online",
-    }
-}
 
 export async function getOrders(options: { branchId?: string; statuses?: string[] } = {}): Promise<Order[]> {
     const supabase = await createClient()
