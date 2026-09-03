@@ -36,14 +36,20 @@ const RECEIPT_CONFIG = {
   // @page a esa altura exacta (lo correcto para PDF y para drivers con rollo de
   // largo variable). Si tu driver sólo ofrece un tamaño de papel fijo, poné acá
   // ese mismo número para que Chrome no reescale ni agregue papel de más.
-  // Tiene que ser EXACTAMENTE el alto del formulario elegido en el driver. Si no
-  // coincide, Chrome reescala el ticket para hacerlo entrar: declarar de más lo
-  // achica, declarar de menos lo agranda.
-  // Driver de la V320N: formulario "ICG1". Este 150 es una estimación hasta
-  // confirmar su alto real en Propiedades del servidor de impresión → Formularios.
-  paperHeightMm: 150 as "auto" | number,
+  // Driver de la V320N: formulario "ICG1", que alimenta sólo lo impreso.
+  // Este número es el alto de página que se le declara a Chrome, y su único
+  // trabajo es ser MÁS ALTO que el ticket: si queda corto, el sobrante se va a
+  // una segunda página y la impresora alimenta el doble (con 150 salían 30cm =
+  // 2 x 150). No conviene bajarlo "para ahorrar papel" — con ICG1 el papel lo
+  // define el contenido, no este valor.
+  paperHeightMm: 297 as "auto" | number,
   // Papel extra al final de cada copia, en mm: espacio para el corte.
   feedAfterMm: 2,
+  // Multiplica todos los tamaños de fuente del ticket. El driver imprime el
+  // contenido algo reducido respecto de lo que se ve en pantalla, así que la
+  // compensación va acá y no peleando con el tamaño de papel. Subilo si las
+  // letras salen chicas; bajalo si el ticket se vuelve innecesariamente largo.
+  textScale: 1.3,
 }
 
 const PAPER_W = RECEIPT_CONFIG.paperWidthMm
@@ -54,6 +60,9 @@ const CONTENT_W = PAPER_W - SIDE_PADDING_MM * 2
 // de ítem), como fracción del ancho útil.
 const VALUE_MAX_MM = Math.round(CONTENT_W * 0.73)
 const ITEM_MAX_MM = Math.round(CONTENT_W * 0.81)
+// Todos los font-size del ticket pasan por acá, para poder escalar la
+// tipografía entera desde `textScale` sin tocar cada regla.
+const fs = (px: number) => Math.round(px * RECEIPT_CONFIG.textScale)
 
 // ── HTML escaping (order data is user-entered) ──────────────────
 function esc(value: string | number | null | undefined): string {
@@ -95,7 +104,7 @@ function shortenAddress(address: string): string {
 
 function row(label: string, value: string): string {
   return `
-    <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:13px;font-weight:600;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:${fs(13)}px;font-weight:600;">
       <span style="color:#000;">${esc(label)}:</span>
       <span style="text-align:right;max-width:${VALUE_MAX_MM}mm;word-break:break-word;font-weight:700;">${esc(value)}</span>
     </div>`
@@ -131,16 +140,16 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
         (item.price + item.modifiers.reduce((s, m) => s + m.price, 0)) * item.quantity
       const modifiersHTML =
         item.modifiers.length > 0
-          ? `<div style="font-size:11px;color:#000;padding-left:12px;font-weight:600;margin-top:1px;">${esc(
+          ? `<div style="font-size:${fs(11)}px;color:#000;padding-left:12px;font-weight:600;margin-top:1px;">${esc(
               item.modifiers.map((m) => `+ ${m.optionName} (${formatPrice(m.price)})`).join(", ")
             )}</div>`
           : ""
       const noteHTML = item.note
-        ? `<div style="font-size:11px;font-style:italic;color:#000;padding-left:12px;font-weight:700;margin-top:1px;">✎ ${esc(item.note)}</div>`
+        ? `<div style="font-size:${fs(11)}px;font-style:italic;color:#000;padding-left:12px;font-weight:700;margin-top:1px;">✎ ${esc(item.note)}</div>`
         : ""
       return `
         <div style="margin-bottom:5px;">
-          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:13px;">
+          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:${fs(13)}px;">
             <span style="max-width:${ITEM_MAX_MM}mm;word-break:break-word;">${item.quantity}x ${esc(item.name)}${item.variantName ? ` (${esc(item.variantName)})` : ""}</span>
             <span style="white-space:nowrap;margin-left:4px;">${formatPrice(itemTotal)}</span>
           </div>
@@ -155,27 +164,27 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
   const deliveryRow = order.deliveryFee > 0 ? row("Envío", formatPrice(order.deliveryFee)) : ""
   const addressBlock =
     order.deliveryMethod === "delivery" && order.address
-      ? `<div style="margin-bottom:3px;"><span style="font-size:12px;color:#000;font-weight:600;">Dir: ${esc(shortenAddress(order.address))}</span></div>`
+      ? `<div style="margin-bottom:3px;"><span style="font-size:${fs(12)}px;color:#000;font-weight:600;">Dir: ${esc(shortenAddress(order.address))}</span></div>`
       : ""
   const phoneRow = order.customerPhone ? row("Tel", order.customerPhone) : ""
 
   return `
-    <div class="receipt-content" style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#000;background:#fff;width:${PAPER_W}mm;padding:4mm ${SIDE_PADDING_MM}mm;box-sizing:border-box;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <div class="receipt-content" style="font-family:'Courier New',Courier,monospace;font-size:${fs(13)}px;color:#000;background:#fff;width:${PAPER_W}mm;padding:4mm ${SIDE_PADDING_MM}mm;box-sizing:border-box;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
       <div style="text-align:center;margin-bottom:8px;">
         ${
           logoUrl
             ? `<img src="${esc(logoUrl)}" alt="${esc(businessName)}" style="max-width:38mm;max-height:18mm;object-fit:contain;margin:0 auto 3px;display:block;filter:grayscale(100%) contrast(1.5) brightness(0.9);" />`
-            : `<div style="font-weight:900;font-size:16px;letter-spacing:1px;text-transform:uppercase;color:#000;">${esc(businessName)}</div>`
+            : `<div style="font-weight:900;font-size:${fs(16)}px;letter-spacing:1px;text-transform:uppercase;color:#000;">${esc(businessName)}</div>`
         }
-        ${branchAddress ? `<div style="font-size:12px;color:#000;font-weight:600;">${esc(branchAddress)}</div>` : ""}
+        ${branchAddress ? `<div style="font-size:${fs(12)}px;color:#000;font-weight:600;">${esc(branchAddress)}</div>` : ""}
       </div>
 
       ${SOLID_DIVIDER}
 
       <div style="text-align:center;margin:4px 0 8px;">
-        <div style="font-size:11px;letter-spacing:1px;color:#000;text-transform:uppercase;font-weight:700;">Pedido</div>
-        <div style="font-weight:900;font-size:32px;line-height:1;letter-spacing:2px;color:#000;">#${esc(orderRef)}</div>
-        <div style="font-size:12px;color:#000;margin-top:3px;font-weight:600;">${esc(dateStr)}</div>
+        <div style="font-size:${fs(11)}px;letter-spacing:1px;color:#000;text-transform:uppercase;font-weight:700;">Pedido</div>
+        <div style="font-weight:900;font-size:${fs(32)}px;line-height:1;letter-spacing:2px;color:#000;">#${esc(orderRef)}</div>
+        <div style="font-size:${fs(12)}px;color:#000;margin-top:3px;font-weight:600;">${esc(dateStr)}</div>
       </div>
 
       ${SOLID_DIVIDER}
@@ -188,14 +197,14 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
 
       ${SOLID_DIVIDER}
 
-      <div style="margin-bottom:5px;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#000;">Detalle</div>
+      <div style="margin-bottom:5px;font-weight:900;font-size:${fs(12)}px;text-transform:uppercase;letter-spacing:1px;color:#000;">Detalle</div>
       ${itemsHTML}
 
       ${DASHED_DIVIDER}
 
       ${subtotalRow}
       ${deliveryRow}
-      <div style="display:flex;justify-content:space-between;font-weight:900;font-size:16px;margin-top:5px;color:#000;">
+      <div style="display:flex;justify-content:space-between;font-weight:900;font-size:${fs(16)}px;margin-top:5px;color:#000;">
         <span>TOTAL</span>
         <span>${formatPrice(order.total)}</span>
       </div>
@@ -203,12 +212,12 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
       ${SOLID_DIVIDER}
 
       <div style="text-align:center;margin-top:10px;">
-        <div style="font-weight:900;font-size:14px;letter-spacing:1.5px;margin-bottom:4px;color:#000;">${esc(RECEIPT_CONFIG.thankYouMessage)}</div>
-        <div style="font-size:12px;color:#000;margin-bottom:5px;line-height:1.4;font-weight:600;">${esc(RECEIPT_CONFIG.tagline)}</div>
-        <div style="font-size:11px;color:#000;letter-spacing:0.5px;line-height:1.4;font-weight:500;">${esc(RECEIPT_CONFIG.footer)}</div>
+        <div style="font-weight:900;font-size:${fs(14)}px;letter-spacing:1.5px;margin-bottom:4px;color:#000;">${esc(RECEIPT_CONFIG.thankYouMessage)}</div>
+        <div style="font-size:${fs(12)}px;color:#000;margin-bottom:5px;line-height:1.4;font-weight:600;">${esc(RECEIPT_CONFIG.tagline)}</div>
+        <div style="font-size:${fs(11)}px;color:#000;letter-spacing:0.5px;line-height:1.4;font-weight:500;">${esc(RECEIPT_CONFIG.footer)}</div>
       </div>
 
-      <div style="margin-top:10px;text-align:center;font-size:11px;color:#000;letter-spacing:4px;font-weight:700;">- - - - - - - - - - - -</div>
+      <div style="margin-top:10px;text-align:center;font-size:${fs(11)}px;color:#000;letter-spacing:4px;font-weight:700;">- - - - - - - - - - - -</div>
     </div>`
 }
 
