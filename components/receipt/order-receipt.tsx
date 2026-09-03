@@ -14,14 +14,22 @@ const RECEIPT_CONFIG = {
   tagline: "Hecho al momento, con la mejor onda.",
   // Small call-to-action / social prompt at the very bottom.
   footer: "Seguinos en redes y volvé cuando quieras.",
-  // Number of identical copies to print per job.
+  // Copias idénticas por pedido.
   copies: 2,
-  // Apila las copias en una sola página en vez de una página por copia.
-  // Sirve cuando el driver impone una página larga y fija (p. ej. 80x420mm) y no
-  // se puede cambiar: el papel en blanco de relleno se paga una vez y no `copies`
-  // veces. Ponelo en false si el driver tiene largo variable o un tamaño a medida
-  // ajustado al ticket — ahí una página por copia es lo correcto.
-  stackCopies: true,
+  // Cómo se reparten esas copias:
+  //   "job-per-copy"  — un trabajo de impresión por copia. Única forma de que la
+  //                     térmica corte entre una copia y la otra: corta al cerrar
+  //                     el trabajo, no entre páginas. Cuesta el relleno en blanco
+  //                     del driver una vez por copia.
+  //   "page-per-copy" — una página por copia, todo en un solo trabajo.
+  //   "stacked"       — todas las copias en una misma página. El relleno del
+  //                     driver se paga una sola vez; el corte del medio queda a
+  //                     mano. Útil si el driver impone una página larga y fija
+  //                     (p. ej. 80x420mm) y no se puede cambiar.
+  copyLayout: "job-per-copy" as "job-per-copy" | "page-per-copy" | "stacked",
+  // Pausa entre trabajos, en ms, sólo para "job-per-copy": le da a la cola de
+  // impresión tiempo de cerrar uno antes de recibir el siguiente.
+  jobGapMs: 800,
   // Ancho del rollo, en mm. 80 para las térmicas estándar, 58 para las angostas.
   paperWidthMm: 80,
   // Alto de página, en mm. "auto" mide el ticket ya renderizado y fija el
@@ -202,18 +210,24 @@ export function renderReceiptHTML(order: Order, branch?: Branch | null): string 
 }
 
 /**
- * Prints `copies` identical receipts in a single job using a hidden iframe.
- * Iframe printing avoids popup blockers and the load race of window.open.
+ * Manda UN trabajo de impresión con `copiesInJob` recibos, desde un iframe
+ * oculto. El iframe evita el bloqueador de popups y la carrera de carga de
+ * window.open. `onDone` corre cuando el trabajo ya se despachó y el iframe se
+ * desmontó, que es lo que permite encadenar varios trabajos en serie.
  */
-export function printOrderReceipt(order: Order, branch?: Branch | null) {
-  if (typeof window === "undefined") return
-
+function runPrintJob(
+  order: Order,
+  branch: Branch | null | undefined,
+  copiesInJob: number,
+  onDone?: () => void
+) {
   const single = renderReceiptHTML(order, branch)
-  // Cada copia es su propia página. El salto va como `break-before` en las
-  // copias 2..n en vez de `break-after` en las 1..n-1: así nunca queda una
-  // página vacía al final, que en un rollo térmico son varios cm de papel.
+  // Cuando cada copia va en su propia página, el salto se pone como
+  // `break-before` en las copias 2..n y no como `break-after` en las 1..n-1: así
+  // nunca queda una página vacía al final, que en un rollo térmico son varios cm
+  // de papel.
   const copies = Array.from(
-    { length: RECEIPT_CONFIG.copies },
+    { length: copiesInJob },
     () => `<div class="receipt-page">${single}</div>`
   ).join("")
 
@@ -232,12 +246,19 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
   iframe.style.border = "0"
   document.body.appendChild(iframe)
 
+  // cleanup entra tanto por `onafterprint` como por el `finally` de print(), así
+  // que `settled` evita que el trabajo siguiente se dispare dos veces.
+  let settled = false
   const cleanup = () => {
     setTimeout(() => {
       try {
         document.body.removeChild(iframe)
       } catch {
         /* already removed */
+      }
+      if (!settled) {
+        settled = true
+        onDone?.()
       }
     }, 1000)
   }
@@ -262,7 +283,7 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
           body { overflow: hidden; }
           .receipt-page { width: ${PAPER_W}mm; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
           .receipt-page + .receipt-page { ${
-            RECEIPT_CONFIG.stackCopies
+            RECEIPT_CONFIG.copyLayout === "stacked"
               ? `margin-top: ${RECEIPT_CONFIG.feedAfterMm}mm;`
               : "break-before: page; page-break-before: always;"
           } }
@@ -372,6 +393,31 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
   } else {
     win.onload = waitForImagesThenPrint
   }
+}
+
+/**
+ * Imprime el recibo del pedido según `RECEIPT_CONFIG.copies` y `copyLayout`.
+ */
+export function printOrderReceipt(order: Order, branch?: Branch | null) {
+  if (typeof window === "undefined") return
+
+  if (RECEIPT_CONFIG.copyLayout !== "job-per-copy") {
+    runPrintJob(order, branch, RECEIPT_CONFIG.copies)
+    return
+  }
+
+  // Un trabajo por copia, en serie y no en paralelo: cada trabajo necesita su
+  // iframe con el foco puesto, y mandándolos juntos el orden queda a merced de
+  // la cola de impresión.
+  const printNext = (remaining: number) => {
+    if (remaining <= 0) return
+    runPrintJob(order, branch, 1, () => {
+      if (remaining > 1) {
+        setTimeout(() => printNext(remaining - 1), RECEIPT_CONFIG.jobGapMs)
+      }
+    })
+  }
+  printNext(RECEIPT_CONFIG.copies)
 }
 
 export function PrintReceiptButton({
