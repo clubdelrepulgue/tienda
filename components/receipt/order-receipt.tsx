@@ -16,13 +16,21 @@ const RECEIPT_CONFIG = {
   footer: "Seguinos en redes y volvé cuando quieras.",
   // Number of identical copies to print per job.
   copies: 2,
+  // Apila las copias en una sola página en vez de una página por copia.
+  // Sirve cuando el driver impone una página larga y fija (p. ej. 80x420mm) y no
+  // se puede cambiar: el papel en blanco de relleno se paga una vez y no `copies`
+  // veces. Ponelo en false si el driver tiene largo variable o un tamaño a medida
+  // ajustado al ticket — ahí una página por copia es lo correcto.
+  stackCopies: true,
   // Ancho del rollo, en mm. 80 para las térmicas estándar, 58 para las angostas.
   paperWidthMm: 80,
   // Alto de página, en mm. "auto" mide el ticket ya renderizado y fija el
   // @page a esa altura exacta (lo correcto para PDF y para drivers con rollo de
   // largo variable). Si tu driver sólo ofrece un tamaño de papel fijo, poné acá
   // ese mismo número para que Chrome no reescale ni agregue papel de más.
-  paperHeightMm: "auto" as "auto" | number,
+  // Tiene que coincidir con el tamaño de papel del driver, si no Chrome reescala
+  // el ticket para encajarlo. Hoy el driver de la V320N está en 80x420mm.
+  paperHeightMm: 420 as "auto" | number,
   // Papel extra al final de cada copia, en mm: espacio para el corte.
   feedAfterMm: 2,
 }
@@ -253,7 +261,11 @@ export function printOrderReceipt(order: Order, branch?: Branch | null) {
              continuo se traduce en un montón de papel en blanco. */
           body { overflow: hidden; }
           .receipt-page { width: ${PAPER_W}mm; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
-          .receipt-page + .receipt-page { break-before: page; page-break-before: always; }
+          .receipt-page + .receipt-page { ${
+            RECEIPT_CONFIG.stackCopies
+              ? `margin-top: ${RECEIPT_CONFIG.feedAfterMm}mm;`
+              : "break-before: page; page-break-before: always;"
+          } }
           .receipt-content { width: ${PAPER_W}mm !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           @media print {
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
