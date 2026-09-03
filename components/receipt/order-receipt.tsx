@@ -36,9 +36,12 @@ const RECEIPT_CONFIG = {
   // @page a esa altura exacta (lo correcto para PDF y para drivers con rollo de
   // largo variable). Si tu driver sólo ofrece un tamaño de papel fijo, poné acá
   // ese mismo número para que Chrome no reescale ni agregue papel de más.
-  // Tiene que coincidir con el tamaño de papel del driver, si no Chrome reescala
-  // el ticket para encajarlo. Hoy el driver de la V320N está en 80x420mm.
-  paperHeightMm: 420 as "auto" | number,
+  // Tiene que ser EXACTAMENTE el alto del formulario elegido en el driver. Si no
+  // coincide, Chrome reescala el ticket para hacerlo entrar: declarar de más lo
+  // achica, declarar de menos lo agranda.
+  // Driver de la V320N: formulario "ICG1". Este 150 es una estimación hasta
+  // confirmar su alto real en Propiedades del servidor de impresión → Formularios.
+  paperHeightMm: 150 as "auto" | number,
   // Papel extra al final de cada copia, en mm: espacio para el corte.
   feedAfterMm: 2,
 }
